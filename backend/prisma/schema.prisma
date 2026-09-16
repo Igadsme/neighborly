@@ -1,0 +1,373 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum ListingStatus {
+  DRAFT
+  PUBLISHED
+  SOLD
+  ARCHIVED
+  DELETED
+}
+
+enum RequestStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  EXPIRED
+  CANCELLED
+}
+
+enum OfferStatus {
+  PENDING
+  COUNTERED
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+  EXPIRED
+}
+
+enum TransactionStatus {
+  DRAFT
+  PUBLISHED
+  OFFER_RECEIVED
+  NEGOTIATING
+  ACCEPTED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DISPUTED
+  REFUNDED
+  EXPIRED
+}
+
+enum ExchangeMode {
+  BUY
+  BORROW
+  RENT
+  HIRE
+  TRADE
+  SKILL_SWAP
+  FREE
+}
+
+model User {
+  id                 String               @id @default(uuid()) @db.Uuid
+  email              String               @unique
+  passwordHash       String
+  status             UserStatus           @default(ACTIVE)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  deletedAt          DateTime?
+  profile            Profile?
+  listings           Listing[]
+  requests           NeedRequest[]
+  offers             RequestOffer[]       @relation("Offerer")
+  favorites          Favorite[]
+  savedSearches      SavedSearch[]
+  preference         UserPreference?
+  notificationPreference NotificationPreference?
+  conversations      ConversationParticipant[]
+  sentMessages       Message[]            @relation("MessageSender")
+  reviewsGiven       Review[]             @relation("ReviewAuthor")
+  reviewsReceived    Review[]             @relation("ReviewSubject")
+  transactionMembers TransactionParticipant[]
+}
+
+model Profile {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @db.Uuid
+  firstName    String
+  lastName     String
+  displayName  String?
+  bio          String?
+  neighborhood String?
+  city         String?
+  state        String?
+  latitude     Decimal? @db.Decimal(9, 6)
+  longitude    Decimal? @db.Decimal(9, 6)
+  phoneVerified Boolean  @default(false)
+  emailVerified Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserPreference {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @db.Uuid
+  interests    Json
+  capabilities Json
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NotificationPreference {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @unique @db.Uuid
+  newListings Boolean  @default(true)
+  priceDrops  Boolean  @default(true)
+  messages    Boolean  @default(true)
+  events      Boolean  @default(false)
+  community   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Category {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  listings  Listing[]
+  requests  NeedRequest[]
+}
+
+model Listing {
+  id                 String          @id @default(uuid()) @db.Uuid
+  sellerId           String          @db.Uuid
+  categoryId         String          @db.Uuid
+  title              String
+  description        String
+  priceCents         Int?
+  condition          String?
+  status             ListingStatus   @default(DRAFT)
+  neighborhood       String?
+  city               String?
+  latitude           Decimal?        @db.Decimal(9, 6)
+  longitude          Decimal?        @db.Decimal(9, 6)
+  radiusMiles        Int?
+  pickupAvailable    Boolean         @default(true)
+  deliveryAvailable  Boolean         @default(false)
+  shippingAvailable  Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  deletedAt          DateTime?
+  seller             User            @relation(fields: [sellerId], references: [id])
+  category           Category        @relation(fields: [categoryId], references: [id])
+  images             ListingImage[]
+  favorites          Favorite[]
+  offerItems         OfferItem[]
+  matches            RequestMatch[]
+  priceHistory       PriceHistory[]
+
+  @@index([status, categoryId, createdAt])
+  @@index([sellerId, status])
+  @@index([city, neighborhood])
+}
+
+model ListingImage {
+  id        String   @id @default(uuid()) @db.Uuid
+  listingId String   @db.Uuid
+  objectKey String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+}
+
+model Favorite {
+  userId    String   @db.Uuid
+  listingId String   @db.Uuid
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@id([userId, listingId])
+  @@index([listingId])
+}
+
+model SavedSearch {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  query     String
+  filters   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NeedRequest {
+  id          String        @id @default(uuid()) @db.Uuid
+  requesterId String        @db.Uuid
+  categoryId  String        @db.Uuid
+  title       String
+  description String
+  budgetCents Int?
+  latitude    Decimal?      @db.Decimal(9, 6)
+  longitude   Decimal?      @db.Decimal(9, 6)
+  radiusMiles Int           @default(10)
+  deadline    DateTime?
+  urgency     String?
+  mode        ExchangeMode
+  status      RequestStatus  @default(DRAFT)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  deletedAt   DateTime?
+  requester   User           @relation(fields: [requesterId], references: [id])
+  category    Category       @relation(fields: [categoryId], references: [id])
+  offers      RequestOffer[]
+  matches     RequestMatch[]
+
+  @@index([requesterId, status, createdAt])
+  @@index([categoryId, status])
+}
+
+model RequestOffer {
+  id          String          @id @default(uuid()) @db.Uuid
+  requestId   String          @db.Uuid
+  offererId   String          @db.Uuid
+  amountCents Int?
+  message     String
+  status      OfferStatus     @default(PENDING)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  request     NeedRequest     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  offerer     User            @relation("Offerer", fields: [offererId], references: [id])
+  items       OfferItem[]
+  counterOffers CounterOffer[]
+
+  @@index([requestId, status, createdAt])
+  @@index([offererId, status])
+}
+
+model OfferItem {
+  id        String       @id @default(uuid()) @db.Uuid
+  offerId   String       @db.Uuid
+  listingId String       @db.Uuid
+  offer     RequestOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  listing   Listing      @relation(fields: [listingId], references: [id])
+
+  @@unique([offerId, listingId])
+}
+
+model CounterOffer {
+  id          String       @id @default(uuid()) @db.Uuid
+  offerId     String       @db.Uuid
+  fromUserId  String       @db.Uuid
+  amountCents Int?
+  message     String
+  createdAt   DateTime     @default(now())
+  offer       RequestOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+}
+
+model RequestMatch {
+  id        String       @id @default(uuid()) @db.Uuid
+  requestId String       @db.Uuid
+  listingId String       @db.Uuid
+  score     Decimal      @db.Decimal(5, 2)
+  createdAt DateTime     @default(now())
+  request   NeedRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  listing   Listing      @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, listingId])
+}
+
+model Conversation {
+  id           String                    @id @default(uuid()) @db.Uuid
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  participants ConversationParticipant[]
+  messages     Message[]
+  transactions Transaction[]
+}
+
+model ConversationParticipant {
+  conversationId String       @db.Uuid
+  userId         String       @db.Uuid
+  joinedAt       DateTime     @default(now())
+  lastReadAt     DateTime?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  senderId       String       @db.Uuid
+  body           String
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id])
+
+  @@index([conversationId, createdAt])
+}
+
+model Transaction {
+  id             String                    @id @default(uuid()) @db.Uuid
+  conversationId String?                   @db.Uuid
+  offerId        String?                   @db.Uuid
+  status         TransactionStatus         @default(DRAFT)
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  conversation   Conversation?             @relation(fields: [conversationId], references: [id])
+  participants   TransactionParticipant[]
+  milestones     TransactionMilestone[]
+  appointments   Appointment[]
+  reviews        Review[]
+}
+
+model TransactionParticipant {
+  transactionId String      @db.Uuid
+  userId        String      @db.Uuid
+  role          String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id])
+
+  @@id([transactionId, userId])
+}
+
+model TransactionMilestone {
+  id            String      @id @default(uuid()) @db.Uuid
+  transactionId String      @db.Uuid
+  fromStatus    TransactionStatus?
+  toStatus      TransactionStatus
+  createdAt     DateTime    @default(now())
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+}
+
+model Appointment {
+  id            String      @id @default(uuid()) @db.Uuid
+  transactionId String      @db.Uuid
+  startsAt      DateTime
+  locationNote  String?
+  createdAt     DateTime    @default(now())
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id            String      @id @default(uuid()) @db.Uuid
+  transactionId String      @db.Uuid
+  authorId      String      @db.Uuid
+  subjectId     String      @db.Uuid
+  rating        Int
+  body          String
+  createdAt     DateTime    @default(now())
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  author        User        @relation("ReviewAuthor", fields: [authorId], references: [id])
+  subject       User        @relation("ReviewSubject", fields: [subjectId], references: [id])
+}
+
+model PriceHistory {
+  id        String   @id @default(uuid()) @db.Uuid
+  listingId String   @db.Uuid
+  priceCents Int?
+  createdAt DateTime @default(now())
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+}

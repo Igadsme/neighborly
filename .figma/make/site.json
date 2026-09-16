@@ -1,0 +1,10 @@
+{
+  "description": "Connect locally to buy, sell, rent, trade, find jobs, hire services, and engage with your community through a safe, user-friendly marketplace.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
