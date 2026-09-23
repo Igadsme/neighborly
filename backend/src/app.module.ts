@@ -11,6 +11,10 @@ import { TransactionsModule } from './transactions/transactions.module'
 import { MessagingModule } from './messaging/messaging.module'
 import { UsersModule } from './users/users.module'
 import { CategoriesModule } from './categories/categories.module'
+import { CommunityModule } from './community/community.module'
+import { HousingModule } from './housing/housing.module'
+import { JobsModule } from './jobs/jobs.module'
+import { ServicesModule } from './services/services.module'
 
 @Module({
   imports: [
@@ -24,7 +28,11 @@ import { CategoriesModule } from './categories/categories.module'
     TransactionsModule,
     MessagingModule,
     UsersModule,
-    CategoriesModule
+    CategoriesModule,
+    HousingModule,
+    JobsModule,
+    ServicesModule,
+    CommunityModule
   ]
 })
 export class AppModule {}

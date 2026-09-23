@@ -63,6 +63,16 @@ enum ExchangeMode {
   FREE
 }
 
+enum PublishStatus {
+  PUBLISHED
+  ARCHIVED
+}
+
+enum QuoteStatus {
+  PENDING
+  ACCEPTED
+}
+
 model User {
   id                 String               @id @default(uuid()) @db.Uuid
   email              String               @unique
@@ -84,6 +94,20 @@ model User {
   reviewsGiven       Review[]             @relation("ReviewAuthor")
   reviewsReceived    Review[]             @relation("ReviewSubject")
   transactionMembers TransactionParticipant[]
+  housingListings    HousingListing[]
+  jobListings        JobListing[]
+  jobApplications    JobApplication[]
+  jobSaves           JobSave[]
+  serviceListings    ServiceListing[]
+  serviceQuotes      ServiceQuote[]
+  communityPosts     CommunityPost[]
+  communityReactions CommunityReaction[]
+  communityComments  CommunityComment[]
+  communityEvents    CommunityEvent[]
+  eventRsvps         CommunityEventRsvp[]
+  lostFoundItems     LostFoundItem[]
+  giveaways          Giveaway[]           @relation("GiveawayAuthor")
+  claimedGiveaways   Giveaway[]           @relation("GiveawayClaimer")
 }
 
 model Profile {
@@ -370,4 +394,262 @@ model PriceHistory {
   priceCents Int?
   createdAt DateTime @default(now())
   listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+}
+
+model HousingListing {
+  id           String        @id @default(uuid()) @db.Uuid
+  ownerId      String        @db.Uuid
+  title        String
+  description  String
+  propertyType String
+  listingType  String
+  priceCents   Int
+  priceUnit    String?
+  beds         Int
+  baths        Int
+  sqft         Int           @default(0)
+  neighborhood String?
+  city         String?
+  available    String?
+  lease        String?
+  pets         Boolean       @default(false)
+  furnished    Boolean       @default(false)
+  utilities    String?
+  verified     Boolean       @default(false)
+  status       PublishStatus @default(PUBLISHED)
+  latitude     Decimal?      @db.Decimal(9, 6)
+  longitude    Decimal?      @db.Decimal(9, 6)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  owner        User          @relation(fields: [ownerId], references: [id])
+  images       HousingImage[]
+
+  @@index([status, listingType, createdAt])
+  @@index([ownerId, status])
+  @@index([city, neighborhood])
+}
+
+model HousingImage {
+  id        String         @id @default(uuid()) @db.Uuid
+  housingId String         @db.Uuid
+  objectKey String
+  sortOrder Int            @default(0)
+  createdAt DateTime       @default(now())
+  housing   HousingListing @relation(fields: [housingId], references: [id], onDelete: Cascade)
+
+  @@index([housingId, sortOrder])
+}
+
+model JobListing {
+  id               String        @id @default(uuid()) @db.Uuid
+  ownerId          String        @db.Uuid
+  title            String
+  company          String
+  logoKey          String?
+  description      String
+  responsibilities String[]      @default([])
+  employmentType   String
+  level            String
+  salary           String
+  location         String
+  remote           String
+  deadline         String?
+  tags             String[]      @default([])
+  verified         Boolean       @default(false)
+  status           PublishStatus @default(PUBLISHED)
+  latitude         Decimal?      @db.Decimal(9, 6)
+  longitude        Decimal?      @db.Decimal(9, 6)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?
+  owner            User          @relation(fields: [ownerId], references: [id])
+  applications     JobApplication[]
+  saves            JobSave[]
+
+  @@index([status, employmentType, createdAt])
+  @@index([ownerId, status])
+}
+
+model JobApplication {
+  id          String     @id @default(uuid()) @db.Uuid
+  jobId       String     @db.Uuid
+  applicantId String     @db.Uuid
+  message     String?
+  createdAt   DateTime   @default(now())
+  job         JobListing @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applicant   User       @relation(fields: [applicantId], references: [id])
+
+  @@unique([jobId, applicantId])
+  @@index([applicantId, createdAt])
+}
+
+model JobSave {
+  userId    String     @db.Uuid
+  jobId     String     @db.Uuid
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job       JobListing @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([userId, jobId])
+  @@index([jobId])
+}
+
+model ServiceListing {
+  id                 String        @id @default(uuid()) @db.Uuid
+  ownerId            String        @db.Uuid
+  title              String
+  businessName       String
+  description        String
+  category           String
+  startingPriceCents Int
+  location           String
+  availability       String
+  tags               String[]      @default([])
+  imageKey           String?
+  backgroundCheck    Boolean       @default(false)
+  rating             Decimal?      @db.Decimal(2, 1)
+  reviewCount        Int           @default(0)
+  status             PublishStatus @default(PUBLISHED)
+  latitude           Decimal?      @db.Decimal(9, 6)
+  longitude          Decimal?      @db.Decimal(9, 6)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  deletedAt          DateTime?
+  owner              User          @relation(fields: [ownerId], references: [id])
+  quotes             ServiceQuote[]
+
+  @@index([status, category, createdAt])
+  @@index([ownerId, status])
+}
+
+model ServiceQuote {
+  id            String         @id @default(uuid()) @db.Uuid
+  serviceId     String         @db.Uuid
+  requesterId   String         @db.Uuid
+  preferredDate String?
+  preferredTime String?
+  notes         String
+  address       String?
+  status        QuoteStatus    @default(PENDING)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  service       ServiceListing @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  requester     User           @relation(fields: [requesterId], references: [id])
+
+  @@index([serviceId, status, createdAt])
+  @@index([requesterId, createdAt])
+}
+
+model CommunityPost {
+  id           String             @id @default(uuid()) @db.Uuid
+  authorId     String             @db.Uuid
+  type         String
+  title        String
+  body         String
+  neighborhood String?
+  city         String?
+  status       PublishStatus      @default(PUBLISHED)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  deletedAt    DateTime?
+  author       User               @relation(fields: [authorId], references: [id])
+  reactions    CommunityReaction[]
+  comments     CommunityComment[]
+
+  @@index([status, type, createdAt])
+  @@index([authorId, status])
+  @@index([neighborhood])
+}
+
+model CommunityReaction {
+  postId    String        @db.Uuid
+  userId    String        @db.Uuid
+  emoji     String
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+}
+
+model CommunityComment {
+  id        String        @id @default(uuid()) @db.Uuid
+  postId    String        @db.Uuid
+  authorId  String        @db.Uuid
+  body      String
+  createdAt DateTime      @default(now())
+  deletedAt DateTime?
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User          @relation(fields: [authorId], references: [id])
+
+  @@index([postId, createdAt])
+}
+
+model CommunityEvent {
+  id           String              @id @default(uuid()) @db.Uuid
+  organizerId  String              @db.Uuid
+  title        String
+  description  String?
+  neighborhood String?
+  city         String?
+  dateLabel    String
+  timeLabel    String
+  imageKey     String?
+  status       PublishStatus       @default(PUBLISHED)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  deletedAt    DateTime?
+  organizer    User                @relation(fields: [organizerId], references: [id])
+  rsvps        CommunityEventRsvp[]
+
+  @@index([status, createdAt])
+  @@index([organizerId, status])
+}
+
+model CommunityEventRsvp {
+  eventId   String         @db.Uuid
+  userId    String         @db.Uuid
+  createdAt DateTime       @default(now())
+  event     CommunityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+}
+
+model LostFoundItem {
+  id           String        @id @default(uuid()) @db.Uuid
+  authorId     String        @db.Uuid
+  kind         String
+  item         String
+  neighborhood String?
+  city         String?
+  imageKey     String?
+  status       PublishStatus @default(PUBLISHED)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  author       User          @relation(fields: [authorId], references: [id])
+
+  @@index([status, kind, createdAt])
+  @@index([authorId, status])
+}
+
+model Giveaway {
+  id           String        @id @default(uuid()) @db.Uuid
+  authorId     String        @db.Uuid
+  item         String
+  neighborhood String?
+  city         String?
+  claimed      Boolean       @default(false)
+  claimedById  String?       @db.Uuid
+  status       PublishStatus @default(PUBLISHED)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  author       User          @relation("GiveawayAuthor", fields: [authorId], references: [id])
+  claimedBy    User?         @relation("GiveawayClaimer", fields: [claimedById], references: [id])
+
+  @@index([status, claimed, createdAt])
+  @@index([authorId, status])
 }

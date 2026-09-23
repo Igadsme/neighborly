@@ -1,6 +1,6 @@
 # Database Design
 
-PostgreSQL via Prisma (`backend/prisma/schema.prisma`). Migrations: `backend/prisma/migrations/0001_init` and `backend/prisma/migrations/0002_onboarding`. Client provider: `prisma-client-js`.
+PostgreSQL via Prisma (`backend/prisma/schema.prisma`). Migrations: `backend/prisma/migrations/0001_init`, `backend/prisma/migrations/0002_onboarding`, and `backend/prisma/migrations/0003_verticals`. Client provider: `prisma-client-js`.
 
 **IMPLEMENTED** is every model, enum, and index in that schema. **TARGET** is the rest of the older entity list that has no table. A model with no service writer is called out; it is still implemented schema, not a target table.
 
@@ -18,8 +18,10 @@ v1 does not add an embeddings table, a vector column, or a semantic-index job.
 | `OfferStatus` | `PENDING`, `COUNTERED`, `ACCEPTED`, `REJECTED`, `WITHDRAWN`, `EXPIRED` |
 | `TransactionStatus` | `DRAFT`, `PUBLISHED`, `OFFER_RECEIVED`, `NEGOTIATING`, `ACCEPTED`, `SCHEDULED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `DISPUTED`, `REFUNDED`, `EXPIRED` |
 | `ExchangeMode` | `BUY`, `BORROW`, `RENT`, `HIRE`, `TRADE`, `SKILL_SWAP`, `FREE` |
+| `PublishStatus` | `PUBLISHED`, `ARCHIVED` |
+| `QuoteStatus` | `PENDING`, `ACCEPTED` |
 
-Create handlers set listing and request status to `PUBLISHED` only. Offer create leaves `PENDING`. Counter sets `COUNTERED`. Other listing, request, and offer statuses have no writer. Transaction statuses change only through `PATCH /transactions/:id/status`, and nothing inserts a transaction.
+Marketplace create handlers set listing and request status to `PUBLISHED`. Housing, jobs, services, community posts, events, lost-and-found, and giveaways do the same with `PublishStatus`. Owner delete sets `ARCHIVED` and `deletedAt`. Offer create leaves `PENDING`. Counter sets `COUNTERED`. Accept sets `ACCEPTED` and inserts the conversation and transaction. Transaction statuses after that change through `PATCH /transactions/:id/status`. Service quotes start `PENDING`; provider accept sets `ACCEPTED`.
 
 ### Identity
 
@@ -59,7 +61,7 @@ There is no API that inserts `Conversation` or `ConversationParticipant`.
 - `TransactionParticipant` — composite id, string `role`.
 - `TransactionMilestone` — `fromStatus`, `toStatus`. Written by the status patch.
 - `Appointment` — `startsAt`, `locationNote`. **No writer.** Included when transactions are listed.
-- `Review` — `transactionId`, `authorId`, `subjectId`, `rating` int, `body`. **No writer and no reader.** No unique constraint yet.
+- `Review` — `transactionId`, `authorId`, `subjectId`, `rating` int, `body`. Written by `POST /reviews` when the transaction is `COMPLETED`. No unique constraint yet.
 
 ### What the schema does not do
 
@@ -67,6 +69,22 @@ There is no API that inserts `Conversation` or `ConversationParticipant`.
 - No full-text index. Search is application `contains`.
 - No soft-delete on offers, messages, or reviews.
 - No money, payout, refund, or dispute tables. Dispute is only a transaction status.
+
+### Housing, jobs, services, and community
+
+Added in `0003_verticals`. Screens still read `src/data/index.ts` until the wiring PR. Seed rows in `backend/prisma/seed.ts` follow those fixtures (dollars converted to cents). Local seed users are `seed.<firstname>@example.com`. The shared password is `SEED_PASSWORD` in that file, for local boot only.
+
+Latitude and longitude on housing, jobs, and services are write-only. Public selects omit them. Profile coordinates stay off the public card. Service quote `address` is stored and returned to the requester, and to the provider only after `ACCEPTED`.
+
+`verified`, `backgroundCheck`, `rating`, and `reviewCount` are columns the API does not accept from clients. Seed writes them.
+
+- `HousingListing` — owner, `propertyType` (Apartment, House, Room, Studio, Condo, Sublet), `listingType` (`rent` or `sale`), `priceCents`, optional `priceUnit`, beds, baths, sqft, neighborhood, city, `available`, `lease`, pets, furnished, utilities, verified, `PublishStatus`, write-only lat/lng, `deletedAt`. `HousingImage.objectKey` is the unsplash id the card already uses. Indexes: `[status, listingType, createdAt]`, `[ownerId, status]`, `[city, neighborhood]`.
+- `JobListing` — owner, title, company, `logoKey`, description, `responsibilities` text array, `employmentType` (Full-time, Part-time, Freelance, Internship), `level`, `salary` display string, location, `remote` (Remote, Hybrid, On-site), deadline, `tags`, verified, write-only lat/lng. `JobApplication` is unique on `(jobId, applicantId)`. `JobSave` is composite `(userId, jobId)`.
+- `ServiceListing` — owner, title, `businessName`, description, `category` (the Services pills), `startingPriceCents`, location, availability, tags, `imageKey`, `backgroundCheck`, `rating` `Decimal(2, 1)`, `reviewCount`. `ServiceQuote` stores `preferredDate`, `preferredTime`, `notes`, private `address`, and `QuoteStatus`.
+- `CommunityPost` — author, `type` (discussion, announcement, lost_found, recommendation, event, giveaway), title, body, neighborhood, city. `CommunityReaction` is one emoji per `(postId, userId)` (`👍`, `❤️`, `😮`). `CommunityComment` is the reply.
+- `CommunityEvent` — organizer, title, description, neighborhood, city, `dateLabel`, `timeLabel`, `imageKey`. `CommunityEventRsvp` is composite `(eventId, userId)`. `attending` in the API is the RSVP count, not a stored column.
+- `LostFoundItem` — author, `kind` (`lost` or `found`; the API calls it `type`), item, neighborhood, city, `imageKey`.
+- `Giveaway` — author, item, neighborhood, city, `claimed`, optional `claimedById`. Public reads do not include `claimedBy`.
 
 ```mermaid
 erDiagram
@@ -96,6 +114,24 @@ erDiagram
     TRANSACTION ||--o{ TRANSACTION_MILESTONE : tracks
     TRANSACTION ||--o{ APPOINTMENT : schedules
     TRANSACTION ||--o{ REVIEW : may_have
+```
+
+```mermaid
+erDiagram
+    USER ||--o{ HOUSING_LISTING : posts
+    USER ||--o{ JOB_LISTING : posts
+    USER ||--o{ SERVICE_LISTING : offers
+    USER ||--o{ COMMUNITY_POST : writes
+    USER ||--o{ COMMUNITY_EVENT : organizes
+    USER ||--o{ LOST_FOUND_ITEM : posts
+    USER ||--o{ GIVEAWAY : posts
+    HOUSING_LISTING ||--o{ HOUSING_IMAGE : has
+    JOB_LISTING ||--o{ JOB_APPLICATION : receives
+    JOB_LISTING ||--o{ JOB_SAVE : bookmarked
+    SERVICE_LISTING ||--o{ SERVICE_QUOTE : receives
+    COMMUNITY_POST ||--o{ COMMUNITY_REACTION : has
+    COMMUNITY_POST ||--o{ COMMUNITY_COMMENT : has
+    COMMUNITY_EVENT ||--o{ COMMUNITY_EVENT_RSVP : has
 ```
 
 ## TARGET
@@ -128,9 +164,9 @@ Tables and constraints the earlier design named that are **not** in `schema.pris
 
 ### Community and verticals
 
-`Neighborhood`, `TrustCircle`, `TrustCircleMember`, `CommunityPost`, `CommunityComment`, `CommunityReaction`, `CommunityEvent`, `NeighborhoodMission`, `MissionContributor`, `MissionTask`, `CommunityGoal`, `CommunityVote`, `HousingListing`, `JobListing`, `ServiceProviderProfile`, `ServiceOffer`, `VehicleListing`, `BorrowAgreement`, `SkillSwap`, `Bounty`, `Team`, `Bundle`, `BundleItem`.
+`Neighborhood`, `TrustCircle`, `TrustCircleMember`, `NeighborhoodMission`, `MissionContributor`, `MissionTask`, `CommunityGoal`, `CommunityVote`, `VehicleListing`, `BorrowAgreement`, `SkillSwap`, `Bounty`, `Team`, `Bundle`, `BundleItem`.
 
-Housing, jobs, services, and community screens read `src/data/index.ts` only.
+`HousingListing`, `JobListing`, `ServiceListing`, `ServiceQuote`, `CommunityPost`, `CommunityComment`, `CommunityReaction`, `CommunityEvent`, `LostFoundItem`, and `Giveaway` are implemented (see above). The older names `ServiceProviderProfile` and `ServiceOffer` were not added. Housing, jobs, services, and community screens still read `src/data/index.ts` until the wiring PR.
 
 ### Target constraints worth keeping when those tables are added
 
@@ -141,16 +177,13 @@ Housing, jobs, services, and community screens read `src/data/index.ts` only.
 - A real geo column and GiST index when radius search is built. Until then, do not claim PostGIS queries work.
 - Full-text index on listing and request text as ordinary Postgres text search. Not embeddings.
 
-### Schema rows that need writers before the UX flow is real
+### Schema rows that still have no writer
 
-Nova can rely on these tables only after a route inserts them. June is not adding the routes.
+Accept creates `Conversation`, `ConversationParticipant`, `Transaction`, and `TransactionParticipant`. `POST /reviews` writes `Review`. These still have no insert route:
 
 | Model | Needed for |
 | --- | --- |
-| `Conversation`, `ConversationParticipant` | Messages leaving fixtures |
-| `Transaction`, `TransactionParticipant` | Dashboard progress and review eligibility |
 | `Appointment` | Dashboard meetup cards |
-| `Review` | Review submit |
 | `RequestMatch` | Any "matches" list (deterministic, not semantic) |
 | `PriceHistory` | Saved Items price alerts without the fake $100 drop |
 | `ListingImage` | Create Listing photos |

@@ -2,7 +2,7 @@
 
 Base URL: `/api/v1`. Swagger UI: `/docs` (outside the global prefix).
 
-This document replaces the mixed "initial production contract" that listed planned routes as if they were live. **IMPLEMENTED** means a controller method exists under `backend/src`. **TARGET** means v1 follow-on work that is not in the tree. The typed client in `src/api/client.ts` mirrors the implemented surface; pages do not call all of it (`docs/FRONTEND_BACKEND_MAP.md`).
+This document replaces the mixed "initial production contract" that listed planned routes as if they were live. **IMPLEMENTED** means a controller method exists under `backend/src`. **TARGET** means v1 follow-on work that is not in the tree. The typed client in `src/api/client.ts` mirrors auth, listings, requests, conversations, transactions, and reviews. It does not call housing, jobs, services, or community yet (`docs/FRONTEND_BACKEND_MAP.md`).
 
 v1 excludes OpenAI, embeddings, and semantic search. Do not add those routes.
 
@@ -214,6 +214,144 @@ Guarded. `POST /reviews`
 ```
 
 `rating` is an integer from 1 to 5. `body` is stored trimmed. The caller must be a `TransactionParticipant` (403 otherwise). Status must be `COMPLETED`, or the response is 400 `"Reviews are only allowed when the transaction is COMPLETED"`. Unknown transaction is 404 `"Transaction not found"`. There is no unique constraint on `(transactionId, authorId)` yet.
+
+### Housing, jobs, services, and community
+
+These four modules persist the screens in `src/pages/Housing.tsx`, `Jobs.tsx`, `Services.tsx`, and `Community.tsx`. The pages still read `src/data/index.ts`. `src/api/client.ts` does not call these routes yet.
+
+Public list and get responses use the same public card as listings (`id` plus profile `displayName`, `firstName`, `neighborhood`, `city`). They do not include `passwordHash`, `email`, `lastName`, profile coordinates, or the row's `latitude` / `longitude`. Coordinates are write-only: create and update accept them, and no read returns them.
+
+Money is integer cents (`priceCents`, `startingPriceCents`). The Housing and Services screens show dollars; divide cents by 100 when wiring. Job `salary` stays the display string from the screen (`$110k–$145k`, `$16–$19/hr`) because it is a range, not one amount.
+
+`verified` (housing and jobs) and `backgroundCheck`, `rating`, and `reviewCount` (services) are not client fields. Sending them is 400. Seed rows set the badges and ratings. A new row from the API has `verified: false`, `backgroundCheck: false`, `rating: null`, and `reviewCount: 0`.
+
+Create always sets `PUBLISHED`. Owner `DELETE` sets `ARCHIVED` and `deletedAt`. A non-owner update or delete is 403. Missing or archived rows are 404.
+
+Pagination matches listings: `limit` (1–100, default 24) and `offset` (default 0). Text `query` is a case-insensitive `contains`, not full-text and not geo. `distance` on the Housing cards is not stored.
+
+| Screen field | API field |
+| --- | --- |
+| Housing `type` | `type` (`Apartment`, `House`, `Room`, `Studio`, `Condo`, `Sublet`) |
+| Housing `listingType` | `listingType` (`rent`, `sale`) |
+| Housing `price` dollars | `priceCents` |
+| Housing `seller` | `owner` public card |
+| Housing `images[]` unsplash id | `images[].objectKey` |
+| Housing `postedAt` | `createdAt` |
+| Jobs `type` | `type` (`Full-time`, `Part-time`, `Freelance`, `Internship`) |
+| Jobs `remote` | `remote` (`Remote`, `Hybrid`, `On-site`) |
+| Jobs `logo` | `logo` |
+| Jobs `posted` | `createdAt` |
+| Services `provider` / `providerName` | `businessName` and `owner.profile.displayName` |
+| Services `startingPrice` dollars | `startingPriceCents` |
+| Services `image` | `image` |
+| Community post `author` | `author` public card |
+| Community `reactions.like` / `love` | `reactions.like` / `reactions.love` (`wow` is the 😮 count) |
+| Community `replies` | `replies` |
+| Lost & found `type` | `type` (`lost`, `found`) |
+| Event `image` / `attending` | `image` / `attending` |
+
+#### Housing
+
+| Method | Path | Auth | Behavior |
+| --- | --- | --- | --- |
+| `GET` | `/housing` | No | Published rows, newest first unless `sort` is `price_asc`, `price_desc`, or `beds`. Query: `query`, `listingType`, `type`, `minBeds`, `maxPriceCents`, `pets`, `furnished`, `verified`, `utilitiesIncluded`, `sort`, `limit`, `offset`. |
+| `GET` | `/housing/:id` | No | One published listing. 404 `"Housing listing not found"`. |
+| `POST` | `/housing` | Yes | Creates `PUBLISHED`. Optional `imageKeys` (max 8). |
+| `PATCH` | `/housing/:id` | Yes | Owner only. |
+| `DELETE` | `/housing/:id` | Yes | Owner only. Returns `{ id, status: "ARCHIVED" }`. |
+
+`POST /housing` body (unknown fields rejected):
+
+```json
+{
+  "title": "Sunny 2BR in Inman Park",
+  "description": "At least 10 characters",
+  "type": "Apartment",
+  "listingType": "rent",
+  "priceCents": 185000,
+  "priceUnit": "/mo",
+  "beds": 2,
+  "baths": 1,
+  "sqft": 920,
+  "neighborhood": "Inman Park",
+  "city": "Atlanta",
+  "available": "Oct 1, 2026",
+  "lease": "12 months",
+  "pets": true,
+  "furnished": false,
+  "utilities": "Water included",
+  "imageKeys": ["photo-1560448204-e02f11c3d0e2"],
+  "latitude": 33.761,
+  "longitude": -84.363
+}
+```
+
+`utilitiesIncluded=true` keeps rows whose `utilities` text is set and is not `N/A` or a `Resident…` string. Boolean query params are `true` or `false`.
+
+#### Jobs
+
+| Method | Path | Auth | Behavior |
+| --- | --- | --- | --- |
+| `GET` | `/jobs` | No | Published jobs, newest first. Query: `query` (title, company, description), `type`, `level` (contains, so `Mid` matches `Mid-Senior`), `remote`, `limit`, `offset`. Does not include applications. |
+| `GET` | `/jobs/:id` | No | One published job. 404 `"Job not found"`. |
+| `POST` | `/jobs` | Yes | Creates `PUBLISHED`. |
+| `PATCH` | `/jobs/:id` | Yes | Owner only. |
+| `DELETE` | `/jobs/:id` | Yes | Owner only. `{ id, status: "ARCHIVED" }`. |
+| `POST` | `/jobs/:id/apply` | Yes | Body `{ "message"?: string }`. One application per person. Repeating returns the existing row. The employer cannot apply (400 `"You cannot apply to your own job"`). The applicant card is the public card. |
+| `GET` | `/jobs/applications` | Yes | Caller's applications, with the public job. |
+| `GET` | `/jobs/:id/applications` | Yes | Owner only. Applicant public cards and messages. No email. |
+| `POST` | `/jobs/:id/save` | Yes | Toggle. `{ saved: true \| false }`. |
+| `GET` | `/jobs/saved` | Yes | Caller's saved jobs, newest save first. |
+
+`POST /jobs` requires `title`, `company`, `description` (min 10), `type`, `level`, `salary`, `location`, and `remote`. Optional `responsibilities[]`, `tags[]`, `deadline`, `logoKey`, `latitude`, `longitude`.
+
+#### Services
+
+| Method | Path | Auth | Behavior |
+| --- | --- | --- | --- |
+| `GET` | `/services` | No | Published services, newest first. Query: `query`, `category`, `limit`, `offset`. No quotes. |
+| `GET` | `/services/:id` | No | One published service. 404 `"Service not found"`. |
+| `POST` | `/services` | Yes | Creates `PUBLISHED`. |
+| `PATCH` | `/services/:id` | Yes | Owner only. |
+| `DELETE` | `/services/:id` | Yes | Owner only. `{ id, status: "ARCHIVED" }`. |
+| `POST` | `/services/:id/quotes` | Yes | Quote request. The provider cannot quote their own service (400). The response includes the address the caller just sent. |
+| `GET` | `/services/quotes/mine` | Yes | Caller's quotes, including their own address and the public service. |
+| `GET` | `/services/:id/quotes` | Yes | Provider only (403 otherwise). Requester public card. `address` is omitted while `status` is `PENDING`. |
+| `POST` | `/services/quotes/:id/accept` | Yes | Provider only. Sets `ACCEPTED`. The response then includes `address`. |
+
+`category` is one of `Cleaning`, `Moving`, `Tutoring`, `Repair`, `Photography`, `Lawn Care`, `Tech Help`, `Fitness`, `Design`, `Cooking`.
+
+`POST /services/:id/quotes` body: `notes` (min 2), optional `preferredDate`, `preferredTime`, and `address`. Address is the street line the Services modal says stays private until the provider accepts.
+
+#### Community
+
+| Method | Path | Auth | Behavior |
+| --- | --- | --- | --- |
+| `GET` | `/community/posts` | No | Published posts, newest first. Query: `type`, `limit`, `offset`. `type` is `discussion`, `announcement`, `lost_found`, `recommendation`, `event`, or `giveaway`. |
+| `GET` | `/community/posts/:id` | No | One post with reaction counts and `replies`. |
+| `POST` | `/community/posts` | Yes | Body: `type`, `title`, `body` (min 10), `neighborhood`, optional `city`. |
+| `PATCH` | `/community/posts/:id` | Yes | Author only. |
+| `DELETE` | `/community/posts/:id` | Yes | Author only. Archives. |
+| `POST` | `/community/posts/:id/reactions` | Yes | Body `{ "emoji": "👍" \| "❤️" \| "😮" }`. One reaction per person. The same emoji again removes it. Returns the post. |
+| `GET` | `/community/posts/:id/comments` | No | Comments oldest first. Author public card. |
+| `POST` | `/community/posts/:id/comments` | Yes | Body `{ "body": "min length 1" }`. |
+| `GET` | `/community/events` | No | Published events, oldest `createdAt` first (seed order matches the Events tab). `attending` is the RSVP count. |
+| `GET` | `/community/events/:id` | No | One event. |
+| `POST` | `/community/events` | Yes | `title`, `neighborhood`, `dateLabel`, `timeLabel`. Optional `description`, `city`, `imageKey`. |
+| `PATCH` | `/community/events/:id` | Yes | Organizer only. |
+| `DELETE` | `/community/events/:id` | Yes | Organizer only. |
+| `POST` | `/community/events/:id/rsvp` | Yes | Toggle. `{ attending, attendingCount }`. |
+| `GET` | `/community/lost-found` | No | Newest first. |
+| `GET` | `/community/lost-found/:id` | No | One item. `type` is `lost` or `found`. |
+| `POST` | `/community/lost-found` | Yes | `type`, `item`, `neighborhood`. Optional `city`, `imageKey`. |
+| `PATCH` | `/community/lost-found/:id` | Yes | Author only. |
+| `DELETE` | `/community/lost-found/:id` | Yes | Author only. |
+| `GET` | `/community/giveaways` | No | Newest first. `claimed` is boolean. The claimer is not included. |
+| `GET` | `/community/giveaways/:id` | No | One giveaway. |
+| `POST` | `/community/giveaways` | Yes | `item`, `neighborhood`, optional `city`. |
+| `PATCH` | `/community/giveaways/:id` | Yes | Author only. |
+| `DELETE` | `/community/giveaways/:id` | Yes | Author only. |
+| `POST` | `/community/giveaways/:id/claim` | Yes | First caller sets `claimed`. `{ claimed: true, giveaway }`. A second person is 409 `"This giveaway has already been claimed"`. The same person claiming again is `{ claimed: true, giveaway }`. |
 
 ## TARGET
 
