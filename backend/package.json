@@ -2,7 +2,6 @@
   "name": "neighborly-api",
   "private": true,
   "version": "1.0.0",
-  "type": "module",
   "scripts": {
     "build": "nest build",
     "start:dev": "nest start --watch",
@@ -21,6 +20,7 @@
     "@nestjs/core": "^11.0.0",
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/platform-socket.io": "^11.2.5",
     "@nestjs/swagger": "^11.0.0",
     "@nestjs/websockets": "^11.0.0",
     "@prisma/client": "^6.0.0",
@@ -46,7 +46,15 @@
     "prisma": "^6.0.0",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.7.0",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "argon2",
+      "prisma"
+    ]
   }
 }
