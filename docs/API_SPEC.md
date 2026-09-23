@@ -79,7 +79,7 @@ Not implemented: `PATCH /users/me/profile`, `GET /users/:id/profile`.
 
 ### Categories
 
-`GET /categories` — public. `{ id, name, slug }[]` ordered by name. Seeded in `backend/prisma/seed.ts`: Furniture, Electronics, Clothing & Accessories, Vehicles, Sports & Outdoors, Toys & Games, Books & Media, Home & Garden, Tools & Equipment, Musical Instruments, Art & Collectibles, Housing, Services, Jobs, Other.
+`GET /categories` — public. `{ id, name, slug, listingCount }[]` ordered by name. `listingCount` is published, non-deleted listings in that category. Seeded in `backend/prisma/seed.ts`: Furniture, Electronics, Clothing & Accessories, Vehicles, Sports & Outdoors, Toys & Games, Books & Media, Home & Garden, Tools & Equipment, Musical Instruments, Art & Collectibles, Housing, Services, Jobs, Other.
 
 The Create Listing `<select>` uses a shorter hardcoded name list and resolves `categoryId` by matching `name`.
 
@@ -88,8 +88,10 @@ The Create Listing `<select>` uses a shorter hardcoded name list and resolves `c
 | Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
 | `GET` | `/listings` | No | Published listings. Query: `query`, `categoryId` (UUID), `limit`, `offset`. Includes `images`, `category`, `seller.profile`. Newest first. |
-| `GET` | `/listings/:id` | No | Any non-deleted listing with images (sort order), category, seller profile. 404 `"Listing not found"`. |
+| `GET` | `/listings/:id` | No | Non-deleted listing that is not `DRAFT`, with images (sort order), category, seller profile. Drafts are 404. 404 `"Listing not found"`. |
 | `POST` | `/listings` | Yes | Creates `PUBLISHED`. Does not accept image keys. Does not write `PriceHistory`. |
+| `POST` | `/listings/drafts` | Yes | Same body as create. Stores `DRAFT`. Omitted from `GET /listings` and `GET /listings/:id`. |
+| `POST` | `/listings/:id/publish` | Yes | Owner only. `DRAFT` becomes `PUBLISHED`. Already published returns the row. Any other status is 409 `"Only a draft can be published"`. 403 if not owner. |
 | `PATCH` | `/listings/:id` | Yes | Owner only. Optional title, description, price, condition, pickup, delivery, shipping. 403 if not owner. |
 | `DELETE` | `/listings/:id` | Yes | Owner only. Sets `ARCHIVED` and `deletedAt`. |
 | `POST` | `/listings/:id/favorite` | Yes | Toggle. `{ saved: true \| false }`. |
@@ -117,7 +119,7 @@ The Create Listing `<select>` uses a shorter hardcoded name list and resolves `c
 }
 ```
 
-`title` is `@MinLength(3)` and `@MaxLength(140)`. `description` is annotated `@Min(10)` (numeric `Min`, not `MinLength`). Do not assume a 10-character description rule until that decorator is corrected. The Create Listing page does not send neighborhood, city, coordinates, radius, or shipping.
+`title` is `@MinLength(3)` and `@MaxLength(140)`. `description` is `@MinLength(10)`. The same body is used for `POST /listings/drafts`. No new Prisma migration: `ListingStatus.DRAFT` already exists in `0001_init`. The Create Listing page sends category, title, description, `priceCents` when the dollar field is filled, condition, pickup, and delivery. It does not send photos, tags, shipping, neighborhood, city, or coordinates. The AI Review step stays on screen and does not call a model.
 
 Not implemented on this module: condition/price/distance/verified/free/delivery query params, image presign, price-drop feed, saved-search alerts.
 
@@ -126,6 +128,7 @@ Not implemented on this module: condition/price/distance/verified/free/delivery 
 | Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
 | `GET` | `/requests` | No | `PUBLISHED` and `deletedAt: null`. Includes category, a public requester card, and `offers: { id, status }[]`. Newest first. Not limited to the caller. |
+| `GET` | `/requests/offers` | Yes | Offers the caller can act on. Query `scope`: `received` (default; `request.requesterId` is the caller), `sent` (`offererId` is the caller), or `all` (either). The request must be published and not deleted. Each row includes the offer, a public offerer card, listing items (`id`, `title`, `priceCents`, `status`), and the parent request with a public requester card. |
 | `GET` | `/requests/:id` | No | One published request. Same public requester card. Offers include `amountCents`, `message`, `status`, `items` (listing id, title, price, status), and the offerer's public card. 404 `"Request not found"`. |
 | `POST` | `/requests` | Yes | Creates `PUBLISHED`. Ignores any attempt to save `DRAFT` because status is hardcoded. |
 | `POST` | `/requests/:id/offers` | Yes | Offer on a published request. Offerer cannot be the requester (400). Optional `listingIds` must all be the offerer's published listings (403 otherwise). |
@@ -158,7 +161,7 @@ The public requester card is `id` plus profile `displayName`, `firstName`, `neig
 
 `POST /requests/offers/:id/counter` body: `message` (min length 2), optional `amountCents` ≥ 0.
 
-Not implemented: `GET /requests/:id/matches`, withdraw, list offers for the current user. `RequestMatch` rows are never created. Matching is not semantic search and is not a hidden implemented feature.
+Not implemented: `GET /requests/:id/matches`, withdraw. `GET /requests/offers` is the caller-scoped list; it does not replace the public `GET /requests` feed. `RequestMatch` rows are never created. Matching is not semantic search and is not a hidden implemented feature.
 
 ### Conversations
 

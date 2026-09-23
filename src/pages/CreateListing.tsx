@@ -1,20 +1,9 @@
 import { useEffect, useState } from "react"
 import { Button, ProgressBar, Badge, Icon } from "../components/ui"
 import { api, readError } from "../api/client"
-import type { ExchangeMode } from "../api/types"
+import type { ListingInput } from "../api/types"
 
 type Page = "home" | "dashboard"
-
-const requestModeByCard: Record<string, ExchangeMode> = {
-  item: "BUY",
-  free: "FREE",
-  housing: "RENT",
-  job: "HIRE",
-  service: "SKILL_SWAP",
-  vehicle: "BUY",
-  event: "TRADE",
-  "lost-found": "BORROW",
-}
 
 interface CreateListingProps {
   onNavigate: (p: Page) => void
@@ -113,6 +102,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
   const [delivery, setDelivery] = useState(false)
   const [aiApplied, setAiApplied] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
   const [published, setPublished] = useState(false)
   const [coverImage, setCoverImage] = useState(0)
   const [categoryId, setCategoryId] = useState("")
@@ -125,6 +115,11 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
     api.categories
       .list()
       .then((items) => {
+        if (items.length === 0) {
+          setCategoryId("")
+          setPublishError("No categories are available yet.")
+          return
+        }
         const match = items.find((item) => item.name === category)
         setCategoryId(match?.id ?? "")
       })
@@ -136,45 +131,53 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
       .finally(() => setCategoryLoading(false))
   }, [category])
 
-  const handlePublish = async () => {
-    const mode = listingType ? requestModeByCard[listingType] : undefined
+  const listingBody = (): ListingInput | null => {
     const trimmedTitle = title.trim()
     const trimmedDescription = description.trim()
     if (!categoryId) {
-      setPublishError("Choose a valid category before publishing.")
-      return
+      setPublishError(
+        categoryLoading
+          ? "Categories are still loading. Please retry."
+          : "Choose a valid category before publishing.",
+      )
+      return null
     }
-    if (!mode) {
-      setPublishError("Unable to publish this listing. Please try again.")
-      return
-    }
-    if (trimmedTitle.length < 3) {
-      setPublishError("Add a title of at least 3 characters.")
-      return
+    if (trimmedTitle.length < 3 || trimmedTitle.length > 140) {
+      setPublishError("Add a title of 3 to 140 characters.")
+      return null
     }
     if (trimmedDescription.length < 10) {
       setPublishError("Add a description of at least 10 characters.")
-      return
+      return null
     }
-    let budgetCents: number | undefined
+    let priceCents: number | undefined
     if (price.trim() !== "") {
       const amount = Number(price)
       if (!Number.isFinite(amount) || amount < 0) {
-        setPublishError("Enter a budget using numbers only.")
-        return
+        setPublishError("Enter a price using numbers only.")
+        return null
       }
-      budgetCents = Math.round(amount * 100)
+      priceCents = Math.round(amount * 100)
     }
+    return {
+      categoryId,
+      title: trimmedTitle,
+      description: trimmedDescription,
+      condition,
+      pickupAvailable: pickup,
+      deliveryAvailable: delivery,
+      ...(priceCents !== undefined ? { priceCents } : {}),
+    }
+  }
+
+  const handlePublish = async () => {
+    if (publishing || savingDraft) return
+    const body = listingBody()
+    if (!body) return
     setPublishing(true)
     setPublishError("")
     try {
-      await api.requests.create({
-        categoryId,
-        title: trimmedTitle,
-        description: trimmedDescription,
-        mode,
-        ...(budgetCents !== undefined ? { budgetCents } : {}),
-      })
+      await api.listings.create(body)
       setPublished(true)
     } catch (cause) {
       setPublishError(
@@ -182,6 +185,24 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
       )
     } finally {
       setPublishing(false)
+    }
+  }
+
+  const handleSaveDraft = async () => {
+    if (publishing || savingDraft) return
+    const body = listingBody()
+    if (!body) return
+    setSavingDraft(true)
+    setPublishError("")
+    try {
+      await api.listings.saveDraft(body)
+      onNavigate("home")
+    } catch (cause) {
+      setPublishError(
+        readError(cause, "Unable to save this draft. Please try again."),
+      )
+    } finally {
+      setSavingDraft(false)
     }
   }
 
@@ -204,12 +225,12 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
             {step > 0 && (
               <button
                 onClick={() => {
-                  if (publishing) return
-                  onNavigate("home")
+                  void handleSaveDraft()
                 }}
-                className="text-sm text-[#8A9AB5] hover:text-[#1B2A4A] transition-colors"
+                disabled={publishing || savingDraft || categoryLoading}
+                className="text-sm text-[#8A9AB5] hover:text-[#1B2A4A] transition-colors disabled:opacity-60"
               >
-                Save draft
+                {savingDraft ? "Saving..." : "Save draft"}
               </button>
             )}
           </div>
@@ -230,6 +251,14 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
               </span>
             ))}
           </div>
+          {publishError && step !== 5 && (
+            <div
+              className="mt-4 rounded-xl border border-[#E8694A]/30 bg-[#FFF5F2] px-4 py-3 text-sm text-[#A63D27]"
+              role="alert"
+            >
+              {publishError}
+            </div>
+          )}
         </div>
 
         {/* Step 0: Listing type */}
@@ -742,10 +771,10 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                   🎉
                 </div>
                 <h3 className="font-display text-2xl font-semibold text-[#1B2A4A] mb-2">
-                  Request published!
+                  Listing published!
                 </h3>
                 <p className="text-[#5C6E8A] mb-2">
-                  Your request is live and visible to neighbors nearby.
+                  Your listing is live and visible to neighbors nearby.
                 </p>
                 <p className="text-sm text-[#8A9AB5] mb-8">
                   Offers will show up on your dashboard.
@@ -777,14 +806,16 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                       label: "Save as draft",
                       desc: "Save your work and publish when you're ready",
                       icon: "📝",
-                      action: () => onNavigate("home"),
+                      action: () => {
+                        void handleSaveDraft()
+                      },
                       primary: false,
                     },
                   ].map(({ label, desc, icon, action, primary }) => (
                     <button
                       key={label}
                       onClick={action}
-                      disabled={publishing || categoryLoading}
+                      disabled={publishing || savingDraft || categoryLoading}
                       className={`w-full flex items-center gap-4 p-5 rounded-2xl border-2 text-left transition-all ${
                         primary
                           ? "border-[#2D6A4F] bg-[#F0FBF3] hover:bg-[#D8F3DC]"
@@ -792,7 +823,11 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                       }`}
                     >
                       <span className="text-3xl">
-                        {publishing && primary ? "⏳" : icon}
+                        {publishing && primary
+                          ? "⏳"
+                          : savingDraft && !primary
+                            ? "⏳"
+                            : icon}
                       </span>
                       <div>
                         <p
@@ -800,7 +835,11 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                             primary ? "text-[#2D6A4F]" : "text-[#1B2A4A]"
                           }`}
                         >
-                          {publishing && primary ? "Publishing..." : label}
+                          {publishing && primary
+                            ? "Publishing..."
+                            : savingDraft && !primary
+                              ? "Saving..."
+                              : label}
                         </p>
                         <p className="text-xs text-[#8A9AB5] mt-0.5">{desc}</p>
                       </div>

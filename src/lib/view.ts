@@ -3,6 +3,7 @@ import type {
   ApiListing,
   ApiOfferDetail,
   ApiRequestDetail,
+  ApiScopedOffer,
   PublicUserCard,
 } from "../api/types"
 
@@ -110,6 +111,29 @@ export type OfferRow = {
   offerer: PublicUserCard
   requester: PublicUserCard
   imageUrl: string | null
+}
+
+export function requestDetailsFromOffers(offers: ApiScopedOffer[]): ApiRequestDetail[] {
+  const byRequest = new Map<string, ApiRequestDetail>()
+  for (const offer of offers) {
+    const detail: ApiOfferDetail = {
+      id: offer.id,
+      requestId: offer.request.id,
+      amountCents: offer.amountCents,
+      message: offer.message,
+      status: offer.status,
+      createdAt: offer.createdAt,
+      offerer: offer.offerer,
+      items: offer.items,
+    }
+    const existing = byRequest.get(offer.request.id)
+    if (existing) {
+      existing.offers.push(detail)
+      continue
+    }
+    byRequest.set(offer.request.id, { ...offer.request, offers: [detail] })
+  }
+  return [...byRequest.values()]
 }
 
 export function offerRowsForUser(

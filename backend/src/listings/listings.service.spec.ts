@@ -55,7 +55,7 @@ describe('ListingsService public reads', () => {
     await moduleRef.get(ListingsService).get('listing-1')
 
     const query = findFirst.mock.calls[0][0]
-    expect(query.where).toEqual({ id: 'listing-1', deletedAt: null })
+    expect(query.where).toEqual({ id: 'listing-1', deletedAt: null, status: { not: 'DRAFT' } })
     expectPublicSeller(query.select.seller)
     expect(query.select.images).toEqual({ orderBy: { sortOrder: 'asc' } })
     expect(query.select.latitude).toBeUndefined()

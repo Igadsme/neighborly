@@ -1,5 +1,7 @@
-import { ListingCard, Badge, SectionHeader, Icon } from '../components/ui'
+import { useEffect, useState } from 'react'
+import { ListingCard, SectionHeader, Icon } from '../components/ui'
 import { listings } from '../data'
+import { api, readStatus } from '../api/client'
 
 type Page = 'explore' | 'listing' | 'housing' | 'services' | 'jobs' | 'community'
 
@@ -88,7 +90,45 @@ const trendingSearches = [
   'Used MacBook', 'Dog friendly housing', 'Part-time barista jobs'
 ]
 
+const liveCategoryName: Record<string, string> = {
+  Housing: 'Housing',
+  'Jobs & Gigs': 'Jobs',
+  Services: 'Services',
+  Vehicles: 'Vehicles',
+}
+
 export default function Categories({ onNavigate }: CategoriesProps) {
+  const [counts, setCounts] = useState<Record<string, number> | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [empty, setEmpty] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    api.categories
+      .list()
+      .then((items) => {
+        if (!active) return
+        if (items.length === 0) {
+          setEmpty(true)
+          setCounts(null)
+          return
+        }
+        const next: Record<string, number> = {}
+        for (const item of items) next[item.name] = item.listingCount ?? 0
+        setCounts(next)
+      })
+      .catch((cause: unknown) => {
+        if (active) setError(readStatus(cause, 'Categories could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-24 md:pb-0">
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12">
@@ -101,6 +141,13 @@ export default function Categories({ onNavigate }: CategoriesProps) {
           <p className="text-[#5C6E8A] text-lg max-w-2xl mx-auto">
             From furniture to jobs, housing to community events — everything happening in your neighborhood, organized.
           </p>
+          {loading && <p className="text-sm text-[#8A9AB5] mt-4">Loading categories…</p>}
+          {error && (
+            <p className="text-sm text-[#A63D27] mt-4" role="alert">
+              {error}
+            </p>
+          )}
+          {!loading && !error && empty && <p className="text-sm text-[#8A9AB5] mt-4">No categories yet.</p>}
         </div>
 
         {/* Trending searches */}
@@ -125,7 +172,10 @@ export default function Categories({ onNavigate }: CategoriesProps) {
 
         {/* Main category grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5 mb-14">
-          {mainCategories.map(cat => (
+          {mainCategories.map(cat => {
+            const liveName = liveCategoryName[cat.label]
+            const live = liveName && counts ? counts[liveName] : undefined
+            return (
             <button
               key={cat.label}
               onClick={() => onNavigate(cat.page)}
@@ -145,7 +195,7 @@ export default function Categories({ onNavigate }: CategoriesProps) {
               <div className="relative h-full flex flex-col justify-end p-5">
                 {/* Count badge */}
                 <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-sm border border-white/30 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
-                  {cat.count.toLocaleString()} near you
+                  {loading ? '…' : live !== undefined ? `${live.toLocaleString()} listings` : `${cat.count.toLocaleString()} near you`}
                 </div>
 
                 <span className="text-3xl mb-2">{cat.emoji}</span>
@@ -160,7 +210,8 @@ export default function Categories({ onNavigate }: CategoriesProps) {
                 </div>
               </div>
             </button>
-          ))}
+            )
+          })}
         </div>
 
         {/* Featured listings preview */}

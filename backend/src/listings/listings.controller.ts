@@ -41,6 +41,20 @@ export class ListingsController {
     return this.listings.create(request.user.id, input)
   }
 
+  @Post('drafts')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
+  saveDraft(@Req() request: AuthenticatedRequest, @Body() input: CreateListingDto) {
+    return this.listings.saveDraft(request.user.id, input)
+  }
+
+  @Post(':id/publish')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
+  publish(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    return this.listings.publish(request.user.id, id)
+  }
+
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
