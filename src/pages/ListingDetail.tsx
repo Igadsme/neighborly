@@ -279,12 +279,19 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                 {/* Actions overlay */}
                 <div className="absolute top-4 right-4 flex gap-2">
                   <button
+                    type="button"
+                    aria-label="Save listing"
                     onClick={e => { e.stopPropagation(); void toggleSaved() }}
                     className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-md hover:scale-110 transition-transform"
                   >
                     <Icon name="heart" size={16} className={saved ? 'fill-[#E8694A] stroke-[#E8694A]' : 'stroke-[#5C6E8A]'} />
                   </button>
-                  <button className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-md hover:scale-110 transition-transform">
+                  <button
+                    type="button"
+                    aria-label="Share listing"
+                    onClick={e => { e.stopPropagation(); setActionNote("Sharing a link isn't available in this version.") }}
+                    className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-md hover:scale-110 transition-transform"
+                  >
                     <Icon name="share" size={16} className="stroke-[#5C6E8A]" />
                   </button>
                 </div>

@@ -65,6 +65,7 @@ export default function App() {
         if (cancelled) return
         setViewerId(me.id)
         setIsSignedIn(true)
+        setPage((current) => (current === "landing" ? "home" : current))
       })
       .catch(() => {
         if (cancelled) return

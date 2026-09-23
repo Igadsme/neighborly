@@ -126,7 +126,8 @@ export class SafetyService {
     })
     if (!report) throw new NotFoundException('Report not found')
     if (report.status === 'RESOLVED' || report.status === 'DISMISSED') {
-      throw new ConflictException('This report is already closed')
+      const canRestore = input.kind === 'RESTORE_USER' && report.status === 'RESOLVED' && await this.targetIsSuspended(report)
+      if (!canRestore) throw new ConflictException('This report is already closed')
     }
     const note = sanitizeOptional(input.note, 2000) || null
     if (input.kind === 'DISMISS' || input.kind === 'RESOLVE') {
@@ -271,6 +272,16 @@ export class SafetyService {
       reportId: report.id
     })
     return closed
+  }
+
+  private async targetIsSuspended(report: { targetType: ReportTargetType; targetId: string }) {
+    const ownerId = await this.ownerOf(report.targetType, report.targetId)
+    if (!ownerId) return false
+    const user = await this.prisma.user.findFirst({
+      where: { id: ownerId, deletedAt: null, status: 'SUSPENDED' },
+      select: { id: true }
+    })
+    return Boolean(user)
   }
 
   private async ownerOf(targetType: ReportTargetType, targetId: string) {

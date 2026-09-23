@@ -17,8 +17,7 @@ export function helmetOptions(nodeEnv = process.env.NODE_ENV): HelmetOptions {
     contentSecurityPolicy: production ? undefined : false,
     crossOriginEmbedderPolicy: false,
     referrerPolicy: { policy: 'no-referrer' },
-    hsts: production,
-    xPoweredBy: false
+    hsts: production
   } as HelmetOptions
 }
 

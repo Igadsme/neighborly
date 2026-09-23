@@ -152,6 +152,31 @@ describe('SafetyService', () => {
     }))
   })
 
+  it('restores a suspended account from the report that already closed', async () => {
+    prisma.staffRoleAssignment.findFirst.mockResolvedValue({ role: 'MODERATOR' })
+    prisma.report.findUnique.mockResolvedValue({ id: reportId, status: 'RESOLVED', targetType: 'USER', targetId: ownerId })
+    prisma.user.findFirst.mockResolvedValue({ id: ownerId })
+    prisma.user.updateMany.mockResolvedValue({ count: 1 })
+    prisma.report.update.mockResolvedValue({ ...report, status: 'RESOLVED', targetType: 'USER', targetId: ownerId })
+    prisma.moderationAction.create.mockResolvedValue({ id: 'action-3' })
+
+    await expect(service.act(moderatorId, reportId, { kind: 'RESTORE_USER', note: 'mistake' })).resolves.toMatchObject({ status: 'RESOLVED' })
+    expect(prisma.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: ownerId, status: 'SUSPENDED' })
+    }))
+    expect(prisma.user.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: { status: 'ACTIVE' }
+    }))
+  })
+
+  it('does not restore a closed report when the account is not suspended', async () => {
+    prisma.staffRoleAssignment.findFirst.mockResolvedValue({ role: 'MODERATOR' })
+    prisma.report.findUnique.mockResolvedValue({ id: reportId, status: 'RESOLVED', targetType: 'USER', targetId: ownerId })
+    prisma.user.findFirst.mockResolvedValue(null)
+    await expect(service.act(moderatorId, reportId, { kind: 'RESTORE_USER' })).rejects.toThrow('This report is already closed')
+    expect(prisma.user.updateMany).not.toHaveBeenCalled()
+  })
+
   it('returns 409 when the report is already closed and 404 when it is missing', async () => {
     prisma.staffRoleAssignment.findFirst.mockResolvedValue({ role: 'MODERATOR' })
     prisma.report.findUnique.mockResolvedValueOnce(null)

@@ -292,6 +292,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 />
                 <input
                   type="text"
+                  aria-label="Search"
                   placeholder="What are you looking for?"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -304,7 +305,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   size={15}
                   className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#E8694A] pointer-events-none"
                 />
-                <select className="h-13 pl-9 pr-8 bg-white text-[#1B2A4A] rounded-xl text-sm font-medium focus:outline-none appearance-none cursor-pointer shadow-lg border-0">
+                <select aria-label="City" className="h-13 pl-9 pr-8 bg-white text-[#1B2A4A] rounded-xl text-sm font-medium focus:outline-none appearance-none cursor-pointer shadow-lg border-0">
                   <option>Atlanta, GA</option>
                   <option>Decatur, GA</option>
                   <option>Midtown, ATL</option>
