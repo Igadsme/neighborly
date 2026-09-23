@@ -20,6 +20,17 @@ export function mediaSrc(image: string | undefined, unsplashParams: string) {
   return `https://images.unsplash.com/${image}?${unsplashParams}`
 }
 
+export function memberSince(iso: string | undefined) {
+  if (!iso) return "recently"
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return "recently"
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  })
+}
+
 export function relativeTime(iso: string | undefined) {
   if (!iso) return "Recently"
   const then = new Date(iso).getTime()

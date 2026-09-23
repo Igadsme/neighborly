@@ -1,6 +1,6 @@
 # Frontend-to-Backend Feature Map
 
-Page engine: `src/App.tsx` holds `page` and swaps screens. There is no URL per screen. Remaining fixtures live in `src/data/index.ts` (`sellers`, `listings`, `mapListings`). Housing, jobs, services, and community fixture arrays were removed after those screens were pointed at `/api/v1`.
+Page engine: `src/App.tsx` holds `page` and swaps screens. There is no URL per screen. Remaining fixtures live in `src/data/index.ts` (`sellers`, `listings`, `mapListings`). Map and Profile no longer read those arrays. Housing, jobs, services, and community fixture arrays were removed after those screens were pointed at `/api/v1`. Landing and the Categories featured strip still use `listings`. Listing Detail still uses `listings` when the id is not a UUID.
 
 **IMPLEMENTED** means the page or client already calls an endpoint that exists. **TARGET** means the screen is Figma-complete and still local, or a control on a wired screen has no endpoint. Request-flow states for Nova are specified in [UX_REQUEST_FLOW_STATES.md](./UX_REQUEST_FLOW_STATES.md). Decisions that constrain wiring are in [DECISIONS.md](./DECISIONS.md).
 
@@ -66,12 +66,12 @@ These controls and copy do not have an endpoint. They stay on screen and are not
 | `home` | `HomeFeed.tsx` | Category chips, listing rails, services, community strip | Suggested people only | Listings, services, events, and posts are implemented | Follow has no endpoint. Cards go to `listing` with the real id. |
 | `explore` | `Explore.tsx` | Query, filters, grid/list, suggestions | Suggestions are inline. Results come from `GET /listings`, then extra filters run in the browser | Target filters beyond `query` | "Save alert" toggles `alertSaved` locally. Map control navigates to `map`. |
 | `categories` | `Categories.tsx` | Category grid and a listing strip | Featured strip still uses `listings`. Housing, Jobs, Services, and Vehicles counts come from the API. Other tile counts stay the original labels. | `GET /categories` (`listingCount`) | Loading, empty, and error lines sit under the existing header. Some tiles navigate to `housing`, `services`, `jobs`, `community`. |
-| `map` | `MapDiscovery.tsx` | Map-style discovery | `mapListings` and `listings` | Target geo query | No Mapbox call. `MAPBOX_TOKEN` may be empty. |
+| `map` | `MapDiscovery.tsx` | Map-style discovery | None for pins or the list. Safe spots and the mile line stay painted | `GET /listings?limit=100` | No Mapbox call. Pins use painted neighborhood centroids, not coordinates. See `docs/API_SPEC.md`. |
 | `listing` | `ListingDetail.tsx` | API listing when the id is a UUID, otherwise a fixture match | `listings` for non-UUID ids and related cards | `GET /listings/:id` is called for UUID ids | Save uses the favorite route for UUID ids. Message "send" sets local success and routes to `messages`. |
 | `create` | `CreateListing.tsx` | Six-step wizard | Sample desk copy is the initial state | Publishes with `POST /listings`. Save draft uses `POST /listings/drafts`. | AI Review stays decorative. Composer states: [UX_REQUEST_FLOW_STATES.md](./UX_REQUEST_FLOW_STATES.md). |
 | `messages` | `Messages.tsx` | Two panes, filters, thread, offer card, safety banner | None for the thread list | Conversations API | Accept, decline, counter, and send are wired when a thread exists. |
 | `saved` | `SavedItems.tsx` | Three tabs | API for the first two tabs | Price history and alert delivery are target | Keep the empty/error cards when extending. |
-| `profile` | `Profile.tsx` | Always `sellers[0]` (Marcus) | `sellers`, `listings`, inline `reviews` | `GET /users/:id/profile`, reviews list | Follow and report are local. Reviews tab is read-only. |
+| `profile` | `Profile.tsx` | Signed-in user, or `userId` when passed | None | `GET /users/me` when no id is passed, then `GET /users/:id/profile`, `GET /users/:id/reviews`, `GET /listings?sellerId=` for published and `status=SOLD` | No edit control, so follow, message, and report stay local. Reviews tab is read-only. Response time is an em dash. The avatar check means `emailVerified`, not an ID check. |
 | `dashboard` | `Dashboard.tsx` | Overview, My Listings, Offers, Activity | Trust banner and the em dashes noted above | Requests, offers, transactions, reviews, listings, conversations are implemented | Offer and review states: [UX_REQUEST_FLOW_STATES.md](./UX_REQUEST_FLOW_STATES.md). |
 | `housing` | `Housing.tsx` | Rental browsing | None | Implemented | See the implemented table. |
 | `services` | `Services.tsx` | Provider cards and quote modal | Category counts only | Implemented | Quote modal posts to the API. Address stays on the requester response. |
@@ -88,13 +88,13 @@ These controls and copy do not have an endpoint. They stay on screen and are not
 - Offer cards on `dashboard` and `messages` → `RequestOffer`, `CounterOffer`, `OfferItem`.
 - `messages` bubbles → `Conversation`, `Message`.
 - Dashboard meetups and the Messages progress strip → `Transaction`, `TransactionMilestone`, `Appointment`.
-- Dashboard "Reviews to complete" and Profile reviews → `Review`. Profile is still fixture text.
+- Dashboard "Reviews to complete" and Profile reviews → `Review`. Profile loads `GET /users/:id/reviews`. Dashboard does not call that list yet.
 - `housing`, `services`, `jobs`, `community` → `HousingListing`, `JobListing`, `ServiceListing`, `CommunityPost`, `CommunityEvent`, `LostFoundItem`, and `Giveaway`. The four pages call those routes. Field mapping is in [API_SPEC.md](./API_SPEC.md).
 
 ### Controls that look done and are local
 
 - Explore suggestions, filters, sort, and view toggle.
-- Map pin selection and radius.
+- Map radius subtitle ("Within 5 miles of Inman Park") and safe-spot pins. Pin selection, the list, category chips, search text, and "Search area" use the published listing payload. Closest sort is distance on the painted map.
 - Listing detail negotiate, reserve, report, related-item clicks (`onClick={() => {}}` on related cards).
 - Messages filters do not include a real `transactions` predicate (`filter === 'transactions'` falls through to all).
 - Dashboard Pause, Promote, and Mark sold.

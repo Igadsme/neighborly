@@ -78,4 +78,21 @@ describe('ListingsService public reads', () => {
     expect(query.include.listing.select.longitude).toBeUndefined()
     expect(JSON.stringify(query)).not.toContain('passwordHash')
   })
+
+  it('can list a seller’s published or sold cards without coordinates', async () => {
+    const findMany = jest.fn().mockResolvedValue([])
+    const moduleRef = await Test.createTestingModule({
+      providers: [ListingsService, { provide: PrismaService, useValue: { listing: { findMany } } }]
+    }).compile()
+    const service = moduleRef.get(ListingsService)
+    const sellerId = '11111111-1111-4111-8111-111111111111'
+
+    await service.list({ sellerId, limit: 24, offset: 0 })
+    expect(findMany.mock.calls[0][0].where).toMatchObject({ status: 'PUBLISHED', sellerId })
+    expect(findMany.mock.calls[0][0].select.latitude).toBeUndefined()
+
+    await service.list({ sellerId, status: 'SOLD', limit: 24, offset: 0 })
+    expect(findMany.mock.calls[1][0].where).toMatchObject({ status: 'SOLD', deletedAt: null, sellerId })
+    expect(findMany.mock.calls[1][0].select.longitude).toBeUndefined()
+  })
 })

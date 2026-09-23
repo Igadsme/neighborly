@@ -29,6 +29,8 @@ import type {
   ListingQuery,
   NeedRequestInput,
   OfferInput,
+  ProfileReview,
+  PublicProfile,
   ReviewInput,
   ServiceQuery,
   ServiceQuoteInput,
@@ -144,6 +146,10 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify(input),
       }),
+  },
+  users: {
+    profile: (id: string) => request<PublicProfile>(`/users/${id}/profile`),
+    reviews: (id: string) => request<ProfileReview[]>(`/users/${id}/reviews`),
   },
   listings: {
     list: (query: ListingQuery = {}) => {

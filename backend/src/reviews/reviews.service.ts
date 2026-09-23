@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { TransactionStatus } from '@prisma/client'
+import { publicUserSelect } from '../common/public-user.select'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateReviewDto } from './dto'
 
@@ -30,5 +31,58 @@ export class ReviewsService {
         body
       }
     })
+  }
+
+  async listForSubject(subjectId: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: subjectId, status: 'ACTIVE', deletedAt: null },
+      select: { id: true }
+    })
+    if (!user) throw new NotFoundException('Profile not found')
+
+    const reviews = await this.prisma.review.findMany({
+      where: { subjectId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        rating: true,
+        body: true,
+        createdAt: true,
+        author: { select: publicUserSelect },
+        transaction: { select: { offerId: true } }
+      }
+    })
+
+    const offerIds = [...new Set(reviews.map(review => review.transaction.offerId).filter((id): id is string => Boolean(id)))]
+    const items = offerIds.length
+      ? await this.prisma.offerItem.findMany({
+          where: { offerId: { in: offerIds } },
+          select: { offerId: true, listing: { select: { title: true } } },
+          orderBy: { id: 'asc' }
+        })
+      : []
+    const titleByOffer = new Map<string, string>()
+    for (const item of items) {
+      if (!titleByOffer.has(item.offerId)) titleByOffer.set(item.offerId, item.listing.title)
+    }
+
+    return reviews.map(review => ({
+      id: review.id,
+      rating: review.rating,
+      body: review.body,
+      createdAt: review.createdAt,
+      itemTitle: review.transaction.offerId ? titleByOffer.get(review.transaction.offerId) ?? null : null,
+      author: {
+        id: review.author.id,
+        profile: review.author.profile
+          ? {
+              displayName: review.author.profile.displayName,
+              firstName: review.author.profile.firstName,
+              neighborhood: review.author.profile.neighborhood,
+              city: review.author.profile.city
+            }
+          : null
+      }
+    }))
   }
 }

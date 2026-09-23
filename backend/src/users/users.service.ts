@@ -63,4 +63,53 @@ export class UsersService {
     })
     return this.me(userId)
   }
+
+  async publicProfile(userId: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, status: 'ACTIVE', deletedAt: null },
+      select: {
+        id: true,
+        createdAt: true,
+        profile: {
+          select: {
+            displayName: true,
+            firstName: true,
+            lastName: true,
+            bio: true,
+            neighborhood: true,
+            city: true,
+            emailVerified: true
+          }
+        }
+      }
+    })
+    if (!user?.profile) throw new NotFoundException('Profile not found')
+
+    const [rating, soldCount] = await Promise.all([
+      this.prisma.review.aggregate({
+        where: { subjectId: userId },
+        _avg: { rating: true },
+        _count: { _all: true }
+      }),
+      this.prisma.listing.count({
+        where: { sellerId: userId, status: 'SOLD', deletedAt: null }
+      })
+    ])
+
+    const average = rating._avg.rating
+    return {
+      id: user.id,
+      displayName: user.profile.displayName,
+      firstName: user.profile.firstName,
+      lastName: user.profile.lastName,
+      bio: user.profile.bio,
+      neighborhood: user.profile.neighborhood,
+      city: user.profile.city,
+      memberSince: user.createdAt,
+      emailVerified: user.profile.emailVerified,
+      ratingAverage: average == null ? null : Math.round(average * 10) / 10,
+      reviewCount: rating._count._all,
+      soldCount
+    }
+  }
 }

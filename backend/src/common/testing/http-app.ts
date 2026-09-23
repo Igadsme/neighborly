@@ -10,6 +10,7 @@ export async function bootApi(options: {
   controller: Type
   service: Type
   prisma: object
+  extraProviders?: Type[]
   userId?: string
   email?: string
 }) {
@@ -17,7 +18,7 @@ export async function bootApi(options: {
   const moduleRef = await Test.createTestingModule({
     imports: [JwtModule.register({})],
     controllers: [options.controller],
-    providers: [options.service, AuthGuard, { provide: PrismaService, useValue: options.prisma }]
+    providers: [options.service, ...(options.extraProviders ?? []), AuthGuard, { provide: PrismaService, useValue: options.prisma }]
   }).compile()
 
   const app: INestApplication = moduleRef.createNestApplication({ forceCloseConnections: true })

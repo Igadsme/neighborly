@@ -28,8 +28,34 @@ export interface CurrentUser {
 export interface ListingQuery {
   query?: string
   categoryId?: string
+  sellerId?: string
+  status?: "PUBLISHED" | "SOLD"
   limit?: number
   offset?: number
+}
+
+export interface PublicProfile {
+  id: string
+  displayName?: string | null
+  firstName: string
+  lastName: string
+  bio?: string | null
+  neighborhood?: string | null
+  city?: string | null
+  memberSince: string
+  emailVerified: boolean
+  ratingAverage: number | null
+  reviewCount: number
+  soldCount: number
+}
+
+export interface ProfileReview {
+  id: string
+  rating: number
+  body: string
+  createdAt: string
+  itemTitle?: string | null
+  author: PublicUserCard
 }
 
 export interface ListingInput {

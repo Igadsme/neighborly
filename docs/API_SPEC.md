@@ -75,7 +75,14 @@ Guarded.
 - `GET /users/me` — user without `passwordHash`, plus `profile`, `preference`, `notificationPreference`.
 - `PATCH /users/me/onboarding` — optional `neighborhood`, `city`, `state`, `interests[]`, `capabilities[]`, `newListings`, `priceDrops`, `messages`, `events`, `community`. Upserts preference (`completedAt` set) and notification preference. Returns the same shape as `GET /users/me`.
 
-Not implemented: `PATCH /users/me/profile`, `GET /users/:id/profile`.
+Not implemented: `PATCH /users/me/profile`. The Profile screen has no edit control. Follow, message, and report stay local.
+
+### Public profile
+
+No auth. These reads do not return `passwordHash`, `email`, account `status`, profile `latitude` / `longitude`, or listing coordinates.
+
+- `GET /users/:id/profile` — active user with `deletedAt` null and a profile row. Body: `id`, `displayName`, `firstName`, `lastName`, `bio`, `neighborhood`, `city`, `memberSince` (user `createdAt`), `emailVerified`, `ratingAverage`, `reviewCount`, `soldCount`. `ratingAverage` is the mean rating of reviews about this user, rounded to one decimal, or null when there are none. `soldCount` counts listings with status `SOLD` and `deletedAt` null. Missing, suspended, or deleted users are 404 `"Profile not found"`. A non-UUID id is 400. `emailVerified` is the stored profile flag. It is not an identity check, and there is no response-time field.
+- `GET /users/:id/reviews` — reviews whose `subjectId` is that user, newest first. Each row is `id`, `rating`, `body`, `createdAt`, `itemTitle`, and `author`. `author` is the public card (`id` plus profile `displayName`, `firstName`, `neighborhood`, `city`). `itemTitle` is the first listing title on the review's transaction offer, or null. Same 404 and 400 rules as the profile read.
 
 ### Categories
 
@@ -87,7 +94,7 @@ The Create Listing `<select>` uses a shorter hardcoded name list and resolves `c
 
 | Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
-| `GET` | `/listings` | No | Published listings. Query: `query`, `categoryId` (UUID), `limit`, `offset`. Includes `images`, `category`, `seller.profile`. Newest first. |
+| `GET` | `/listings` | No | Published listings by default. Query: `query`, `categoryId` (UUID), `sellerId` (UUID), `status` (`PUBLISHED` default, or `SOLD`), `limit`, `offset`. `SOLD` also requires `deletedAt` null. Includes `images`, `category`, `seller.profile`. Newest first. Latitude and longitude are not selected. |
 | `GET` | `/listings/:id` | No | Non-deleted listing that is not `DRAFT`, with images (sort order), category, seller profile. Drafts are 404. 404 `"Listing not found"`. |
 | `POST` | `/listings` | Yes | Creates `PUBLISHED`. Does not accept image keys. Does not write `PriceHistory`. |
 | `POST` | `/listings/drafts` | Yes | Same body as create. Stores `DRAFT`. Omitted from `GET /listings` and `GET /listings/:id`. |
@@ -122,6 +129,8 @@ The Create Listing `<select>` uses a shorter hardcoded name list and resolves `c
 `title` is `@MinLength(3)` and `@MaxLength(140)`. `description` is `@MinLength(10)`. The same body is used for `POST /listings/drafts`. No new Prisma migration: `ListingStatus.DRAFT` already exists in `0001_init`. The Create Listing page sends category, title, description, `priceCents` when the dollar field is filled, condition, pickup, and delivery. It does not send photos, tags, shipping, neighborhood, city, or coordinates. The AI Review step stays on screen and does not call a model.
 
 Not implemented on this module: condition/price/distance/verified/free/delivery query params, image presign, price-drop feed, saved-search alerts.
+
+Map pins are not a new route and not a radius query. `GET /listings` still omits `latitude` and `longitude`. The Map screen loads up to 100 published listings and places each pin on a painted neighborhood centroid. Unknown neighborhood names use a coarse hash of the public neighborhood and city strings. The small offset comes from the listing id. Profile coordinates are not read. The "Within 5 miles of Inman Park" line and the safe-spot markers stay painted. "Search area" keeps listings whose neighborhood matches a painted label. Category chips and the search box filter that list in the browser. "Sort: Closest first" orders by distance to the Inman Park label on that painted map. "Sort: Most popular" keeps newest-first, because no popularity field exists.
 
 ### Requests and offers
 
@@ -217,6 +226,8 @@ Guarded. `POST /reviews`
 ```
 
 `rating` is an integer from 1 to 5. `body` is stored trimmed. The caller must be a `TransactionParticipant` (403 otherwise). Status must be `COMPLETED`, or the response is 400 `"Reviews are only allowed when the transaction is COMPLETED"`. Unknown transaction is 404 `"Transaction not found"`. There is no unique constraint on `(transactionId, authorId)` yet.
+
+The Profile reviews tab reads `GET /users/:id/reviews` (public, see Users). Dashboard "Reviews to complete" does not call that list yet, so a completed transaction still shows a prompt until a later pass checks whether this author already reviewed it.
 
 ### Housing, jobs, services, and community
 
@@ -363,8 +374,7 @@ These routes are the remainder of the v1 contract. They are not implemented. Pat
 ### Identity
 
 - `POST /auth/refresh` — rotate access tokens. Env already has `JWT_REFRESH_SECRET` and `JWT_REFRESH_TTL`.
-- `PATCH /users/me/profile` — bio, display name, phone. Distinct from onboarding.
-- `GET /users/:id/profile` — public profile. Trust badges are target; do not compute them with a model.
+- `PATCH /users/me/profile` — bio, display name, phone. Distinct from onboarding. The Profile screen does not have an edit control, so this route is still not implemented.
 
 ### Listings and media
 
@@ -388,8 +398,7 @@ These routes are the remainder of the v1 contract. They are not implemented. Pat
 ### Transactions, reviews, safety
 
 - `POST /transactions/:id/appointments` — `startsAt`, `locationNote`. The Dashboard meetup cards bind here later.
-- One review per author per transaction (constraint still target). `POST /reviews` itself is implemented.
-- `GET /users/:id/reviews` — feeds the Profile reviews tab, which is fixture text today.
+- One review per author per transaction (constraint still target). `POST /reviews` and `GET /users/:id/reviews` are implemented. Dashboard does not yet hide a prompt when that list already contains the author's review.
 - Reports, blocks, moderation actions, notification list, and mark-read. Buttons exist on Listing Detail and Profile and only flip local React state.
 
 ### Explicitly out of v1
