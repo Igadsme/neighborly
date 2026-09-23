@@ -5,7 +5,7 @@ import { mapListings, listings } from '../data'
 type Page = 'listing' | 'explore'
 
 interface MapDiscoveryProps {
-  onNavigate: (p: Page) => void
+  onNavigate: (p: Page, id?: string) => void
 }
 
 const neighborhoods = [
@@ -263,7 +263,7 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
             <div className="flex border-t border-[#74C69D]/30">
               <button className="flex-1 py-2.5 text-xs font-semibold text-[#2D6A4F] hover:bg-[#D8F3DC]/50 transition-colors">Save</button>
               <div className="w-px bg-[#74C69D]/30" />
-              <button onClick={() => onNavigate('listing')} className="flex-1 py-2.5 text-xs font-semibold text-[#2D6A4F] hover:bg-[#D8F3DC]/50 transition-colors">View listing →</button>
+              <button onClick={() => onNavigate('listing', fullListing.id)} className="flex-1 py-2.5 text-xs font-semibold text-[#2D6A4F] hover:bg-[#D8F3DC]/50 transition-colors">View listing →</button>
             </div>
           </div>
         )}
@@ -293,7 +293,11 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
                       {pin.price === null ? <span className="text-[#2D6A4F] font-bold">Free</span> : `$${pin.price}`}
                     </span>
                     <button
-                      onClick={e => { e.stopPropagation(); onNavigate('listing') }}
+                      onClick={e => {
+                        e.stopPropagation()
+                        const matched = listings.find(l => l.images[0] === pin.image)
+                        onNavigate('listing', matched?.id ?? fullListing.id)
+                      }}
                       className="text-xs text-[#2D6A4F] font-medium hover:underline"
                     >
                       View →

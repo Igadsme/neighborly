@@ -1,8 +1,20 @@
 import { useEffect, useState } from "react"
 import { Button, ProgressBar, Badge, Icon } from "../components/ui"
-import { api, ApiError } from "../api/client"
+import { api, readError } from "../api/client"
+import type { ExchangeMode } from "../api/types"
 
-type Page = "home" | "listing"
+type Page = "home" | "dashboard"
+
+const requestModeByCard: Record<string, ExchangeMode> = {
+  item: "BUY",
+  free: "FREE",
+  housing: "RENT",
+  job: "HIRE",
+  service: "SKILL_SWAP",
+  vehicle: "BUY",
+  event: "TRADE",
+  "lost-found": "BORROW",
+}
 
 interface CreateListingProps {
   onNavigate: (p: Page) => void
@@ -114,7 +126,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
       .list()
       .then((items) => {
         const match = items.find((item) => item.name === category)
-        if (match) setCategoryId(match.id)
+        setCategoryId(match?.id ?? "")
       })
       .catch(() =>
         setPublishError(
@@ -125,28 +137,48 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
   }, [category])
 
   const handlePublish = async () => {
+    const mode = listingType ? requestModeByCard[listingType] : undefined
+    const trimmedTitle = title.trim()
+    const trimmedDescription = description.trim()
     if (!categoryId) {
       setPublishError("Choose a valid category before publishing.")
       return
     }
+    if (!mode) {
+      setPublishError("Unable to publish this listing. Please try again.")
+      return
+    }
+    if (trimmedTitle.length < 3) {
+      setPublishError("Add a title of at least 3 characters.")
+      return
+    }
+    if (trimmedDescription.length < 10) {
+      setPublishError("Add a description of at least 10 characters.")
+      return
+    }
+    let budgetCents: number | undefined
+    if (price.trim() !== "") {
+      const amount = Number(price)
+      if (!Number.isFinite(amount) || amount < 0) {
+        setPublishError("Enter a budget using numbers only.")
+        return
+      }
+      budgetCents = Math.round(amount * 100)
+    }
     setPublishing(true)
     setPublishError("")
     try {
-      await api.listings.create({
+      await api.requests.create({
         categoryId,
-        title: aiApplied ? aiSuggestions.title : title,
-        description,
-        priceCents: price ? Math.round(Number(price) * 100) : undefined,
-        condition,
-        pickupAvailable: pickup,
-        deliveryAvailable: delivery,
+        title: trimmedTitle,
+        description: trimmedDescription,
+        mode,
+        ...(budgetCents !== undefined ? { budgetCents } : {}),
       })
       setPublished(true)
     } catch (cause) {
       setPublishError(
-        cause instanceof ApiError
-          ? cause.message
-          : "Unable to publish this listing. Please try again.",
+        readError(cause, "Unable to publish this listing. Please try again."),
       )
     } finally {
       setPublishing(false)
@@ -171,7 +203,10 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
             </h1>
             {step > 0 && (
               <button
-                onClick={() => onNavigate("home")}
+                onClick={() => {
+                  if (publishing) return
+                  onNavigate("home")
+                }}
                 className="text-sm text-[#8A9AB5] hover:text-[#1B2A4A] transition-colors"
               >
                 Save draft
@@ -701,21 +736,20 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                   🎉
                 </div>
                 <h3 className="font-display text-2xl font-semibold text-[#1B2A4A] mb-2">
-                  Listing published!
+                  Request published!
                 </h3>
                 <p className="text-[#5C6E8A] mb-2">
-                  Your listing is live and visible to neighbors nearby.
+                  Your request is live and visible to neighbors nearby.
                 </p>
                 <p className="text-sm text-[#8A9AB5] mb-8">
-                  We'll notify you when someone messages you or saves your
-                  listing.
+                  Offers will show up on your dashboard.
                 </p>
                 <div className="flex justify-center gap-3">
                   <Button
                     variant="primary"
-                    onClick={() => onNavigate("listing")}
+                    onClick={() => onNavigate("dashboard")}
                   >
-                    View my listing →
+                    View offers →
                   </Button>
                   <Button variant="outline" onClick={() => onNavigate("home")}>
                     Go to feed

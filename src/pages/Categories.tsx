@@ -4,7 +4,7 @@ import { listings } from '../data'
 type Page = 'explore' | 'listing' | 'housing' | 'services' | 'jobs' | 'community'
 
 interface CategoriesProps {
-  onNavigate: (p: Page) => void
+  onNavigate: (p: Page, id?: string) => void
 }
 
 const mainCategories = [
@@ -168,7 +168,7 @@ export default function Categories({ onNavigate }: CategoriesProps) {
           <SectionHeader title="Featured in Atlanta" subtitle="Curated picks from trusted sellers" action={() => onNavigate('explore')} actionLabel="Browse all" />
           <div className="listing-grid">
             {listings.slice(0, 6).map(listing => (
-              <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing')} />
+              <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing', listing.id)} />
             ))}
           </div>
         </section>

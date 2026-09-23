@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ListingCard, Chip, Badge, Button, Icon, Toggle, TabBar } from '../components/ui'
-import { listings } from '../data'
+import type { Listing } from '../data'
+import { api, readError } from '../api/client'
+import { listingFromApi, mediaSrc } from '../lib/view'
 
 type Page = 'listing' | 'map'
 
 interface ExploreProps {
-  onNavigate: (p: Page) => void
+  onNavigate: (p: Page, id?: string) => void
 }
 
 const categories = ['All', 'Furniture', 'Electronics', 'Vehicles', 'Housing', 'Services', 'Free', 'Jobs', 'Pets', 'Clothing']
@@ -38,6 +40,33 @@ export default function Explore({ onNavigate }: ExploreProps) {
   const [searched, setSearched] = useState(true)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [alertSaved, setAlertSaved] = useState(false)
+  const [results, setResults] = useState<Listing[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [searchNonce, setSearchNonce] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setLoadError('')
+    api.listings
+      .list({
+        query: searchNonce === 0 ? undefined : query.trim() || undefined,
+        limit: 48,
+      })
+      .then((rows) => {
+        if (active) setResults(rows.map((row) => listingFromApi(row)))
+      })
+      .catch((cause: unknown) => {
+        if (active) setLoadError(readError(cause, 'Listings could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [searchNonce])
 
   const activeFilters: string[] = []
   if (category !== 'All') activeFilters.push(category)
@@ -48,7 +77,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
   if (freeOnly) activeFilters.push('Free only')
   if (deliveryOnly) activeFilters.push('Delivery available')
 
-  const filteredListings = listings.filter(l => {
+  const filteredListings = results.filter(l => {
     if (freeOnly && !l.isFree) return false
     if (deliveryOnly && !l.deliveryAvailable) return false
     if (verifiedOnly && !l.seller.verified) return false
@@ -71,7 +100,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
               onChange={e => { setQuery(e.target.value); setShowSuggestions(true) }}
               onFocus={() => setShowSuggestions(true)}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              onKeyDown={e => { if (e.key === 'Enter') { setSearched(true); setShowSuggestions(false) } }}
+              onKeyDown={e => { if (e.key === 'Enter') { setSearched(true); setShowSuggestions(false); setSearchNonce((n) => n + 1) } }}
               placeholder="Search for anything nearby..."
               className="w-full h-12 pl-12 pr-40 bg-[#F5F4EF] rounded-2xl text-sm text-[#1B2A4A] placeholder:text-[#C5CCDA] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#2D6A4F]/20 transition-all"
             />
@@ -80,7 +109,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
                 <Icon name="map" size={13} />
                 Map view
               </button>
-              <button onClick={() => { setSearched(true); setShowSuggestions(false) }} className="bg-[#2D6A4F] text-white text-sm font-semibold px-4 py-1.5 rounded-xl hover:bg-[#1B4332] transition-colors">
+              <button onClick={() => { setSearched(true); setShowSuggestions(false); setSearchNonce((n) => n + 1) }} className="bg-[#2D6A4F] text-white text-sm font-semibold px-4 py-1.5 rounded-xl hover:bg-[#1B4332] transition-colors">
                 Search
               </button>
             </div>
@@ -90,14 +119,14 @@ export default function Explore({ onNavigate }: ExploreProps) {
               <div className="absolute top-14 left-0 right-0 bg-white border border-[#E8E6DF] rounded-2xl shadow-xl z-50 p-4">
                 <p className="text-xs font-semibold text-[#8A9AB5] uppercase tracking-wide mb-3">Recent searches</p>
                 {recentSearches.map(s => (
-                  <button key={s} onClick={() => { setQuery(s); setSearched(true); setShowSuggestions(false) }} className="flex items-center gap-3 w-full p-2 rounded-xl hover:bg-[#F5F4EF] text-sm text-[#1B2A4A] text-left">
+                  <button key={s} onClick={() => { setQuery(s); setSearched(true); setShowSuggestions(false); setSearchNonce((n) => n + 1) }} className="flex items-center gap-3 w-full p-2 rounded-xl hover:bg-[#F5F4EF] text-sm text-[#1B2A4A] text-left">
                     <Icon name="search" size={13} className="text-[#C5CCDA]" />
                     {s}
                   </button>
                 ))}
                 <p className="text-xs font-semibold text-[#8A9AB5] uppercase tracking-wide mb-3 mt-4">Try searching for</p>
                 {suggestedSearches.map(s => (
-                  <button key={s} onClick={() => { setQuery(s); setSearched(true); setShowSuggestions(false) }} className="flex items-center gap-3 w-full p-2 rounded-xl hover:bg-[#F5F4EF] text-sm text-[#2D6A4F] text-left">
+                  <button key={s} onClick={() => { setQuery(s); setSearched(true); setShowSuggestions(false); setSearchNonce((n) => n + 1) }} className="flex items-center gap-3 w-full p-2 rounded-xl hover:bg-[#F5F4EF] text-sm text-[#2D6A4F] text-left">
                     <Icon name="zap" size={13} className="text-[#52B788]" />
                     {s}
                   </button>
@@ -267,13 +296,23 @@ export default function Explore({ onNavigate }: ExploreProps) {
             </div>
 
             {/* Grid */}
-            {filteredListings.length > 0 ? (
+            {loading ? (
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+                Loading listings…
+              </div>
+            ) : loadError ? (
+              <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D]">
+                {loadError}
+              </div>
+            ) : filteredListings.length > 0 ? (
               <div className={view === 'list' ? 'space-y-3' : 'listing-grid'}>
                 {filteredListings.map(listing => (
                   view === 'list' ? (
-                    <div key={listing.id} onClick={() => onNavigate('listing')} className="flex gap-4 bg-white rounded-2xl border border-[#E8E6DF] p-4 cursor-pointer card-hover">
+                    <div key={listing.id} onClick={() => onNavigate('listing', listing.id)} className="flex gap-4 bg-white rounded-2xl border border-[#E8E6DF] p-4 cursor-pointer card-hover">
                       <div className="w-28 h-28 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF]">
-                        <img src={`https://images.unsplash.com/${listing.images[0]}?w=200&h=200&fit=crop&auto=format`} alt={listing.title} className="w-full h-full object-cover" />
+                        {mediaSrc(listing.images[0], 'w=200&h=200&fit=crop&auto=format') && (
+                          <img src={mediaSrc(listing.images[0], 'w=200&h=200&fit=crop&auto=format')!} alt={listing.title} className="w-full h-full object-cover" />
+                        )}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-start justify-between gap-3">
@@ -283,7 +322,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
                           </span>
                         </div>
                         <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="navy" size="sm">{listing.condition}</Badge>
+                          {listing.condition && <Badge variant="navy" size="sm">{listing.condition}</Badge>}
                           <span className="text-xs text-[#8A9AB5]">{listing.neighborhood} · {listing.distance}</span>
                         </div>
                         <p className="text-sm text-[#5C6E8A] mt-2 line-clamp-2">{listing.description}</p>
@@ -302,7 +341,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
                       </div>
                     </div>
                   ) : (
-                    <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing')} />
+                    <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing', listing.id)} />
                   )
                 ))}
               </div>
