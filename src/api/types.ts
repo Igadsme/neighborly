@@ -50,6 +50,7 @@ export interface ListingInput {
 
 export interface ApiListing {
   id: string
+  sellerId?: string
   title: string
   description: string
   priceCents?: number | null
@@ -59,7 +60,7 @@ export interface ApiListing {
   pickupAvailable?: boolean
   deliveryAvailable?: boolean
   shippingAvailable?: boolean
-  images?: Array<{ url?: string | null; key?: string | null }>
+  images?: Array<{ url?: string | null; key?: string | null; objectKey?: string | null }>
   category?: { name?: string | null; slug?: string | null } | null
   seller?: {
     id: string
@@ -204,4 +205,188 @@ export interface ReviewInput {
   subjectId: string
   rating: number
   body: string
+}
+
+export interface HousingQuery {
+  query?: string
+  listingType?: "rent" | "sale"
+  type?: string
+  minBeds?: number
+  maxPriceCents?: number
+  pets?: boolean
+  furnished?: boolean
+  verified?: boolean
+  utilitiesIncluded?: boolean
+  sort?: "newest" | "price_asc" | "price_desc" | "beds"
+  limit?: number
+  offset?: number
+}
+
+export interface ApiHousing {
+  id: string
+  title: string
+  description: string
+  type: string
+  listingType: string
+  priceCents: number
+  priceUnit?: string | null
+  beds: number
+  baths: number
+  sqft: number
+  neighborhood: string
+  city?: string | null
+  available?: string | null
+  lease?: string | null
+  pets: boolean
+  furnished: boolean
+  utilities?: string | null
+  verified: boolean
+  createdAt: string
+  owner: PublicUserCard
+  images: Array<{ id?: string; objectKey?: string | null; sortOrder?: number }>
+}
+
+export interface JobQuery {
+  query?: string
+  type?: string
+  level?: string
+  remote?: string
+  limit?: number
+  offset?: number
+}
+
+export interface ApiJob {
+  id: string
+  title: string
+  company: string
+  logo?: string | null
+  description: string
+  responsibilities?: string[]
+  type: string
+  level: string
+  salary: string
+  location: string
+  remote: string
+  deadline?: string | null
+  tags?: string[]
+  verified: boolean
+  createdAt: string
+  owner: PublicUserCard
+}
+
+export interface ApiJobSave {
+  createdAt: string
+  job: ApiJob
+}
+
+export interface ApiJobApplication {
+  id: string
+  message?: string | null
+  createdAt: string
+  job: ApiJob
+}
+
+export interface ServiceQuery {
+  query?: string
+  category?: string
+  limit?: number
+  offset?: number
+}
+
+export interface ApiServiceListing {
+  id: string
+  title: string
+  businessName: string
+  description: string
+  category: string
+  startingPriceCents: number
+  location: string
+  availability: string
+  tags?: string[]
+  image?: string | null
+  backgroundCheck: boolean
+  rating?: number | null
+  reviewCount: number
+  createdAt: string
+  owner: PublicUserCard
+}
+
+export interface ServiceQuoteInput {
+  notes: string
+  preferredDate?: string
+  preferredTime?: string
+  address?: string
+}
+
+export interface ApiServiceQuote {
+  id: string
+  serviceId: string
+  preferredDate?: string | null
+  preferredTime?: string | null
+  notes: string
+  address?: string | null
+  status: string
+  createdAt: string
+}
+
+export interface CommunityPostQuery {
+  type?: string
+  limit?: number
+  offset?: number
+}
+
+export interface ApiCommunityPost {
+  id: string
+  type: string
+  title: string
+  body: string
+  neighborhood: string
+  city?: string | null
+  createdAt: string
+  author: PublicUserCard
+  reactions: { like: number; love: number; wow: number }
+  replies: number
+}
+
+export interface CommunityPostInput {
+  type: string
+  title: string
+  body: string
+  neighborhood: string
+  city?: string
+}
+
+export interface ApiCommunityEvent {
+  id: string
+  title: string
+  description?: string | null
+  neighborhood: string
+  city?: string | null
+  dateLabel: string
+  timeLabel: string
+  image?: string | null
+  createdAt: string
+  attending: number
+  organizer: PublicUserCard
+}
+
+export interface ApiLostFound {
+  id: string
+  type: "lost" | "found" | string
+  item: string
+  neighborhood: string
+  city?: string | null
+  image?: string | null
+  createdAt: string
+  author: PublicUserCard
+}
+
+export interface ApiGiveaway {
+  id: string
+  item: string
+  neighborhood: string
+  city?: string | null
+  claimed: boolean
+  createdAt: string
+  author: PublicUserCard
 }

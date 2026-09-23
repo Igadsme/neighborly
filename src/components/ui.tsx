@@ -879,6 +879,45 @@ export function EmptyState({
   )
 }
 
+/** Same loading and error shells Saved Items, Dashboard, and Messages already use. */
+export function LoadState({
+  loading,
+  error,
+  loadingLabel,
+}: {
+  loading?: boolean
+  error?: string
+  loadingLabel: string
+}) {
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+        {loadingLabel}
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D]">
+        {error}
+      </div>
+    )
+  }
+  return null
+}
+
+export function InlineAlert({ message }: { message?: string }) {
+  if (!message) return null
+  return (
+    <div
+      className="rounded-xl border border-[#E8694A]/30 bg-[#FFF5F2] px-4 py-3 text-sm text-[#A63D27]"
+      role="alert"
+    >
+      {message}
+    </div>
+  )
+}
+
 // ─── Progress Bar ──────────────────────────────────────────────────────────────
 
 export function ProgressBar({
