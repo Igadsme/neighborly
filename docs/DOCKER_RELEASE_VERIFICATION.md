@@ -2,7 +2,7 @@
 
 Live Docker and database gate for Neighborly on the Mac at `/Volumes/T7 Shield/Projects/neighborly`.
 
-This document is a verification record. It is not a release. **Release readiness: NOT claimed** until the Product Owner reviews a fully green run of every required row below.
+This document is a verification record. It is not a release. **Release readiness: NOT claimed until a fully green run is reviewed.**
 
 Checked boxes in this file mean a command was run on this machine and the recorded result matched the row. An open box means that row did not pass, was not run, or stopped because an earlier required row failed.
 
@@ -177,7 +177,7 @@ Live run on this Mac. Checked rows above match this table. The browser row stays
 
 | Field | Value |
 | --- | --- |
-| Timestamp (America/New_York) | 2026-09-23 15:04:16 EDT start; API loop finished 15:06:28 EDT (`2026-09-23T19:06:28.192Z`) |
+| Timestamp (America/New_York) | Confirmation run 2026-09-23 15:10:01 EDT start; API loop finished 15:10:18 EDT (`2026-09-23T19:10:18.418Z`). Earlier pass the same day finished 15:06:28 EDT |
 | SHA | `df5aae1b0ceac63d7c449ee377eeae98743830a8` (`df5aae1`) |
 | Docker Desktop | 4.92.0 |
 | Docker Engine | client and server 29.8.0 |
@@ -186,15 +186,15 @@ Live run on this Mac. Checked rows above match this table. The browser row stays
 | Node / pnpm | v22.23.2 / 10.34.3 |
 | Postgres healthy | Pass. `neighborly-postgres-1` healthy. `pg_isready` exit 0, `accepting connections` |
 | Redis ping | Pass. `PONG`, exit 0. Compose does not define a Redis healthcheck, so `docker compose ps` shows no health state for Redis |
-| Migrations | Pass. `pnpm prisma:deploy` exit 0. Applied `0001_init`, `0002_onboarding`, `0003_verticals` |
-| Seed | Pass. `pnpm prisma:seed` exit 0 |
-| Health / ready | Pass. HTTP 200 on both. See snippets below |
-| Unit and build smoke | Pass. Frontend tsc 0, Vitest 51/51, vite build 0. Backend tsc 0, Jest 124/124, nest build 0 |
-| Two-user API loop | Pass. `node scripts/docker-release-e2e.mjs` exit 0 |
+| Migrations | Pass. First run applied `0001_init`, `0002_onboarding`, `0003_verticals`. Confirmation run exit 0: `No pending migrations to apply.` |
+| Seed | Pass on both runs. `pnpm prisma:seed` exit 0 |
+| Health / ready | Pass on both runs. HTTP 200. Latest bodies below |
+| Unit and build smoke | Pass on the 15:04 EDT run. Frontend tsc 0, Vitest 51/51, vite build 0. Backend tsc 0, Jest 124/124, nest build 0. Not repeated at 15:10 |
+| Two-user API loop | Pass on both runs. Confirmation `e2e_exit:0` |
 | Browser pass | Not run |
 | Blockers | None on the required rows. Warnings are listed under Command log and do not flip those rows to fail |
 
-**Release readiness: NOT claimed.**
+**Release readiness: NOT claimed until a fully green run is reviewed.**
 
 ### Environment
 
@@ -212,17 +212,41 @@ Docker printed: the PostGIS image platform is `linux/amd64` and the host is `lin
 
 ### Health bodies
 
-`GET http://127.0.0.1:3001/api/v1/health` HTTP 200:
+Confirmation run, `GET http://127.0.0.1:3001/api/v1/health` HTTP 200:
 
 ```json
-{"status":"ok","service":"neighborly-api","timestamp":"2026-09-23T19:06:27.691Z"}
+{"status":"ok","service":"neighborly-api","timestamp":"2026-09-23T19:10:17.905Z"}
 ```
 
-`GET http://127.0.0.1:3001/api/v1/ready` HTTP 200:
+Confirmation run, `GET http://127.0.0.1:3001/api/v1/ready` HTTP 200:
 
 ```json
 {"status":"ready","dependencies":{"postgres":"up"}}
 ```
+
+The 15:06 EDT pass returned the same shapes (`status: ok` at `2026-09-23T19:06:27.691Z`, and `postgres: up`).
+
+### Confirmation commerce loop (15:10 EDT)
+
+`pnpm prisma:deploy` exit 0 with no pending migrations. `pnpm prisma:seed` exit 0. Postgres was already healthy and Redis already returned `PONG` before this pass. `API_BASE=http://127.0.0.1:3001/api/v1 node scripts/docker-release-e2e.mjs` exit 0. Seed login worked again. Report: `artifacts/docker-release-verification/e2e-report-rerun.json`.
+
+| Step | Endpoint | Status | Result |
+| --- | --- | --- | --- |
+| Login A | `POST /api/v1/auth/login` `seed.marcus@example.com` | 201 | user `10000000-0000-4000-8000-000000000001` |
+| Login B | `POST /api/v1/auth/login` `seed.priya@example.com` | 201 | user `10000000-0000-4000-8000-000000000002` |
+| Categories | `GET /api/v1/categories` | 200 | used `Art & Collectibles` `09c564d6-0521-471a-b090-eed16a1a5c3b` |
+| Publish | `POST /api/v1/requests` | 201 | request `1c5d533b-df92-4ac9-91d3-c553407c8fc6`, status `PUBLISHED` |
+| Offer | `POST /api/v1/requests/1c5d533b-df92-4ac9-91d3-c553407c8fc6/offers` | 201 | offer `7f62e41a-0c76-4800-8028-d5d3c3e0427c`, status `PENDING` |
+| Accept | `POST .../offers/7f62e41a-0c76-4800-8028-d5d3c3e0427c/accept` | 201 | conversation `a5323028-98de-4cb2-8307-b3175edb7715`, transaction `84a5f430-62bf-4573-a91b-18792416290d`, status `ACCEPTED` |
+| Message A | `POST /api/v1/conversations/a5323028-98de-4cb2-8307-b3175edb7715/messages` | 201 | message `dd74b283-98d7-429c-9198-fca7c236fc22` |
+| Message B | same path, offerer token | 201 | message `60a74876-30c5-4821-a8c4-7ee6a865c46f` |
+| Direct complete | `PATCH /api/v1/transactions/84a5f430-62bf-4573-a91b-18792416290d/status` `{ "status": "COMPLETED" }` | 400 | `Invalid transaction transition: ACCEPTED -> COMPLETED` (expected negative check) |
+| Scheduled | same patch `{ "status": "SCHEDULED" }` | 200 | status `SCHEDULED` |
+| In progress | same patch `{ "status": "IN_PROGRESS" }` | 200 | status `IN_PROGRESS` |
+| Completed | same patch `{ "status": "COMPLETED" }` | 200 | status `COMPLETED` |
+| Review | `POST /api/v1/reviews` | 201 | review `77d856fa-9a97-4d18-bf2b-56ee072c35f8`, rating 5, author A, subject B |
+
+The API process for this pass was stopped after the loop. Compose was left running.
 
 ### Unit and build smoke
 
@@ -237,7 +261,7 @@ Docker printed: the PostGIS image platform is `linux/amd64` and the host is `lin
 
 `pnpm exec prisma generate` exit 0 before migrate and the backend smoke (Prisma Client 6.19.3). Prisma printed a deprecation warning for `package.json#prisma` and an upgrade notice. Exit code stayed 0.
 
-### Two-user API loop
+### Earlier commerce loop (15:06 EDT)
 
 `API_BASE=http://127.0.0.1:3001/api/v1 node scripts/docker-release-e2e.mjs` exit 0. Seed login worked. No fresh registration was required. Access tokens in `artifacts/docker-release-verification/e2e-report.json` are redacted.
 
@@ -275,12 +299,13 @@ Redacted and command output for this run:
 - `artifacts/docker-release-verification/datastore.log`
 - `artifacts/docker-release-verification/versions.txt`
 - `artifacts/docker-release-verification/env-check.json` (lengths and matches only, no secret)
+- Confirmation run: `migrate-rerun.log`, `seed-rerun.log`, `health-rerun.log`, `datastore-rerun.log`, `e2e-stdout-rerun.log`, `e2e-exit-rerun.txt`, `e2e-report-rerun.json`, `compose-ps-rerun.txt`, `rerun-started-at.txt`
 
 ### Not run
 
 Signed-in browser pass. Housing, Jobs, Services, and Community pages were not clicked. `VITE_API_URL` still points at port 3000, which this gate did not use for the API.
 
-**Release readiness: NOT claimed.**
+**Release readiness: NOT claimed until a fully green run is reviewed.**
 
 ## 11. Out of scope
 

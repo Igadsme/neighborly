@@ -1,0 +1,4 @@
+=== compose ps ===
+NAME                    IMAGE                    COMMAND                  SERVICE    CREATED         STATUS                   PORTS
+neighborly-postgres-1   postgis/postgis:16-3.4   "docker-entrypoint.s…"   postgres   8 minutes ago   Up 8 minutes (healthy)   0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+neighborly-redis-1      redis:7-alpine           "docker-entrypoint.s…"   redis      8 minutes ago   Up 8 minutes             0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp

@@ -127,4 +127,4 @@ Live commands, exit codes, and pass/fail rows are in [`docs/DOCKER_RELEASE_VERIF
 - [x] Node 22 (`.mise.toml`) verify on the Mac: frontend `tsc`, Vitest, and `vite build`; backend `tsc`, Jest, and nest build
 - [x] Two-user API loop against the live database (publish, offer, accept, message, complete, review)
 
-The 2026-09-23 Mac run passed those six rows. The API listened on port 3001 because port 3000 was already taken by an unrelated process. A signed-in browser pass was not run, and the four vertical pages were not clicked. Details, warnings, and ids are in `docs/DOCKER_RELEASE_VERIFICATION.md`. **Release readiness: NOT claimed.**
+The 2026-09-23 Mac run passed those six rows, and a confirmation pass the same afternoon (15:10 EDT) passed migrate, seed, health, ready, and the two-user API loop again. The API listened on port 3001 because port 3000 was already taken by an unrelated process. A signed-in browser pass was not run, and the four vertical pages were not clicked. Details, warnings, and ids are in `docs/DOCKER_RELEASE_VERIFICATION.md`. **Release readiness: NOT claimed until a fully green run is reviewed.**
