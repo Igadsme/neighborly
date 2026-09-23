@@ -84,7 +84,7 @@ cd backend
 pnpm prisma:seed
 ```
 
-`backend/prisma/seed.ts` upserts categories, nine local users, and housing, jobs, services, and community rows. Local fixture password only, shared by every seed user: `neighborly-local-seed`. Emails are `seed.<firstname>@example.com` (for example `seed.marcus@example.com`, `seed.priya@example.com`). This password is a local fixture, not a production credential.
+`backend/prisma/seed.ts` upserts categories, nine local users, and housing, jobs, services, and community rows. Phase 1 also upserts ten published marketplace `Listing` rows (section 12). Local fixture password only, shared by every seed user: `neighborly-local-seed`. Emails are `seed.<firstname>@example.com` (for example `seed.marcus@example.com`, `seed.priya@example.com`). This password is a local fixture, not a production credential.
 
 - [x] `pnpm prisma:seed` exits 0
 
@@ -169,7 +169,7 @@ The script writes `artifacts/docker-release-verification/e2e-report.json` and re
 
 Browser signed-in pass: not part of the required loop.
 
-- [ ] Browser smoke. Run on 2026-09-23 15:31 EDT. Not a full pass: Listing Detail, Save, and Message seller were not reached because the featured strip was empty. See the browser table in section 10.
+- [ ] Browser smoke. Run on 2026-09-23 15:31 EDT. Not a full pass: Listing Detail, Save, and Message seller were not reached because the featured strip was empty. See the browser table in section 10. Phase 1 closed that seed gap and re-ran the smoke (section 12). This historical row stays open.
 
 ## 10. Results
 
@@ -369,3 +369,69 @@ Do not read a green Docker gate as feature-complete.
 - Any new page id, Figma restyle, or AI call
 
 Related record: `docs/RELEASE_CHECKLIST.md` section E.
+
+## 12. Phase 1 — marketplace seed and signed-in smoke
+
+Phase 1 only. It closes the seed gap from section 10: `GET /api/v1/listings` was `[]` because `backend/prisma/seed.ts` did not insert marketplace listings. Housing, jobs, services, and community rows were already seeded. This section does not start later phases.
+
+**Release readiness: NOT claimed.**
+
+| Field | Value |
+| --- | --- |
+| Timestamp (America/New_York) | 2026-09-23 15:50–15:56 EDT. Passing smoke finished 15:56 EDT |
+| Base | `f9e28c87f57ae05dd22d0fd19fa82f159413dfeb` (`f9e28c8`, Docker release verification record, PR #17) |
+| Seed commit | `1b7ac344f6a9968ac2ecc8c26fe1b73be473ea52` on `cursor/seed-marketplace-listings-3bd9` |
+| Workspace | `/Volumes/T7 Shield/Projects/neighborly` |
+| Node / pnpm | v22.23.2 / 10.34.3 |
+| Postgres | Already healthy. `pg_isready` accepting connections. `prisma migrate deploy`: no pending migrations |
+| Redis | `PONG` |
+| API | Already running from `backend/` (`node dist/main.js`) on port 3000. Not restarted. Neighborly was the listener, so nothing was stopped |
+| Vite | Already running `pnpm dev` on port 8443. HTTP 200 |
+| Health / ready | HTTP 200. `status: ok`. `postgres: up`. Log: `artifacts/docker-release-verification/phase1-api.log` |
+
+### Seed
+
+`pnpm prisma:seed` exit 0. The new `seedMarketplace()` upserts 10 published listings with Unsplash `photo-` image keys, across Furniture, Electronics, Vehicles, Clothing & Accessories, Sports & Outdoors, Home & Garden, Housing, Services, Jobs, and Tools & Equipment. Sellers are the existing seed users. The six newest are not Marcus, so Message seller is allowed. Marcus's row is the older Decatur mower.
+
+After seed, before the smoke published anything, `GET /api/v1/listings?status=PUBLISHED&limit=20` returned those 10 rows. Category `listingCount` values were 1 for each of those ten categories and 0 for the rest.
+
+The passing smoke then used Create Listing's existing default form and clicked Publish now four times across script iterations (three earlier failures on Listing Detail or Save, then the passing run). That added four live rows titled "My Herman Miller Standing Desk", seller Marcus Johnson, category Furniture. Those are smoke output, not seed rows.
+
+Counts after the passing smoke:
+
+| Source | Published listings |
+| --- | --- |
+| Seed (`60000000-…`) | 10 |
+| Smoke publishes (Herman Miller desk) | 4 |
+| `GET /api/v1/listings` total | 14 |
+
+Category counts after that smoke: Clothing & Accessories 1, Electronics 1, Furniture 5, Home & Garden 1, Housing 1, Jobs 1, Services 1, Sports & Outdoors 1, Tools & Equipment 1, Vehicles 1.
+
+### Browser smoke
+
+`node scripts/docker-release-browser-smoke.mjs` exit 0 at the end of the passing run. User `seed.marcus@example.com`. Screenshots and `results.json` replaced the section 10 files under `artifacts/docker-release-verification/browser-smoke/`. `failed` in `results.json` is false.
+
+The sign-in dialog is a real control. The section 10 capture miss was the smoke reading the first 1,200 characters of page text, which never reached the dialog at the end of the landing page. This run waits for `[role="dialog"]` and "Welcome back". The card is in the screenshot (white panel, about 448×348). No Landing change was made.
+
+| Page | Result | Note |
+| --- | --- | --- |
+| Landing | Pass | Sign in and Get started visible |
+| Onboarding | Pass | Get started opened the account step. No new account submitted |
+| Sign-in dialog | Pass | Dialog text "Welcome back", layout box 1440×1100 for the overlay. Sign-in then reached Home |
+| Home | Pass | Greeting rendered. No listings error |
+| Explore | Pass | Results shell rendered |
+| Categories | Pass | Featured strip had 6 cards, including "Walnut mid-century dining table". Empty copy was absent. `06-categories.png` |
+| Map | Pass | Search area rendered |
+| Housing | Pass | "Find your next home" |
+| Services | Pass | "Local services" |
+| Jobs | Pass | "Local jobs" |
+| Community | Pass | Community shell |
+| Listing Detail | Pass | Opened Priya Patel's walnut table, $425, Inman Park. `12-listing-detail.png` |
+| Save / favorite | Pass | The passing run found the heart already Saved from the earlier click in this same Phase 1 session. Saved items then listed the walnut table (`17-saved.png`) |
+| Message seller | Pass | Sent "Can I pick up the walnut table on Saturday morning?" and saw "Message sent!". `14-message-modal.png` |
+| Messages | Pass | That sentence is the latest line in the Priya Patel thread. The API reuses the existing two-person conversation, so the thread title is still the earlier Docker-gate request. `16-messages.png` |
+| Create | Pass | Item for Sale, then through to "Listing published!" using the form's existing desk defaults. Did not add a new page or an AI call. The painted AI Review step was only clicked through |
+| Profile | Pass | Marcus Johnson, Decatur, member since September 2026 |
+| Dashboard | Pass | "My dashboard" and Marcus Johnson. The trust banner still shows painted "52 transactions" and "4.9 rating" |
+
+**Release readiness: NOT claimed.**

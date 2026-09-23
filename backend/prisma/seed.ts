@@ -728,6 +728,175 @@ async function seedCommunity() {
   }
 }
 
+async function seedMarketplace() {
+  const categoryRows = await prisma.category.findMany({ select: { id: true, name: true } })
+  const categoryId = (name: string) => {
+    const row = categoryRows.find((item) => item.name === name)
+    if (!row) throw new Error(`Seed category missing: ${name}`)
+    return row.id
+  }
+
+  const rows = [
+    {
+      id: '60000000-0000-4000-8000-000000000001',
+      sellerId: users.priya.id,
+      categoryId: categoryId('Furniture'),
+      title: 'Walnut mid-century dining table',
+      description: 'Solid walnut table for six from an Inman Park dining room. A few faint water rings on the top. No chairs. Pickup from a ground-floor unit near the BeltLine.',
+      priceCents: 42500,
+      condition: 'Like New',
+      neighborhood: 'Inman Park',
+      latitude: 33.761,
+      longitude: -84.363,
+      createdAt: at('2026-09-23T16:00:00.000Z'),
+      images: ['photo-1555041469-a586c61ea9bc', 'photo-1493663284031-b7e3aefcae8e']
+    },
+    {
+      id: '60000000-0000-4000-8000-000000000002',
+      sellerId: users.david.id,
+      categoryId: categoryId('Electronics'),
+      title: 'iPhone 14 Pro 128GB, unlocked',
+      description: 'Unlocked iPhone 14 Pro in deep purple. Battery health 89 percent. Includes the original box and a cable. Screen has a light case scratch, no cracks.',
+      priceCents: 48000,
+      condition: 'Good',
+      neighborhood: 'Midtown',
+      latitude: 33.781,
+      longitude: -84.383,
+      createdAt: at('2026-09-23T15:00:00.000Z'),
+      images: ['photo-1591337676887-a217a6970a8a', 'photo-1556656793-08538906a9f8']
+    },
+    {
+      id: '60000000-0000-4000-8000-000000000003',
+      sellerId: users.aaliyah.id,
+      categoryId: categoryId('Vehicles'),
+      title: '2016 Honda Civic EX, one owner',
+      description: 'One-owner Civic EX with service records from a Buckhead shop. Clean title, cold air, and new front brakes this spring. No accidents reported.',
+      priceCents: 1450000,
+      condition: 'Good',
+      neighborhood: 'Buckhead',
+      latitude: 33.839,
+      longitude: -84.379,
+      createdAt: at('2026-09-23T14:00:00.000Z'),
+      images: ['photo-1494976388531-d1058494cdd8']
+    },
+    {
+      id: '60000000-0000-4000-8000-000000000004',
+      sellerId: users.sofia.id,
+      categoryId: categoryId('Clothing & Accessories'),
+      title: 'Vintage leather jacket, size M',
+      description: 'Brown leather jacket, size medium, worn one season. Lining is intact and the zipper works. Pickup in Little Five Points on evenings and weekends.',
+      priceCents: 12000,
+      condition: 'Like New',
+      neighborhood: 'Little Five Points',
+      latitude: 33.767,
+      longitude: -84.349,
+      createdAt: at('2026-09-23T13:00:00.000Z'),
+      images: ['photo-1551028719-00167b16eac5']
+    },
+    {
+      id: '60000000-0000-4000-8000-000000000005',
+      sellerId: users.tyler.id,
+      categoryId: categoryId('Sports & Outdoors'),
+      title: 'Trek Marlin 7 mountain bike',
+      description: 'Medium Trek Marlin 7, recently tuned in East Atlanta. Hydraulic brakes and a lock-on grip set. Ready to ride. Helmet not included.',
+      priceCents: 56000,
+      condition: 'Good',
+      neighborhood: 'East Atlanta',
+      latitude: 33.74,
+      longitude: -84.345,
+      createdAt: at('2026-09-23T12:00:00.000Z'),
+      images: ['photo-1558618666-fcd25c85cd64', 'photo-1571068316344-75bc76f77890']
+    },
+    {
+      id: '60000000-0000-4000-8000-000000000006',
+      sellerId: users.james.id,
+      categoryId: categoryId('Home & Garden'),
+      title: 'Handmade ceramic dinner set for four',
+      description: 'Four dinner plates, four bowls, and four mugs from a Grant Park studio shelf. One mug has a small glaze skip on the foot. Food safe.',
+      priceCents: 8500,
+      condition: 'Like New',
+      neighborhood: 'Grant Park',
+      latitude: 33.737,
+      longitude: -84.369,
+      createdAt: at('2026-09-23T11:00:00.000Z'),
+      images: ['photo-1610701596007-11502861dcfa', 'photo-1565193566173-7a0ee3dbe261']
+    },
+    {
+      id: '60000000-0000-4000-8000-000000000007',
+      sellerId: users.nadia.id,
+      categoryId: categoryId('Housing'),
+      title: 'Covered parking spot in Westside, month to month',
+      description: 'One covered parking pad behind a Westside house. Month to month, no overnight guests stored on the pad. Available October 1.',
+      priceCents: 12500,
+      condition: 'Good',
+      neighborhood: 'Westside',
+      latitude: 33.77,
+      longitude: -84.42,
+      createdAt: at('2026-09-22T18:00:00.000Z'),
+      images: ['photo-1507089947368-19c1da9775ae']
+    },
+    {
+      id: '60000000-0000-4000-8000-000000000008',
+      sellerId: users.rosa.id,
+      categoryId: categoryId('Services'),
+      title: 'Three-hour deep clean, Decatur homes',
+      description: 'A three-hour deep clean for a Decatur apartment or small house. Supplies included. Weekday mornings. Message with the address and a preferred date.',
+      priceCents: 12000,
+      condition: 'New',
+      neighborhood: 'Decatur',
+      latitude: 33.775,
+      longitude: -84.296,
+      createdAt: at('2026-09-22T16:00:00.000Z'),
+      images: ['photo-1527515545081-5db817172677']
+    },
+    {
+      id: '60000000-0000-4000-8000-000000000009',
+      sellerId: users.tyler.id,
+      categoryId: categoryId('Jobs'),
+      title: 'Saturday market stall helper, East Atlanta',
+      description: 'Need one helper for a Saturday market stall in East Atlanta. Four hours, cash at the end of the shift. Must be able to lift a folding table.',
+      priceCents: 8000,
+      condition: 'New',
+      neighborhood: 'East Atlanta',
+      latitude: 33.741,
+      longitude: -84.346,
+      createdAt: at('2026-09-22T14:00:00.000Z'),
+      images: ['photo-1488459716781-31db52582fe9']
+    },
+    {
+      id: '60000000-0000-4000-8000-000000000010',
+      sellerId: users.marcus.id,
+      categoryId: categoryId('Tools & Equipment'),
+      title: 'Push mower and string trimmer, Decatur',
+      description: 'Gas push mower and a string trimmer from a Decatur shed. Both start on the second pull. Sold together. Pickup only, cash or app.',
+      priceCents: 14000,
+      condition: 'Good',
+      neighborhood: 'Decatur',
+      latitude: 33.775,
+      longitude: -84.296,
+      createdAt: at('2026-09-20T12:00:00.000Z'),
+      images: ['photo-1416879595882-3373a0480b5b', 'photo-1621905252507-b35492cc74b4']
+    }
+  ]
+
+  for (const [listingIndex, row] of rows.entries()) {
+    const { id, images, ...data } = row
+    await prisma.listing.upsert({
+      where: { id },
+      update: { ...data, city: 'Atlanta', status: 'PUBLISHED', deletedAt: null, pickupAvailable: true },
+      create: { id, ...data, city: 'Atlanta', status: 'PUBLISHED', pickupAvailable: true }
+    })
+    for (const [sortOrder, objectKey] of images.entries()) {
+      const imageId = `61000000-0000-4000-8000-${(listingIndex * 10 + sortOrder + 1).toString(16).padStart(12, '0')}`
+      await prisma.listingImage.upsert({
+        where: { id: imageId },
+        update: { objectKey, sortOrder, listingId: id },
+        create: { id: imageId, listingId: id, objectKey, sortOrder }
+      })
+    }
+  }
+}
+
 async function main() {
   for (const name of categories) {
     await prisma.category.upsert({
@@ -739,6 +908,7 @@ async function main() {
 
   const passwordHash = await argon2.hash(SEED_PASSWORD)
   await seedUsers(passwordHash)
+  await seedMarketplace()
   await seedHousing()
   await seedJobs()
   await seedServices()
