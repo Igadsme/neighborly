@@ -108,7 +108,7 @@ PR #9 (`1f38563`) claimed no new page ids and that the Figma UI was preserved. `
 
 ## E. Sprint 2 vertical wiring and local Mac boot
 
-Code items are what `cfd0db3` and `1f38563` contain. The Mac boot boxes stay open: Docker Desktop is not installed on the Mac, and a live signed-in browser pass against the seeded database was not run. This section is not a release.
+Code items are what `cfd0db3` and `1f38563` contain. Local Mac boot is the live Docker and database gate in [`docs/DOCKER_RELEASE_VERIFICATION.md`](DOCKER_RELEASE_VERIFICATION.md), run from tip `df5aae1` on `/Volumes/T7 Shield/Projects/neighborly`. Docker Desktop is installed on this Mac. That document is the record of what was actually run. This section is not a release. **Release readiness: NOT claimed.**
 
 ### Vertical wiring (in the tree)
 
@@ -116,11 +116,13 @@ Code items are what `cfd0db3` and `1f38563` contain. The Mac boot boxes stay ope
 - [x] Those four pages, plus Home and Dashboard, call `/api/v1` with loading, empty, error, and 401 states (`1f38563`)
 - [x] Frontend CI runs Vitest (`pnpm test` in `.github/workflows/ci.yml`) with `tsc` and `vite build`
 
-### Local Mac boot (not run)
+### Local Mac boot
+
+Live commands, exit codes, and pass/fail rows are in [`docs/DOCKER_RELEASE_VERIFICATION.md`](DOCKER_RELEASE_VERIFICATION.md). The boxes below stay aligned with that document. They are not a release, and they are not a signed-in browser pass. The required commerce check is the scripted API loop in that doc (`node scripts/docker-release-e2e.mjs`), not Playwright. Prefer `pnpm prisma:deploy` over interactive `pnpm prisma:migrate`.
 
 - [ ] `.env` copied from `env.example` to `backend/.env` and the repo root (`DATABASE_URL`, `JWT_SECRET` of at least 32 characters, `CORS_ORIGIN`, `VITE_API_URL`)
 - [ ] `docker compose up -d` for Postgres (PostGIS 16) and Redis 7
-- [ ] `pnpm prisma:migrate` in `backend/` against that database
+- [ ] `pnpm prisma:deploy` in `backend/` against that database
 - [ ] `pnpm prisma:seed`
 - [ ] Node 22 (`.mise.toml`) verify on the Mac: frontend `tsc`, Vitest, and `vite build`; backend `tsc`, Jest, and nest build
-- [ ] Full signed-in e2e against the seeded database (publish, offer, accept, message, review, and the four verticals)
+- [ ] Two-user API loop against the live database (publish, offer, accept, message, complete, review)
