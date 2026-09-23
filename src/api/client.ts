@@ -159,6 +159,28 @@ export const api = {
     profile: (id: string) => request<PublicProfile>(`/users/${id}/profile`),
     reviews: (id: string) => request<ProfileReview[]>(`/users/${id}/reviews`),
   },
+  safety: {
+    report: (input: {
+      targetType: "LISTING" | "USER" | "MESSAGE" | "COMMUNITY_POST"
+      targetId: string
+      reason: "SPAM" | "SCAM" | "HARASSMENT" | "INAPPROPRIATE" | "OTHER"
+      details?: string
+    }) =>
+      request<{ id: string; status: string }>("/safety/reports", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    blocks: () => request<Array<{ userId: string; createdAt: string }>>("/safety/blocks"),
+    block: (userId: string) =>
+      request<{ blocked: boolean; userId: string }>("/safety/blocks", {
+        method: "POST",
+        body: JSON.stringify({ userId }),
+      }),
+    unblock: (userId: string) =>
+      request<{ blocked: boolean; userId: string }>(`/safety/blocks/${userId}`, {
+        method: "DELETE",
+      }),
+  },
   listings: {
     list: (query: ListingQuery = {}) => {
       const params = new URLSearchParams()
