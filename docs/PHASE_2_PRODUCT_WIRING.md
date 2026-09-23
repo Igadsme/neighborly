@@ -30,6 +30,6 @@ Each of these keeps its control and explains why it does not complete:
 - Follow on Profile and Home. No follow route.
 - Housing and Jobs have no create control on the existing screens. `POST /housing` and `POST /jobs` already exist and were not given a new page.
 - Community events have no create control on the screen. `POST /community/events` already exists.
-- Suggested people on Home stay the painted sample cards. Follow is disabled.
-- Landing testimonials stay the painted stories. They are not live stats.
-- Listing view, save, and message counters on Dashboard stay an em dash. Those metrics are not tracked.
+- Suggested people on Home stay the painted sample cards, labeled Preview · Examples. Follow is disabled. The painted scores are not live ratings.
+- Landing testimonials are labeled Preview · Examples. They are not live stats.
+- Listing view, save, message, and offer counters on Dashboard stay an em dash, with a “Not tracked yet” tooltip.

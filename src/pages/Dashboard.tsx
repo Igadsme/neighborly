@@ -461,7 +461,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         { label: 'Messages', value: '—', icon: 'message', color: 'text-[#2D6A4F]' },
                         { label: 'Offers', value: '—', icon: 'dollar', color: 'text-[#D97706]' },
                       ].map(stat => (
-                        <div key={stat.label} className="bg-[#F5F4EF] rounded-xl p-2 text-center">
+                        <div key={stat.label} title="Not tracked yet" className="bg-[#F5F4EF] rounded-xl p-2 text-center">
                           <Icon name={stat.icon} size={12} className={`mx-auto mb-0.5 ${stat.color}`} />
                           <p className="font-bold text-sm text-[#1B2A4A]">{stat.value}</p>
                           <p className="text-[9px] text-[#8A9AB5]">{stat.label}</p>

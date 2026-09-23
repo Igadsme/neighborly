@@ -588,10 +588,10 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="font-display text-4xl font-semibold text-white mb-3">
-              Real neighbors. Real stories.
+              Preview · Examples
             </h2>
             <p className="text-[#74C69D] text-lg">
-              What your Atlanta community is saying about Neighborly.
+              Sample stories. Not live reviews.
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
