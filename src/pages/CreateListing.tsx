@@ -377,7 +377,10 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
               <input
                 type="text"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => {
+                  setTitle(e.target.value)
+                  setPublishError("")
+                }}
                 placeholder="e.g. West Elm Mid-Century Sofa, Excellent Condition"
                 className="w-full h-12 px-4 bg-white border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F] transition-all"
               />
@@ -393,7 +396,10 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
               </label>
               <textarea
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => {
+                  setDescription(e.target.value)
+                  setPublishError("")
+                }}
                 rows={4}
                 placeholder="Describe the item — condition, dimensions, brand, reason for selling, and any defects."
                 className="w-full p-4 bg-white border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] resize-none focus:outline-none focus:border-[#2D6A4F] transition-all"

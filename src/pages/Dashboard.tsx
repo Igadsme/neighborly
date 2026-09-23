@@ -200,7 +200,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         setSkippedReviews((ids) => [...ids, finishedId])
         setReviewing(null)
         setSubmittingReview(false)
-      }, 900)
+      }, 1600)
     } catch (cause: unknown) {
       setReviewError(readError(cause, 'Unable to submit this review. Please try again.'))
       setSubmittingReview(false)
