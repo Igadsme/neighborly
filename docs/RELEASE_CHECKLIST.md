@@ -74,6 +74,7 @@ These are outside the June docs PR. A checked line is in the tree at `1f38563` w
 - [x] Accept and reject exist. Accept creates one conversation and one `ACCEPTED` transaction. Withdraw is not implemented. There is no appointment write route
 - [x] `POST /reviews` exists for a participant when the transaction is `COMPLETED`. `GET /users/:id/reviews` lists them for Profile. The Dashboard trust banner stays painted copy
 - [x] `/realtime` requires a JWT, and send emits `message.created`. Typing, attachments, and `POST /conversations` are not implemented
+- [x] The nav message badge counts unread threads from `GET /conversations` (caller `lastReadAt` vs the latest message). Signed-out, zero unread, and 401 hide it. There is no `GET /notifications`. This checkbox is not a release, and Docker/e2e in Section E were not run
 - [x] Housing, jobs, services, and community PostgreSQL APIs exist (`cfd0db3`), including public list/get and the mutations those pages call (jobs apply/save, service quotes, community post/reaction/RSVP/claim). `pnpm prisma:seed` loads fixture-shaped rows. Remaining UI gaps are the unchecked list below
 
 ### Still open
@@ -86,7 +87,7 @@ These are outside the June docs PR. A checked line is in the tree at `1f38563` w
 - Lost-and-found and giveaway composers (`+ Post lost/found` and `+ Give something` have no form). Reply, Share, and lost-and-found Contact do not start a thread
 - Dashboard Pause, Promote, and Mark sold (the buttons render and have no route)
 - Landing marketing cards and the Categories featured strip (`listings` fixtures). Map, Profile, and Listing Detail primary content for UUID ids read the API. Non-UUID listing ids still use fixtures. Message, negotiate, reserve, report, and share on Listing Detail stay local
-- `Navigation` unread badge (`unreadMessages={2}` in `src/App.tsx`). Dashboard's own message count reads conversations
+- A notification list and notification mark-read. The nav message badge is no longer `unreadMessages={2}`; it counts unread threads from `GET /conversations`. That is not a notification feed, and it is not a release.
 - Image upload (S3 is env-only)
 - Price history writes and real price-drop alerts
 - Radius / PostGIS search (columns are decimals)
