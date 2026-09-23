@@ -17,6 +17,8 @@ services:
       start_period: 10s
   redis:
     image: redis:7-alpine
+    # Rate-limit counters are not source-of-truth data. AOF keeps them across a local restart.
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "6379:6379"
     volumes:

@@ -1,6 +1,6 @@
 # Database Design
 
-PostgreSQL via Prisma (`backend/prisma/schema.prisma`). Migrations: `backend/prisma/migrations/0001_init`, `backend/prisma/migrations/0002_onboarding`, `backend/prisma/migrations/0003_verticals`, and `backend/prisma/migrations/0004_trust_safety`. Client provider: `prisma-client-js`.
+PostgreSQL via Prisma (`backend/prisma/schema.prisma`). Migrations: `backend/prisma/migrations/0001_init`, `backend/prisma/migrations/0002_onboarding`, `backend/prisma/migrations/0003_verticals`, `backend/prisma/migrations/0004_trust_safety`, and `backend/prisma/migrations/0005_query_indexes`. Client provider: `prisma-client-js`.
 
 **IMPLEMENTED** is every model, enum, and index in that schema. **TARGET** is the rest of the older entity list that has no table. A model with no service writer is called out; it is still implemented schema, not a target table.
 
@@ -77,6 +77,7 @@ Offer accept and `POST /conversations` insert `Conversation` and `ConversationPa
 
 - No PostGIS `geometry`. Latitude and longitude are `Decimal(9, 6)`. The compose image is `postgis/postgis:16-3.4`; the migration does not use it.
 - No full-text index. Search is application `contains`.
+- `0005_query_indexes` adds btree indexes for reads that were filtering or sorting without a matching index: published listing and request feeds (`status, createdAt`), listing images (`listingId, sortOrder`), saved searches (`userId, updatedAt`), counter offers (`offerId, createdAt`), conversation inbox (`ConversationParticipant.userId`, `Conversation.updatedAt`), transaction lists (`TransactionParticipant.userId`, `Transaction.updatedAt`, milestone `transactionId, createdAt`), reviews (`subjectId, createdAt` and `transactionId`), and a caller's own reports (`reporterId, createdAt`). There is still no slow-query log unless `SLOW_QUERY_LOG=1`. Primary keys and the earlier composite indexes are unchanged.
 - No soft-delete on offers, messages, or reviews.
 - No money, payout, refund, or dispute tables. Dispute is only a transaction status.
 

@@ -1,16 +1,17 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-
-interface AccessTokenClaims {
-  sub?: string
-  email?: string
-}
+import { PrismaService } from '../prisma/prisma.service'
+import { readAccessToken } from './access-token'
+import { accountSelect, isActiveAccount } from './account'
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly jwt: JwtService) {}
+  constructor(
+    private readonly jwt: JwtService,
+    private readonly prisma: PrismaService
+  ) {}
 
-  canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<{
       headers: { authorization?: string }
       user?: { id: string; email: string }
@@ -19,11 +20,10 @@ export class AuthGuard implements CanActivate {
     if (!token) throw new UnauthorizedException('Bearer token required')
 
     try {
-      const payload = this.jwt.verify<AccessTokenClaims>(token, { secret: process.env.JWT_SECRET })
-      if (!payload || typeof payload === 'string' || !payload.sub || !payload.email) {
-        throw new UnauthorizedException('Invalid or expired access token')
-      }
-      request.user = { id: payload.sub, email: payload.email }
+      const claims = readAccessToken(this.jwt, token)
+      const account = await this.prisma.user.findUnique({ where: { id: claims.sub }, select: accountSelect })
+      if (!isActiveAccount(account)) throw new UnauthorizedException('Account is not active')
+      request.user = { id: claims.sub, email: claims.email }
       return true
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error

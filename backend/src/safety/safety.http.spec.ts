@@ -62,6 +62,12 @@ describe('Safety HTTP', () => {
     jest.clearAllMocks()
     resetRateLimitsForTests()
     delete process.env.RATE_LIMIT_ENFORCE
+    prisma.user.findUnique.mockImplementation(async (args: { select?: { email?: boolean }; where?: { id?: string } }) => {
+      if (args?.select?.email) {
+        return { id: args.where?.id ?? reporterId, email: 'ada@example.com', status: 'ACTIVE', deletedAt: null }
+      }
+      return null
+    })
   })
 
   function post(path: string, body: unknown, authorization?: string) {
@@ -190,7 +196,13 @@ describe('Abuse limits on auth, messaging, listings, and offers', () => {
         provide: PrismaService,
         useValue: {
           conversationParticipant: { findUnique: async () => null, findMany: async () => [] },
-          blockedUser: { findFirst: async () => null }
+          blockedUser: { findFirst: async () => null },
+          user: {
+            findUnique: async (args: { select?: { email?: boolean }; where?: { id?: string } }) =>
+              args?.select?.email
+                ? { id: args.where?.id ?? reporterId, email: 'ada@example.com', status: 'ACTIVE', deletedAt: null }
+                : null
+          }
         }
       }
     ])
@@ -213,7 +225,20 @@ describe('Abuse limits on auth, messaging, listings, and offers', () => {
     const booted = await boot([ListingsController], [
       ListingsService,
       AuthGuard,
-      { provide: PrismaService, useValue: { listing: { create: async () => ({ id: listingId }) } } }
+      {
+        provide: PrismaService,
+        useValue: {
+          listing: { create: async () => ({ id: listingId }) },
+          user: {
+            findUnique: async (args: { where?: { id?: string } }) => ({
+              id: args?.where?.id ?? reporterId,
+              email: 'ada@example.com',
+              status: 'ACTIVE',
+              deletedAt: null
+            })
+          }
+        }
+      }
     ])
     const init = {
       method: 'POST',
@@ -242,7 +267,15 @@ describe('Abuse limits on auth, messaging, listings, and offers', () => {
         provide: PrismaService,
         useValue: {
           needRequest: { findUnique: async () => null },
-          blockedUser: { findFirst: async () => null }
+          blockedUser: { findFirst: async () => null },
+          user: {
+            findUnique: async (args: { where?: { id?: string } }) => ({
+              id: args?.where?.id ?? reporterId,
+              email: 'ada@example.com',
+              status: 'ACTIVE',
+              deletedAt: null
+            })
+          }
         }
       }
     ])

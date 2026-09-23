@@ -65,7 +65,15 @@ describe('Socket.IO /realtime handshake', () => {
     process.env.JWT_SECRET = secret
     const moduleRef = await Test.createTestingModule({
       imports: [JwtModule.register({})],
-      providers: [MessagingGateway, { provide: PrismaService, useValue: { conversationParticipant: { findUnique: jest.fn() } } }]
+      providers: [MessagingGateway, {
+        provide: PrismaService,
+        useValue: {
+          conversationParticipant: { findUnique: jest.fn() },
+          user: {
+            findUnique: jest.fn(async () => ({ id: 'user-real', email: 'ada@example.com', status: 'ACTIVE', deletedAt: null }))
+          }
+        }
+      }]
     }).compile()
 
     app = moduleRef.createNestApplication({ forceCloseConnections: true })

@@ -1,8 +1,10 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common'
-import { JwtService, JwtSignOptions } from '@nestjs/jwt'
+import { JwtService } from '@nestjs/jwt'
 import * as argon2 from 'argon2'
+import { audit } from '../common/logger'
 import { sanitizeOptional, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
+import { accessTokenSignOptions } from './access-token'
 import { LoginDto, RegisterDto } from './dto'
 
 @Injectable()
@@ -29,25 +31,25 @@ export class AuthService {
       },
       include: { profile: true }
     })
+    audit('auth.register', { userId: user.id })
     return this.issueTokens(user.id, user.email)
   }
 
   async login(input: LoginDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: input.email.trim().toLowerCase() } })
+    const email = input.email.trim().toLowerCase()
+    const user = await this.prisma.user.findUnique({ where: { email } })
     if (!user || user.status !== 'ACTIVE' || !(await argon2.verify(user.passwordHash, input.password))) {
+      audit('auth.login.failure', { email })
       throw new UnauthorizedException('Invalid email or password')
     }
+    audit('auth.login.success', { userId: user.id })
     return this.issueTokens(user.id, user.email)
   }
 
   private async issueTokens(id: string, email: string) {
-    const options: JwtSignOptions = {
-      secret: process.env.JWT_SECRET,
-      expiresIn: process.env.JWT_ACCESS_TTL as JwtSignOptions['expiresIn'] ?? '15m'
-    }
     return {
       user: { id, email },
-      accessToken: await this.jwt.signAsync({ sub: id, email }, options)
+      accessToken: await this.jwt.signAsync({ sub: id, email }, accessTokenSignOptions())
     }
   }
 }
