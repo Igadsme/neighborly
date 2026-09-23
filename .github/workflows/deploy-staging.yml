@@ -1,0 +1,99 @@
+# Manual staging pipeline. Builds the Compose staging profile, migrates, seeds,
+# and checks /health, /ready, and the frontend API URL.
+# It does not deploy to production, register a domain, or change DNS.
+# A public host stays blocked until the product owner approves one.
+# Set the repository variable STAGING_PUSH_IMAGES to the string true to also
+# push the built images to GHCR. Leave it unset otherwise.
+
+name: Deploy staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag used only when STAGING_PUSH_IMAGES is true
+        required: false
+        default: staging
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Build and smoke Compose staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start the staging profile
+        run: sh scripts/staging-up.sh
+
+      - name: Check health, readiness, seed data, and the frontend bundle
+        run: |
+          set -euo pipefail
+          curl -fsS http://127.0.0.1:3001/api/v1/health
+          echo
+          curl -fsS http://127.0.0.1:3001/api/v1/ready
+          echo
+          curl -kfsS --resolve staging.neighborly.localhost:8444:127.0.0.1 \
+            https://staging.neighborly.localhost:8444/api/v1/health
+          echo
+          curl -kfsS --resolve staging.neighborly.localhost:8444:127.0.0.1 \
+            https://staging.neighborly.localhost:8444/api/v1/ready
+          echo
+          html=$(curl -kfsS --resolve staging.neighborly.localhost:8444:127.0.0.1 \
+            https://staging.neighborly.localhost:8444/)
+          printf '%s' "$html" | grep -q 'id="root"'
+          js=$(printf '%s' "$html" | sed -n 's/.*src="\(\/assets\/[^"]*\.js\)".*/\1/p' | head -1)
+          test -n "$js"
+          curl -kfsS --resolve staging.neighborly.localhost:8444:127.0.0.1 \
+            "https://staging.neighborly.localhost:8444${js}" \
+            | grep -q 'https://staging.neighborly.localhost:8444/api/v1'
+          curl -kfsS --resolve staging.neighborly.localhost:8444:127.0.0.1 \
+            https://staging.neighborly.localhost:8444/api/v1/categories \
+            | grep -q Furniture
+
+      - name: Stop the runner stack and drop its volumes
+        if: always()
+        run: docker compose --env-file .env.staging --profile staging down -v
+
+  push-images:
+    name: Push images to GHCR
+    needs: smoke
+    if: vars.STAGING_PUSH_IMAGES == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: staging
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create a runner-only env file
+        run: sh scripts/staging-up.sh
+
+      - name: Log in to GHCR and push
+        run: |
+          set -euo pipefail
+          owner=$(printf '%s' "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          tag="${{ inputs.image_tag }}"
+          case "$tag" in
+            ''|*[!A-Za-z0-9._-]*) echo "image_tag must be a plain docker tag" >&2; exit 1 ;;
+          esac
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "$owner" --password-stdin
+          docker tag neighborly-api:staging "ghcr.io/${owner}/neighborly-api:${tag}"
+          docker tag neighborly-web:staging "ghcr.io/${owner}/neighborly-web:${tag}"
+          docker push "ghcr.io/${owner}/neighborly-api:${tag}"
+          docker push "ghcr.io/${owner}/neighborly-web:${tag}"
+
+      - name: Stop the runner stack and drop its volumes
+        if: always()
+        run: docker compose --env-file .env.staging --profile staging down -v
