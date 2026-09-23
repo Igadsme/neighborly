@@ -63,7 +63,7 @@ Checked items below were read in `src/pages/Dashboard.tsx`, `src/pages/Messages.
 - [ ] Landing login, onboarding register, create-listing category load, and Saved Items favorites still behave as they do in the current pages (not re-run against a database in this docs pass)
 - [ ] Signed-out gate and the landing Preview bar still work when clicked (both are still in `src/App.tsx` / `Landing`; this docs pass did not exercise them)
 - [x] Housing, Services, Jobs, and Community call `/api/v1` with loading, empty, error, and 401 copy (`Sign in to continue.`). Home listing rails and the service, event, and discussion strips call the APIs. They do not render the old vertical fixture arrays
-- [x] Explore loads `GET /listings` and still applies extra filters in the browser. Map loads `GET /listings` and places pins from public neighborhood labels. Landing and Categories still import `src/data/index.ts` for surfaces with no read endpoint. Profile does not. Listing Detail uses the listing API for UUID ids and still uses fixtures for non-UUID ids
+- [x] Explore loads `GET /listings` and still applies extra filters in the browser. Map loads `GET /listings` and places pins from public neighborhood labels. Landing still imports `src/data/index.ts`. Categories featured strip loads `GET /listings` (`status=PUBLISHED`, `limit=6`) and does not import that fixture array. Profile does not. Listing Detail uses the listing API for UUID ids and still uses fixtures for non-UUID ids. This checkbox is not a release, and Docker/e2e in Section E were not run
 
 ## C. Not a release
 
@@ -87,7 +87,7 @@ These are outside the June docs PR. A checked line is in the tree at `1f38563` w
 - Trust scores computed from reviews. The reviews list route exists; Dashboard still does not use it to hide a prompt
 - Lost-and-found and giveaway composers (`+ Post lost/found` and `+ Give something` have no form). Reply, Share, and lost-and-found Contact do not start a thread
 - Dashboard Pause, Promote, and Mark sold (the buttons render and have no route)
-- Landing marketing cards and the Categories featured strip (`listings` fixtures). Map, Profile, and Listing Detail primary content for UUID ids read the API. Non-UUID listing ids still use fixtures. Negotiate, reserve, report, and share on Listing Detail stay local. Message send on a UUID listing persists through `POST /conversations`; fixture listings still use the local modal
+- Landing marketing cards (`listings` fixtures). The Categories featured strip reads `GET /listings` (`status=PUBLISHED`, `limit=6`) and is not a fixture strip. Map, Profile, and Listing Detail primary content for UUID ids read the API. Non-UUID listing ids still use fixtures. Negotiate, reserve, report, and share on Listing Detail stay local. Message send on a UUID listing persists through `POST /conversations`; fixture listings still use the local modal. The featured-strip wiring is not a release, and Docker/e2e in Section E were not run
 - A notification list and notification mark-read. The nav message badge is no longer `unreadMessages={2}`; it counts unread threads from `GET /conversations`. That is not a notification feed, and it is not a release.
 - Image upload (S3 is env-only)
 - Price history writes and real price-drop alerts

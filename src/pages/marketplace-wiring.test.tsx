@@ -100,9 +100,29 @@ describe("Create listing", () => {
   })
 })
 
+const featuredId = "33333333-3333-4333-8333-333333333333"
+
+function publishedListing(id: string, title: string) {
+  return {
+    id,
+    title,
+    description: "A published listing from the neighborhood.",
+    priceCents: 12000,
+    condition: "Good",
+    neighborhood: "Inman Park",
+    city: "Atlanta",
+    category: { name: "Furniture" },
+    seller: {
+      id: "44444444-4444-4444-8444-444444444444",
+      profile: { firstName: "Ada", lastName: "Lovelace" },
+    },
+  }
+}
+
 describe("Categories", () => {
   it("shows published counts for categories the API knows", async () => {
     route((url) => {
+      if (url.includes("/listings")) return json([])
       expect(url).toContain("/categories")
       return json([
         { id: categoryId, name: "Housing", slug: "housing", listingCount: 4 },
@@ -125,7 +145,80 @@ describe("Categories", () => {
 
     route(() => json({ message: "Unauthorized" }, 401))
     render(<Categories onNavigate={() => undefined} />)
+    const alerts = await screen.findAllByText("Sign in to continue.")
+    expect(alerts.length).toBe(2)
+    expect(screen.getByText("Services")).toBeTruthy()
+  })
+
+  it("loads the featured strip from published listings", async () => {
+    const calls: Array<{ url: string; auth: string | null }> = []
+    const navigate = vi.fn()
+    const rows = [
+      publishedListing(featuredId, "Oak dining table"),
+      publishedListing("55555555-5555-4555-8555-555555555555", "Second chair"),
+      publishedListing("66666666-6666-4666-8666-666666666666", "Third lamp"),
+      publishedListing("77777777-7777-4777-8777-777777777777", "Fourth rug"),
+      publishedListing("88888888-8888-4888-8888-888888888888", "Fifth vase"),
+      publishedListing("99999999-9999-4999-8999-999999999999", "Sixth stool"),
+      publishedListing("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "Seventh extra"),
+    ]
+    route((url, init) => {
+      const headers = init?.headers
+      calls.push({
+        url,
+        auth: headers instanceof Headers ? headers.get("Authorization") : null,
+      })
+      if (url.includes("/listings")) return json(rows)
+      return json([{ id: categoryId, name: "Housing", slug: "housing", listingCount: 4 }])
+    })
+    render(<Categories onNavigate={navigate} />)
+    expect(screen.getByText("Loading listings…")).toBeTruthy()
+    expect(await screen.findByText("Oak dining table")).toBeTruthy()
+    expect(screen.getByText("Sixth stool")).toBeTruthy()
+    expect(screen.queryByText("Seventh extra")).toBeNull()
+    expect(screen.queryByText("West Elm Mid-Century Modern Sofa — Excellent Condition")).toBeNull()
+    expect(screen.getByText("Featured in Atlanta")).toBeTruthy()
+    expect(screen.getByText("4 listings")).toBeTruthy()
+    fireEvent.click(screen.getByText("Oak dining table"))
+    expect(navigate).toHaveBeenCalledWith("listing", featuredId)
+    const listCall = calls.find((call) => call.url.includes("/listings"))
+    expect(listCall?.url).toContain("status=PUBLISHED")
+    expect(listCall?.url).toContain("limit=6")
+    expect(listCall?.auth).toBe("Bearer test-token")
+  })
+
+  it("shows an empty featured strip when no published listings come back", async () => {
+    route((url) => {
+      if (url.includes("/listings")) return json([])
+      return json([{ id: categoryId, name: "Vehicles", slug: "vehicles", listingCount: 1 }])
+    })
+    render(<Categories onNavigate={() => undefined} />)
+    expect(await screen.findByText("No featured listings yet.")).toBeTruthy()
+    expect(screen.getByText("1 listings")).toBeTruthy()
+    expect(screen.getByText("Featured in Atlanta")).toBeTruthy()
+    expect(screen.getByText("Trending in Atlanta")).toBeTruthy()
+    expect(screen.getByText("Popular in your neighborhoods")).toBeTruthy()
+    expect(screen.queryByText("West Elm Mid-Century Modern Sofa — Excellent Condition")).toBeNull()
+  })
+
+  it("keeps the grid when the featured list fails", async () => {
+    route((url) => {
+      if (url.includes("/listings")) return Promise.reject(new Error("offline"))
+      return json([{ id: categoryId, name: "Housing", slug: "housing", listingCount: 2 }])
+    })
+    const { unmount } = render(<Categories onNavigate={() => undefined} />)
+    expect(await screen.findByText("Listings could not be loaded.")).toBeTruthy()
+    expect(screen.getByText("2 listings")).toBeTruthy()
+    expect(screen.queryByText("West Elm Mid-Century Modern Sofa — Excellent Condition")).toBeNull()
+    unmount()
+
+    route((url) => {
+      if (url.includes("/listings")) return json({ message: "Unauthorized" }, 401)
+      return json([{ id: categoryId, name: "Services", slug: "services", listingCount: 3 }])
+    })
+    render(<Categories onNavigate={() => undefined} />)
     expect(await screen.findByText("Sign in to continue.")).toBeTruthy()
+    expect(screen.getByText("3 listings")).toBeTruthy()
     expect(screen.getByText("Services")).toBeTruthy()
   })
 })
