@@ -197,13 +197,19 @@ async function clickContaining(cdp, label) {
 }
 
 async function scrollToText(cdp, label) {
-  await cdp.evaluate(`(() => {
+  const scrollY = await cdp.evaluate(`(() => {
     const wanted = ${JSON.stringify(label)}
-    const el = [...document.querySelectorAll('h1, h2, h3, button, p, section')].find((node) => (node.innerText || '').includes(wanted))
-    if (el) el.scrollIntoView({ block: 'center' })
-    return Boolean(el)
+    const el = [...document.querySelectorAll('h1, h2, h3, p, button, div')].find((node) => {
+      const text = (node.innerText || '').replace(/\\s+/g, ' ').trim()
+      return text.includes(wanted) && text.length < 120
+    })
+    if (!el) return -1
+    const top = el.getBoundingClientRect().top + window.scrollY - 120
+    window.scrollTo(0, Math.max(0, top))
+    return window.scrollY
   })()`)
   await sleep(400)
+  return scrollY
 }
 
 async function main() {
@@ -277,7 +283,7 @@ async function main() {
 
     const pages = [
       { name: '05-explore', click: 'Explore', ready: ['results', 'Save search', 'Loading listings'], fail: ['Listings could not be loaded', 'Sign in to continue'] },
-      { name: '06-categories', click: 'All →', homeFirst: true, ready: ['Browse by category', 'Featured in Atlanta'], fail: ['Categories could not be loaded', 'Listings could not be loaded', 'No featured listings yet', 'Sign in to continue'], scroll: 'Featured in Atlanta' },
+      { name: '06-categories', click: 'All →', homeFirst: true, ready: ['Walnut mid-century dining table'], fail: ['Categories could not be loaded', 'Listings could not be loaded', 'No featured listings yet', 'Sign in to continue'], scroll: 'Walnut mid-century dining table' },
       { name: '07-map', click: 'Map', ready: ['Search this area', 'Search area', 'Furniture'], fail: ['could not be loaded', 'Sign in to continue'] },
       { name: '08-housing', click: 'Housing', ready: ['Find your next home', 'Loading', 'No housing'], fail: ['could not be loaded', 'Sign in to continue'] },
       { name: '09-services', click: 'Services', ready: ['Local services'], fail: ['could not be loaded', 'Sign in to continue'] },
@@ -306,7 +312,7 @@ async function main() {
       await record(cdp, page.name, {
         ok: clicked && judgment.ok && featuredOk,
         note: clicked
-          ? `${judgment.note}${featuredCards === null ? '' : ` Featured cards: ${featuredCards}.`}`
+          ? `${judgment.note}${featuredCards === null ? '' : ` Featured cards: ${featuredCards}.`}${page.scroll ? ` Scrolled to ${page.scroll}.` : ''}`
           : `Click failed for ${page.click}. ${judgment.note}`
       })
     }
@@ -314,44 +320,64 @@ async function main() {
     await clickButton(cdp, 'Neighborly')
     await waitForText(cdp, /All →|Good morning|Good afternoon|Good evening/, 8000)
     await clickButton(cdp, 'All →')
-    body = await waitForText(cdp, /Featured in Atlanta|No featured listings yet|Listings could not be loaded/, 10000)
-    const featuredState = await cdp.evaluate(`(() => {
-      const text = document.body ? document.body.innerText : ''
-      return {
-        featured: text.includes('Featured in Atlanta'),
-        empty: text.includes('No featured listings yet'),
-        error: text.includes('Listings could not be loaded')
-      }
-    })()`)
+    const listingTitle = 'Walnut mid-century dining table'
+    body = await waitForText(cdp, /Walnut mid-century dining table|No featured listings yet|Listings could not be loaded/, 15000)
     const openedListing = await cdp.evaluate(`(() => {
-      const heading = [...document.querySelectorAll('h2, h3, p, span')].find((node) => (node.textContent || '').includes('Featured in Atlanta'))
-      const section = heading?.closest('section') || document
-      const card = section.querySelector('div.cursor-pointer')
+      const card = [...document.querySelectorAll('div.cursor-pointer')].find((node) => (node.innerText || '').includes(${JSON.stringify(listingTitle)}))
       if (!card) return false
+      const top = card.getBoundingClientRect().top + window.scrollY - 120
+      window.scrollTo(0, Math.max(0, top))
       card.click()
       return true
     })()`)
     if (openedListing) {
-      body = await waitForText(cdp, /Message seller|This listing could not be loaded|Loading listing/, 10000)
+      body = await waitForText(cdp, /Message seller|This listing could not be loaded|Choose a listing/, 10000)
     }
     await record(cdp, '12-listing-detail', {
-      ok: openedListing && body.includes('Message seller') && !body.includes('This listing could not be loaded'),
+      ok: openedListing && body.includes(listingTitle) && body.includes('Message seller') && body.includes('Priya') && !body.includes('This listing could not be loaded'),
       note: openedListing
-        ? 'Opened a featured listing card.'
-        : `Featured strip state ${JSON.stringify(featuredState)}. No listing card was opened.`
+        ? `Opened ${listingTitle}.`
+        : 'The walnut table card was not opened.'
     })
 
-    const saved = await clickButton(cdp, 'Save')
-    body = await waitForText(cdp, /Saved|Saving this listing is unavailable|Sign in to continue/, 8000)
+    const saveState = await cdp.evaluate(`(() => {
+      const label = (node) => (node.innerText || '').replace(/\\s+/g, ' ').trim()
+      const nodes = [...document.querySelectorAll('button')]
+      const save = nodes.find((node) => label(node) === 'Save')
+      const saved = nodes.find((node) => label(node) === 'Saved')
+      if (save) {
+        save.click()
+        return 'clicked'
+      }
+      if (saved) return 'already'
+      return 'missing'
+    })()`)
+    if (saveState === 'clicked') {
+      body = await waitForText(cdp, /Saved|Saving this listing is unavailable|Sign in to continue/, 8000)
+    } else {
+      body = await text(cdp)
+    }
     await record(cdp, '13-listing-save', {
-      ok: saved && body.includes('Saved') && !body.includes('Sign in to continue') && !body.includes('Saving this listing is unavailable'),
-      note: saved ? 'Clicked Save on Listing Detail and waited for Saved.' : 'Save button was not clicked.'
+      ok: (saveState === 'clicked' || saveState === 'already') && body.includes('Saved') && !body.includes('Sign in to continue') && !body.includes('Saving this listing is unavailable'),
+      note: saveState === 'clicked'
+        ? 'Clicked Save on Listing Detail and waited for Saved.'
+        : saveState === 'already'
+          ? 'Listing Detail already showed Saved for this favorite.'
+          : 'Save button was not clicked.'
     })
 
-    const sellerMessage = 'Is this still available?'
+    const sellerMessage = 'Can I pick up the walnut table on Saturday morning?'
     const messaged = await clickButton(cdp, 'Message seller')
     await sleep(400)
-    const pickedReply = await clickButton(cdp, sellerMessage)
+    const pickedReply = await cdp.evaluate(`(() => {
+      const dialog = document.querySelector('.fixed.inset-0.z-50')
+      const field = dialog?.querySelector('textarea')
+      if (!field) return false
+      const proto = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
+      proto.set.call(field, ${JSON.stringify(sellerMessage)})
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+      return true
+    })()`)
     await sleep(300)
     const sentMessage = await clickButton(cdp, 'Send message')
     body = await waitForText(cdp, /Message sent!|couldn't be sent|Sign in to continue|You cannot message yourself/, 10000)
@@ -392,11 +418,11 @@ async function main() {
       button.click()
       return true
     })()`)
-    body = await waitForText(cdp, /Is this still available\?|No messages yet|could not be loaded|Sign in to continue/, 10000)
+    body = await waitForText(cdp, /walnut table on Saturday|No messages yet|could not be loaded|Sign in to continue/, 10000)
     await record(cdp, '16-messages', {
-      ok: messagesClicked && body.includes('Is this still available?') && !body.includes('could not be loaded') && !body.includes('Sign in to continue'),
-      note: body.includes('Is this still available?')
-        ? 'The seeded-listing message is in the inbox.'
+      ok: messagesClicked && body.includes('walnut table on Saturday') && !body.includes('could not be loaded') && !body.includes('Sign in to continue'),
+      note: body.includes('walnut table on Saturday')
+        ? 'The walnut-table message is in the inbox.'
         : messagesClicked
           ? 'Opened Messages. The seller message was not visible.'
           : 'Messages icon was not found.'
@@ -409,10 +435,14 @@ async function main() {
       button.click()
       return true
     })()`)
-    body = await waitForText(cdp, /Saved items|could not be loaded|Sign in to continue/, 8000)
+    body = await waitForText(cdp, /Walnut mid-century dining table|No saved listings yet|could not be loaded|Sign in to continue/, 8000)
     await record(cdp, '17-saved', {
-      ok: savedNav && body.includes('Saved items') && !body.includes('could not be loaded') && !body.includes('Sign in to continue'),
-      note: savedNav ? 'Opened the saved icon.' : 'Saved icon was not found.'
+      ok: savedNav && body.includes('Walnut mid-century dining table') && !body.includes('No saved listings yet') && !body.includes('could not be loaded') && !body.includes('Sign in to continue'),
+      note: body.includes('Walnut mid-century dining table')
+        ? 'Saved items shows the walnut table.'
+        : savedNav
+          ? 'Opened Saved items. The walnut table was not listed.'
+          : 'Saved icon was not found.'
     })
 
     const menu = await cdp.evaluate(`(() => {
@@ -448,6 +478,7 @@ async function main() {
     await writeFile(resolve(OUT, 'results.json'), `${JSON.stringify({ appUrl: APP_URL, finishedAt: new Date().toISOString(), failed, results }, null, 2)}\n`)
     chrome.kill('SIGTERM')
   }
+  if (failed) process.exitCode = 1
 }
 
 main().catch(async (cause) => {
