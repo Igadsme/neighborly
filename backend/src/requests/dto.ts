@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer'
-import { IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min, MinLength } from 'class-validator'
+import { IsDateString, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min, MinLength } from 'class-validator'
 import { ExchangeMode } from '@prisma/client'
 
 export class CreateRequestDto {
@@ -52,6 +52,12 @@ export class CreateOfferDto {
   @IsOptional()
   @IsUUID('4', { each: true })
   listingIds?: string[]
+}
+
+export class ListOffersQuery {
+  @IsOptional()
+  @IsIn(['received', 'sent', 'all'])
+  scope?: 'received' | 'sent' | 'all'
 }
 
 export class CounterOfferDto {

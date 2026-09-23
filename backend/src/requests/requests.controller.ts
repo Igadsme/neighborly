@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
-import { CounterOfferDto, CreateOfferDto, CreateRequestDto } from './dto'
+import { CounterOfferDto, CreateOfferDto, CreateRequestDto, ListOffersQuery } from './dto'
 import { RequestsService } from './requests.service'
 
 @ApiTags('requests')
@@ -12,6 +12,13 @@ export class RequestsController {
 
   @Get()
   list() { return this.requests.list() }
+
+  @Get('offers')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
+  offers(@Req() req: AuthenticatedRequest, @Query() query: ListOffersQuery) {
+    return this.requests.listOffers(req.user.id, query.scope ?? 'received')
+  }
 
   @Get(':id')
   get(@Param('id') id: string) { return this.requests.get(id) }

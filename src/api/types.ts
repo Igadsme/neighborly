@@ -132,6 +132,17 @@ export interface ApiRequestSummary {
   offers: Array<{ id: string; status: string }>
 }
 
+export interface ApiScopedOffer {
+  id: string
+  amountCents?: number | null
+  message: string
+  status: string
+  createdAt: string
+  offerer: PublicUserCard
+  items?: ApiOfferDetail["items"]
+  request: Omit<ApiRequestSummary, "offers">
+}
+
 export interface ApiOfferDetail {
   id: string
   requestId?: string

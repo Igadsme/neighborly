@@ -9,6 +9,7 @@ import {
   indexOffers,
   listingFromApi,
   matchesOfferChip,
+  requestDetailsFromOffers,
   mediaSrc,
   offerBadge,
   offerRowsForUser,
@@ -63,15 +64,13 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     setOffersError('')
     ;(async () => {
       const me = await api.auth.me()
-      const [summaries, txs, convos, listingRows] = await Promise.all([
-        api.requests.list(),
+      const [offerFeed, txs, convos, listingRows] = await Promise.all([
+        api.requests.offers("all"),
         api.transactions.list(),
         api.conversations.list(),
         api.listings.list({ limit: 100 }),
       ])
-      const details = await Promise.all(
-        summaries.filter((request) => request.offers.length > 0).map((request) => api.requests.get(request.id)),
-      )
+      const details = requestDetailsFromOffers(offerFeed)
       if (!active) return
       const name = [me.profile?.firstName, me.profile?.lastName].filter(Boolean).join(' ')
       const place = me.profile?.neighborhood

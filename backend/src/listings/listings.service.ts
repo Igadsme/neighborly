@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { publicUserSelect } from '../common/public-user.select'
 import { PrismaService } from '../prisma/prisma.service'
@@ -48,30 +48,28 @@ export class ListingsService {
   }
 
   create(sellerId: string, input: CreateListingDto) {
-    return this.prisma.listing.create({
-      data: {
-        sellerId,
-        categoryId: input.categoryId,
-        title: input.title.trim(),
-        description: input.description.trim(),
-        priceCents: input.priceCents,
-        condition: input.condition?.trim(),
-        neighborhood: input.neighborhood?.trim(),
-        city: input.city?.trim(),
-        latitude: input.latitude,
-        longitude: input.longitude,
-        radiusMiles: input.radiusMiles,
-        pickupAvailable: input.pickupAvailable ?? true,
-        deliveryAvailable: input.deliveryAvailable ?? false,
-        shippingAvailable: input.shippingAvailable ?? false,
-        status: 'PUBLISHED'
-      }
-    })
+    return this.persist(sellerId, input, 'PUBLISHED')
+  }
+
+  saveDraft(sellerId: string, input: CreateListingDto) {
+    return this.persist(sellerId, input, 'DRAFT')
+  }
+
+  async publish(userId: string, id: string) {
+    const listing = await this.prisma.listing.findUnique({ where: { id } })
+    if (!listing || listing.deletedAt) throw new NotFoundException('Listing not found')
+    if (listing.sellerId !== userId) throw new ForbiddenException()
+    if (listing.status === 'PUBLISHED') return listing
+    if (listing.status !== 'DRAFT') throw new ConflictException('Only a draft can be published')
+    if (listing.title.trim().length < 3 || listing.description.trim().length < 10) {
+      throw new BadRequestException('Add a title and description before publishing.')
+    }
+    return this.prisma.listing.update({ where: { id }, data: { status: 'PUBLISHED' } })
   }
 
   async get(id: string) {
     const listing = await this.prisma.listing.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, deletedAt: null, status: { not: 'DRAFT' } },
       select: { ...publicListingSelect, images: { orderBy: { sortOrder: 'asc' } } }
     })
     if (!listing) throw new NotFoundException('Listing not found')
@@ -131,5 +129,27 @@ export class ListingsService {
 
   listSavedSearches(userId: string) {
     return this.prisma.savedSearch.findMany({ where: { userId }, orderBy: { updatedAt: 'desc' } })
+  }
+
+  private persist(sellerId: string, input: CreateListingDto, status: 'DRAFT' | 'PUBLISHED') {
+    return this.prisma.listing.create({
+      data: {
+        sellerId,
+        categoryId: input.categoryId,
+        title: input.title.trim(),
+        description: input.description.trim(),
+        priceCents: input.priceCents,
+        condition: input.condition?.trim(),
+        neighborhood: input.neighborhood?.trim(),
+        city: input.city?.trim(),
+        latitude: input.latitude,
+        longitude: input.longitude,
+        radiusMiles: input.radiusMiles,
+        pickupAvailable: input.pickupAvailable ?? true,
+        deliveryAvailable: input.deliveryAvailable ?? false,
+        shippingAvailable: input.shippingAvailable ?? false,
+        status
+      }
+    })
   }
 }

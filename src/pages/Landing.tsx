@@ -160,25 +160,25 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           </div>
           <nav className="hidden md:flex items-center gap-6">
             <button
-              onClick={() => onNavigate("categories")}
+              onClick={handleSignIn}
               className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Browse
             </button>
             <button
-              onClick={() => onNavigate("services")}
+              onClick={handleSignIn}
               className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Services
             </button>
             <button
-              onClick={() => onNavigate("housing")}
+              onClick={handleSignIn}
               className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Housing
             </button>
             <button
-              onClick={() => onNavigate("jobs")}
+              onClick={handleSignIn}
               className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Jobs
@@ -272,7 +272,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
               </Button>
               <Button
                 size="lg"
-                onClick={() => onNavigate("create")}
+                onClick={handleSignIn}
                 className="bg-white/15 text-white border border-white/30 hover:bg-white/25 rounded-full px-7 py-3 h-12 text-base font-semibold transition-colors"
               >
                 Post a Listing

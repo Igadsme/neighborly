@@ -5,5 +5,6 @@ module.exports = {
   transform: { '^.+\\.(t|j)s$': 'ts-jest' },
   testEnvironment: 'node',
   collectCoverageFrom: ['**/*.ts'],
-  coveragePathIgnorePatterns: ['/node_modules/', '\\.module\\.ts$']
+  coveragePathIgnorePatterns: ['/node_modules/', '\\.module\\.ts$', '/\\._'],
+  testPathIgnorePatterns: ['/node_modules/', '/\\._']
 }

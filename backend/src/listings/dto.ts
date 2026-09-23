@@ -11,7 +11,7 @@ export class CreateListingDto {
   title!: string
 
   @IsString()
-  @Min(10)
+  @MinLength(10)
   description!: string
 
   @IsOptional()
