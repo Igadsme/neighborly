@@ -17,6 +17,7 @@ import Services from "./pages/Services"
 import Jobs from "./pages/Jobs"
 import Community from "./pages/Community"
 import { api } from "./api/client"
+import { unreadConversations } from "./lib/activity"
 
 type Page = "landing" | "onboarding" | "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community"
 
@@ -27,6 +28,8 @@ export default function App() {
   const [profileUserId, setProfileUserId] = useState<string | null>(null)
   const [isSignedIn, setIsSignedIn] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
+  const [viewerId, setViewerId] = useState<string | null>(null)
+  const [unreadMessages, setUnreadMessages] = useState(0)
 
   const navigate = (p: string, id?: string) => {
     if (p === "listing") setListingId(id ?? null)
@@ -43,6 +46,8 @@ export default function App() {
 
   const signOut = () => {
     api.auth.signOut()
+    setViewerId(null)
+    setUnreadMessages(0)
     setIsSignedIn(false)
     navigate("landing")
   }
@@ -52,12 +57,68 @@ export default function App() {
       setAuthLoading(false)
       return
     }
+    let cancelled = false
     api.auth
       .me()
-      .then(() => setIsSignedIn(true))
-      .catch(() => api.auth.signOut())
-      .finally(() => setAuthLoading(false))
+      .then((me) => {
+        if (cancelled) return
+        setViewerId(me.id)
+        setIsSignedIn(true)
+      })
+      .catch(() => {
+        if (cancelled) return
+        api.auth.signOut()
+        setViewerId(null)
+        setIsSignedIn(false)
+      })
+      .finally(() => {
+        if (!cancelled) setAuthLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
+
+  useEffect(() => {
+    if (!isSignedIn || viewerId) return
+    let cancelled = false
+    api.auth
+      .me()
+      .then((me) => {
+        if (!cancelled) setViewerId(me.id)
+      })
+      .catch(() => {
+        if (cancelled) return
+        api.auth.signOut()
+        setViewerId(null)
+        setUnreadMessages(0)
+        setIsSignedIn(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isSignedIn, viewerId])
+
+  useEffect(() => {
+    if (!isSignedIn || !viewerId) {
+      setUnreadMessages(0)
+      return
+    }
+    let cancelled = false
+    api.conversations
+      .list()
+      .then((conversations) => {
+        if (!cancelled) {
+          setUnreadMessages(unreadConversations(conversations, viewerId))
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setUnreadMessages(0)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isSignedIn, viewerId, page])
 
   const isMapPage = page === "map"
 
@@ -76,7 +137,7 @@ export default function App() {
         <Navigation
           currentPage={page as any}
           onNavigate={navigate as any}
-          unreadMessages={2}
+          unreadMessages={unreadMessages}
           onSignOut={signOut}
         />
       )}
@@ -175,7 +236,6 @@ export default function App() {
           </div>
         )}
       </main>
-
     </div>
   )
 }
