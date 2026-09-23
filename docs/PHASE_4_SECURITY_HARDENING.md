@@ -11,6 +11,8 @@ Base before this work: `46d6589` (`feat: Phase 3 trust and safety`).
 | `f8243f6` | feat: harden sessions, boot checks, and readiness |
 | `0d3f2b2` | fix: patch Vite, multer, and deepmerge-ts advisories |
 | `a8ed410` | docs: record Phase 4 security hardening |
+| `de162a5` | docs: cite the Phase 4 record commit (marks the backup scripts executable) |
+| `447457b` | docs: cite the Phase 4 record commit |
 
 ## Checklist
 
