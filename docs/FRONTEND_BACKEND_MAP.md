@@ -21,7 +21,7 @@ v1 wiring does not add AI calls. The Create Listing AI Review step and landing s
 | `SavedItems` | Saved Listings and Saved Searches tabs load, error, and empty for real. | `GET /listings/favorites`, `GET /listings/saved-searches`, `POST /listings/:id/favorite` |
 | `ListingCard` heart | Calls the API unless the parent passes `onSavedChange` | `POST /listings/:id/favorite` |
 
-`src/api/client.ts` also implements `requests.list`, `requests.create`, `requests.createOffer`, `requests.counterOffer`, `transactions.list`, `transactions.transition`, and `conversations.list|messages|send|markRead`. **No page calls them.** That is client-only coverage, not a wired screen.
+`src/api/client.ts` implements requests, conversations, transactions, and reviews. Dashboard, Messages, and Create Listing call parts of that surface. Housing, jobs, services, and community are not on the client yet. Those four pages still render `src/data/index.ts` even though the API persists them.
 
 ### Create Listing payload that actually leaves the browser
 
@@ -54,10 +54,10 @@ Not sent: photos, tags, shipping, coordinates, the AI panels.
 | `saved` | `SavedItems.tsx` | Three tabs | API for the first two tabs | Price history and alert delivery are target | Keep the empty/error cards when extending. |
 | `profile` | `Profile.tsx` | Always `sellers[0]` (Marcus) | `sellers`, `listings`, inline `reviews` | `GET /users/:id/profile`, reviews list | Follow and report are local. Reviews tab is read-only. |
 | `dashboard` | `Dashboard.tsx` | Overview, My Listings, Offers, Activity | `listings` plus inline `offers`, `meetups`, activity | Requests, offers, transactions, reviews | Offer and review states: [UX_REQUEST_FLOW_STATES.md](./UX_REQUEST_FLOW_STATES.md). Stats are literals (`3`, `624`, `12`, `$1,925`). |
-| `housing` | `Housing.tsx` | Rental browsing | `housingListings` | Target `HousingListing` | Out of the request-flow slice. |
-| `services` | `Services.tsx` | Provider cards | `services` | Target service tables | Out of slice. |
-| `jobs` | `Jobs.tsx` | List/detail, apply, save | `jobs` | Target job tables | Apply and save are local arrays. |
-| `community` | `Community.tsx` | Posts and events | `communityPosts` | Target community tables | Out of slice. |
+| `housing` | `Housing.tsx` | Rental browsing | `housingListings` | `GET/POST /housing` is implemented | Page still filters fixtures. Wiring is the next PR. |
+| `services` | `Services.tsx` | Provider cards and quote modal | `services` | `GET/POST /services` and `/services/:id/quotes` are implemented | Quote modal is still local. Address stays private until accept. |
+| `jobs` | `Jobs.tsx` | List/detail, apply, save | `jobs` | `GET/POST /jobs`, apply, and save are implemented | Apply and save are still local arrays. |
+| `community` | `Community.tsx` | Posts, events, lost & found, giveaways | `communityPosts` plus inline events, lost-and-found, and giveaways | `/community/posts`, `/events`, `/lost-found`, `/giveaways` are implemented | Reactions, RSVP, and claim are still local. |
 
 `Navigation` (`src/components/Navigation.tsx`) highlights the current page id, pins location to a local Atlanta list, and shows `unreadMessages` from the prop (hardcoded `2` in `App`). Sign-out calls the prop. Global search is not a request.
 
@@ -70,7 +70,7 @@ Not sent: photos, tags, shipping, coordinates, the AI panels.
 - `messages` bubbles → `Conversation`, `Message`.
 - Dashboard meetups and the Messages progress strip → `Transaction`, `TransactionMilestone`, `Appointment`.
 - Dashboard "Reviews to complete" and Profile reviews → `Review`.
-- `housing`, `services`, `jobs`, `community` → target tables listed in [DATABASE_DESIGN.md](./DATABASE_DESIGN.md). Leave fixtures in place.
+- `housing`, `services`, `jobs`, `community` → `HousingListing`, `JobListing`, `ServiceListing`, `CommunityPost`, `CommunityEvent`, `LostFoundItem`, and `Giveaway`. The routes exist. Leave the fixture arrays in place until the wiring PR. Field mapping is in [API_SPEC.md](./API_SPEC.md).
 
 ### Controls that look done and are local
 
@@ -80,8 +80,8 @@ Not sent: photos, tags, shipping, coordinates, the AI panels.
 - Messages filters do not include a real `transactions` predicate (`filter === 'transactions'` falls through to all).
 - Dashboard Accept, Counter, Decline, Edit, Pause, Promote, Mark sold, Adjust price.
 - Profile follow and report.
-- Jobs apply and save.
-- Community reactions and RSVP (fixture handlers in that page).
+- Jobs apply and save. `POST /jobs/:id/apply` and `POST /jobs/:id/save` exist; the page still uses local arrays.
+- Community reactions, RSVP, and "I'll take it". `POST /community/posts/:id/reactions`, `POST /community/events/:id/rsvp`, and `POST /community/giveaways/:id/claim` exist; the page still toggles React state.
 
 ### Wiring order for the request flow
 
