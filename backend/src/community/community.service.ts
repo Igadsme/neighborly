@@ -116,6 +116,15 @@ function presentGiveaway<T extends { author: unknown }>(row: T) {
 export class CommunityService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async summary() {
+    const [neighbors, posts, events] = await Promise.all([
+      this.prisma.user.count({ where: { status: 'ACTIVE', deletedAt: null } }),
+      this.prisma.communityPost.count({ where: published }),
+      this.prisma.communityEvent.count({ where: published })
+    ])
+    return { neighbors, posts, events }
+  }
+
   async listPosts(query: ListPostsQuery) {
     const rows = await this.prisma.communityPost.findMany({
       where: { ...published, ...(query.type ? { type: query.type } : {}) },

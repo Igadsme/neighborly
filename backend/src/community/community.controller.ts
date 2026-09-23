@@ -23,6 +23,11 @@ import {
 export class CommunityController {
   constructor(private readonly community: CommunityService) {}
 
+  @Get('summary')
+  summary() {
+    return this.community.summary()
+  }
+
   @Get('posts')
   listPosts(@Query() query: ListPostsQuery) {
     return this.community.listPosts(query)

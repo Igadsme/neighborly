@@ -63,6 +63,9 @@ export class ListingsService {
     if (!listing || listing.deletedAt) throw new NotFoundException('Listing not found')
     if (listing.sellerId !== userId) throw new ForbiddenException()
     if (listing.status === 'PUBLISHED') return listing
+    if (listing.status === 'ARCHIVED') {
+      return this.prisma.listing.update({ where: { id }, data: { status: 'PUBLISHED' } })
+    }
     if (listing.status !== 'DRAFT') throw new ConflictException('Only a draft can be published')
     if (listing.title.trim().length < 3 || listing.description.trim().length < 10) {
       throw new BadRequestException('Add a title and description before publishing.')
@@ -132,6 +135,53 @@ export class ListingsService {
 
   listSavedSearches(userId: string) {
     return this.prisma.savedSearch.findMany({ where: { userId }, orderBy: { updatedAt: 'desc' } })
+  }
+
+  listMine(userId: string) {
+    return this.prisma.listing.findMany({
+      where: {
+        sellerId: userId,
+        deletedAt: null,
+        status: { in: ['DRAFT', 'PUBLISHED', 'SOLD', 'ARCHIVED'] }
+      },
+      select: { ...publicListingSelect, images: true },
+      orderBy: { createdAt: 'desc' }
+    })
+  }
+
+  async neighborhoodCounts() {
+    const rows = await this.prisma.listing.groupBy({
+      by: ['neighborhood'],
+      where: { status: 'PUBLISHED', deletedAt: null },
+      _count: { _all: true }
+    })
+    return rows
+      .filter((row): row is typeof row & { neighborhood: string } => Boolean(row.neighborhood))
+      .map((row) => ({ neighborhood: row.neighborhood, count: row._count._all }))
+      .sort((a, b) => b.count - a.count || a.neighborhood.localeCompare(b.neighborhood))
+  }
+
+  async pause(userId: string, id: string) {
+    const listing = await this.ownedListing(userId, id)
+    if (listing.status === 'ARCHIVED') return listing
+    if (listing.status !== 'PUBLISHED') throw new ConflictException('Only a published listing can be paused')
+    return this.prisma.listing.update({ where: { id }, data: { status: 'ARCHIVED' } })
+  }
+
+  async markSold(userId: string, id: string) {
+    const listing = await this.ownedListing(userId, id)
+    if (listing.status === 'SOLD') return listing
+    if (listing.status !== 'PUBLISHED' && listing.status !== 'ARCHIVED') {
+      throw new ConflictException('Only a published or paused listing can be marked sold')
+    }
+    return this.prisma.listing.update({ where: { id }, data: { status: 'SOLD' } })
+  }
+
+  private async ownedListing(userId: string, id: string) {
+    const listing = await this.prisma.listing.findUnique({ where: { id } })
+    if (!listing || listing.deletedAt) throw new NotFoundException('Listing not found')
+    if (listing.sellerId !== userId) throw new ForbiddenException()
+    return listing
   }
 
   private persist(sellerId: string, input: CreateListingDto, status: 'DRAFT' | 'PUBLISHED') {
