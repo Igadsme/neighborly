@@ -1,4 +1,7 @@
 node_modules/
+# macOS AppleDouble resource forks on the external volume
+._*
+**/._*
 dist/
 build/
 .cache/
