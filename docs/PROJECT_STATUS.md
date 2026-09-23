@@ -61,6 +61,7 @@ State-by-state wiring instructions are in `docs/UX_REQUEST_FLOW_STATES.md`.
 
 ## Page inventory
 
+
 `src/App.tsx` page ids, in order: `landing`, `onboarding`, `home`, `explore`, `categories`, `map`, `listing`, `create`, `messages`, `saved`, `profile`, `dashboard`, `housing`, `services`, `jobs`, `community`.
 
 Signed-out visitors can open `landing` and `onboarding`. Any other id shows the existing "Sign in to continue" gate. `Navigation` is hidden on `landing` and `onboarding`. `unreadMessages={2}` is hardcoded. The landing page has a fixed "Preview" bar for prototype jumps.
@@ -80,3 +81,20 @@ Signed-out visitors can open `landing` and `onboarding`. Any other id shows the 
 - No `src/` or `backend/` diff in the June Sprint 1 docs PR.
 - No AI feature work.
 - Housing, services, jobs, community, map, and profile remain fixture screens. They are mapped in `docs/FRONTEND_BACKEND_MAP.md` and are out of the request-flow wiring slice.
+
+## Workspace (T7 Shield)
+
+- **Canonical local path:** `/Volumes/T7 Shield/Projects/neighborly`
+- **Backup only (do not modify):** `~/Desktop/Neighborly/app`
+- **Paused:** 2026-09-23 00:00 EDT for SSD transfer; see `docs/PAUSE_CHECKPOINT.md`.
+- **Resumed:** 2026-09-23 — feature work continues from this path only. Node 22 via `.mise.toml` (Vite/Rolldown). Do not weaken for Node 20.
+- **GitHub remote:** `https://github.com/Igadsme/neighborly.git`
+- **Secrets:** recreate local `.env` from `env.example` on T7; never commit real secrets. Required to boot API: `DATABASE_URL`, `JWT_SECRET` (≥32 chars), `CORS_ORIGIN`. Frontend: `VITE_API_URL`.
+
+## Resume verification (2026-09-23)
+
+- Path on T7 Shield confirmed; Desktop copy left untouched.
+- Branch `main` after June docs merge; frontend `tsc` + `vite build` pass under Node 22; backend prisma generate, `tsc`, tests, nest build pass.
+- `prisma validate` needs `DATABASE_URL` (expected without local `.env`).
+- Next spine: offer accept/reject → conversation + transaction; then Nova wiring and Sentinel tests.
+
