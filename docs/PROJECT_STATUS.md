@@ -1,6 +1,6 @@
 # Project Status
 
-Neighborly status board. Housing, jobs, services, and community pages now call the `/api/v1` routes added in `cfd0db3`. Dashboard and Home no longer render fixture arrays for listings, offers, messages, transactions, reviews, or those verticals. The app is not release-complete. Local `.env`, Compose, and browser e2e on a Mac are still a separate step.
+Neighborly status board. Housing, jobs, services, and community pages call the `/api/v1` routes added in `cfd0db3`. `1f38563` points those pages, plus Home and Dashboard, at the APIs with loading, empty, error, and 401 states. Dashboard and Home no longer render fixture arrays for listings, offers, messages, transactions, reviews, or those verticals. The app is not release-complete. `docs/RELEASE_CHECKLIST.md` Section B records the offer, message, and review wiring that is in this tree. Section E (local `.env`, Compose, migrate, seed, Node 22 on the Mac, signed-in e2e) stays unchecked: Docker Desktop is not installed on the Mac, and that e2e was not run.
 
 The June Sprint 1 notes below are the handoff from `d0dab1c`. Where they disagree with the "What is running today" list, the running list is the current contract.
 
@@ -99,5 +99,5 @@ Signed-out visitors can open `landing` and `onboarding`. Any other id shows the 
 - Path on T7 Shield confirmed; Desktop copy left untouched.
 - Branch `main` after June docs merge; frontend `tsc` + `vite build` pass under Node 22; backend prisma generate, `tsc`, tests, nest build pass.
 - `prisma validate` needs `DATABASE_URL` (expected without local `.env`).
-- Next spine: offer accept/reject → conversation + transaction is in the API and on Dashboard/Messages. Vertical screens are wired to the same client. Release is not complete; Mac `.env` / Compose / e2e is still separate.
+- Offer accept/reject → conversation + transaction is in the API and on Dashboard/Messages. Vertical screens are wired to the same client. Release is not complete. Mac `.env`, Compose, migrate, seed, and signed-in e2e are still open (`docs/RELEASE_CHECKLIST.md` Section E).
 

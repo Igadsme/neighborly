@@ -1,6 +1,8 @@
 # Integration Log
 
-Record of what the repo actually connects. Entries are observations from the tree at foundation commit `d0dab1c`, written down in the June Sprint 1 docs pass (2026-09-23). This is not a claim that each line shipped on that calendar day.
+June foundation snapshot of what the repo connected at `d0dab1c` (docs pass 2026-09-23). This is not a claim that each line shipped on that calendar day, and it is not the current wiring map.
+
+**Superseded on `main` at `1f38563`.** Housing, jobs, services, community, Home, Dashboard, and Messages call `/api/v1`. Accept, reject, counter, `POST /reviews`, and authenticated `message.created` exist. The "no page calls those methods" line and the fixture-only bullets below describe `d0dab1c` only. Current contracts are `docs/PROJECT_STATUS.md`, `docs/FRONTEND_BACKEND_MAP.md`, and `docs/RELEASE_CHECKLIST.md`. The app is not release-complete.
 
 ## Frontend → API
 
@@ -32,7 +34,7 @@ Global prefix `/api/v1`. Validation pipe whitelists and rejects unknown fields. 
 
 ## Not integrated
 
-Confirmed by reading pages and controllers:
+Confirmed at `d0dab1c` only. Do not use this list as the current gap list. Current gaps are the unchecked lines in `docs/RELEASE_CHECKLIST.md` sections B, C, and E.
 
 - Home, Explore, Categories, Map, Listing Detail, Messages, Profile, Dashboard, Housing, Services, Jobs, Community: fixture data only.
 - Listing detail id, offer send, message send, report, and save on that page: local React state.
