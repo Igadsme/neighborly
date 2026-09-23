@@ -19,6 +19,7 @@ export interface Listing {
   isFree: boolean
   condition: string
   category: string
+  categoryId?: string
   subcategory?: string
   neighborhood: string
   city: string

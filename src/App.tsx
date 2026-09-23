@@ -24,12 +24,14 @@ export default function App() {
   const [page, setPage] = useState<Page>("landing")
   const [listingId, setListingId] = useState<string | null>(null)
   const [conversationId, setConversationId] = useState<string | null>(null)
+  const [profileUserId, setProfileUserId] = useState<string | null>(null)
   const [isSignedIn, setIsSignedIn] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
 
   const navigate = (p: string, id?: string) => {
     if (p === "listing") setListingId(id ?? null)
     if (p === "messages") setConversationId(id ?? null)
+    if (p === "profile") setProfileUserId(id ?? null)
     setPage(p as Page)
     window.scrollTo({ top: 0, behavior: "instant" })
   }
@@ -125,7 +127,7 @@ export default function App() {
         )}
 
         {page === "profile" && isSignedIn && (
-          <Profile onNavigate={navigate as any} />
+          <Profile userId={profileUserId} onNavigate={navigate as any} />
         )}
 
         {page === "dashboard" && isSignedIn && (
