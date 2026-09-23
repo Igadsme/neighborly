@@ -39,12 +39,12 @@ Implemented and reachable in code:
 - Requests: public list and get, authenticated create (always `PUBLISHED`), `GET /requests/offers` (`scope` `received` by default, plus `sent` and `all`), create offer, counter, accept, and reject. Accept creates one conversation and one `ACCEPTED` transaction.
 - Messaging: list conversations, list/send messages, mark read, for existing participants. Socket.IO namespace `/realtime` requires a JWT and emits `message.created` after a participant sends.
 - Transactions: list for a participant, status transition through `backend/src/transactions/transaction-state.ts`.
-- Reviews: `POST /reviews` for a participant when the transaction is `COMPLETED`.
+- Reviews: `POST /reviews` for a participant when the transaction is `COMPLETED`. `GET /users/:id/reviews` lists reviews about that user. `GET /users/:id/profile` is the public profile card.
 - Housing, jobs, services, community: list/get are public; create, update, and archive require the owner. Jobs apply and save, service quotes (street address hidden until the provider accepts), community reactions, comments, RSVPs, and giveaway claims are implemented. See `docs/API_SPEC.md`. The Housing, Jobs, Services, and Community pages call the public lists and the mutations that already have a control (apply, save, quote, post, reaction, RSVP, claim).
 - Health: `GET /api/v1/health`, `GET /api/v1/ready` (Postgres `SELECT 1` only).
 - Local infra: `docker-compose.yml` runs PostGIS 16 and Redis 7. The schema stores latitude/longitude as decimals. There is no geometry column. `pnpm prisma:seed` loads categories plus fixture-shaped rows for the four verticals. Booting that stack from a local `.env` on a Mac is still a separate step.
 
-Frontend pages that call the API include `App` (session), `Landing` (login), `Onboarding`, `CreateListing` (`POST /listings` and draft save), `Categories` (`GET /categories`), `SavedItems`, `ListingCard`, Dashboard (`GET /requests/offers?scope=all`), Messages, Home (listings plus services, events, and posts), Housing, Jobs, Services, and Community. Explore still loads listings and then applies extra filters in the browser. Categories still uses fixture cards for the featured strip and the tiles that have no matching category name. Map, Listing Detail (non-UUID ids), and Profile still use `src/data/index.ts` for the surfaces that have no read endpoint. Do not treat this as a finished product.
+Frontend pages that call the API include `App` (session), `Landing` (login), `Onboarding`, `CreateListing` (`POST /listings` and draft save), `Categories` (`GET /categories`), `SavedItems`, `ListingCard`, Dashboard (`GET /requests/offers?scope=all`), Messages, Home (listings plus services, events, and posts), Housing, Jobs, Services, Community, Map (`GET /listings`), and Profile (`GET /users/me`, `GET /users/:id/profile`, `GET /users/:id/reviews`, seller listings). Explore still loads listings and then applies extra filters in the browser. Categories still uses fixture cards for the featured strip and the tiles that have no matching category name. Listing Detail still uses `src/data/index.ts` when the id is not a UUID. Map pins are neighborhood centroids on the painted map; listing and profile coordinates are not returned. Do not treat this as a finished product.
 
 ## Request-first flow status
 
@@ -57,7 +57,7 @@ The product flow is: post a need, receive offers, compare and counter, message, 
 | Accept / decline | Dashboard and Messages buttons | `POST /api/v1/requests/:id/offers/:offerId/accept` and `.../reject`. Counter: `POST /api/v1/requests/offers/:id/counter`. | Accept opens one conversation and one `ACCEPTED` transaction. |
 | Thread | `messages` | Conversation read/send for an existing participant. Accept creates the thread. `/realtime` requires a JWT. | There is still no standalone create-conversation route. |
 | Complete exchange | Messages progress strip; Dashboard meetups | `GET` + `PATCH /api/v1/transactions/:id/status` | No appointment route. Accept inserts the transaction. |
-| Review | Dashboard "Reviews to complete" cards; Profile reviews tab is read-only fixture | `POST /api/v1/reviews` | Profile reviews list is still fixture text. There is no reviews list route. |
+| Review | Dashboard "Reviews to complete" cards; Profile reviews tab | `POST /api/v1/reviews`, `GET /api/v1/users/:id/reviews` | Profile reviews load from the API. Dashboard still does not hide a prompt when a review already exists. Follow and report on Profile stay local. |
 
 State-by-state wiring instructions are in `docs/UX_REQUEST_FLOW_STATES.md`.
 
@@ -82,8 +82,8 @@ Signed-out visitors can open `landing` and `onboarding`. Any other id shows the 
 
 - No `src/` or `backend/` diff in the June Sprint 1 docs PR.
 - No AI feature work.
-- Map, landing marketing cards, the categories featured strip, and profile remain fixture screens. The categories grid reads `GET /categories` for counts on Housing, Jobs, Services, and Vehicles. Housing, services, jobs, and community pages read the APIs from `0003_verticals`. They are mapped in `docs/FRONTEND_BACKEND_MAP.md`.
-- This board is not a release-complete claim. Docker Compose, migrate, seed, and signed-in browser e2e were not run for this pass.
+- Landing marketing cards and the categories featured strip remain fixture screens. Map and Profile read the API. Map still paints the Atlanta map, the mile line, and safe spots; it does not call Mapbox. The categories grid reads `GET /categories` for counts on Housing, Jobs, Services, and Vehicles. Housing, services, jobs, and community pages read the APIs from `0003_verticals`. They are mapped in `docs/FRONTEND_BACKEND_MAP.md`.
+- This board is not a release-complete claim. Docker Compose, migrate, seed, and signed-in browser e2e were not run for this pass. Docker Desktop is still missing on this Mac, so those steps stay blocked.
 - Local `.env`, `docker compose`, and a full browser pass against Postgres on a Mac are not part of this wiring. CI runs frontend `tsc`, Vitest, and `vite build`, plus the existing backend Jest suite.
 
 ## Workspace (T7 Shield)

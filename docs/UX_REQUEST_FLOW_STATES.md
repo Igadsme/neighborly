@@ -307,11 +307,11 @@ Quick replies stay and only fill the textarea.
 
 ## 3. Review prompt
 
-Host: Dashboard Overview, section "Reviews to complete" / "Leave reviews for recent transactions". Profile's reviews tab is a read-only fixture and is not the prompt.
+Host: Dashboard Overview, section "Reviews to complete" / "Leave reviews for recent transactions". Profile's reviews tab loads `GET /users/:id/reviews` and is not the prompt.
 
 ### 3.1 Post-completion prompt
 
-When: `GET /transactions` includes a row the caller participates in, `status === "COMPLETED"`, and the target review read says this author has not reviewed it. `GET /transactions` does not include reviews today. Until `GET /users/:id/reviews` or an equivalent exists, treat every completed transaction as still needing a prompt. Do not hide the prompt because fixture reviews exist on Profile.
+When: `GET /transactions` includes a row the caller participates in, `status === "COMPLETED"`, and the target review read says this author has not reviewed it. `GET /transactions` does not include reviews today. `GET /users/:id/reviews` exists, and Profile uses it. Dashboard does not call it yet, so keep showing a prompt for every completed transaction the caller is on. Do not hide the prompt from Profile review text.
 
 Card (already in Dashboard):
 

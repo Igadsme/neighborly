@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer'
-import { IsBoolean, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator'
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator'
 
 export class CreateListingDto {
   @IsUUID()
@@ -69,6 +69,14 @@ export class ListListingsQuery {
   @IsOptional()
   @IsUUID()
   categoryId?: string
+
+  @IsOptional()
+  @IsUUID()
+  sellerId?: string
+
+  @IsOptional()
+  @IsIn(['PUBLISHED', 'SOLD'])
+  status?: 'PUBLISHED' | 'SOLD'
 
   @IsOptional()
   @Type(() => Number)

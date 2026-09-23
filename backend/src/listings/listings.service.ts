@@ -34,10 +34,13 @@ export class ListingsService {
 
   list(query: ListListingsQuery) {
     const search = query.query?.trim()
+    const status = query.status === 'SOLD' ? 'SOLD' : 'PUBLISHED'
     return this.prisma.listing.findMany({
       where: {
-        status: 'PUBLISHED',
-        categoryId: query.categoryId,
+        status,
+        ...(status === 'SOLD' ? { deletedAt: null } : {}),
+        ...(query.sellerId ? { sellerId: query.sellerId } : {}),
+        ...(query.categoryId ? { categoryId: query.categoryId } : {}),
         ...(search ? { OR: [{ title: { contains: search, mode: 'insensitive' } }, { description: { contains: search, mode: 'insensitive' } }] } : {})
       },
       select: { ...publicListingSelect, images: true },
