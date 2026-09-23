@@ -169,7 +169,7 @@ The script writes `artifacts/docker-release-verification/e2e-report.json` and re
 
 Browser signed-in pass: not part of the required loop.
 
-- [ ] Browser pass (bonus, not required). Not run in this gate.
+- [ ] Browser smoke. Run on 2026-09-23 15:31 EDT. Not a full pass: Listing Detail, Save, and Message seller were not reached because the featured strip was empty. See the browser table in section 10.
 
 ## 10. Results
 
@@ -191,7 +191,7 @@ Live run on this Mac. Checked rows above match this table. The browser row stays
 | Health / ready | Pass on both runs. HTTP 200. Latest bodies below |
 | Unit and build smoke | Pass on the 15:04 EDT run. Frontend tsc 0, Vitest 51/51, vite build 0. Backend tsc 0, Jest 124/124, nest build 0. Not repeated at 15:10 |
 | Two-user API loop | Pass on both runs. Confirmation `e2e_exit:0` |
-| Browser pass | Not run |
+| Browser pass | Partial. See the browser table below. Not a full pass |
 | Blockers | None on the required rows. Warnings are listed under Command log and do not flip those rows to fail |
 
 **Release readiness: NOT claimed until a fully green run is reviewed.**
@@ -206,9 +206,37 @@ Live run on this Mac. Checked rows above match this table. The browser row stays
 
 Docker printed: the PostGIS image platform is `linux/amd64` and the host is `linux/arm64/v8`, with no platform pin in `docker-compose.yml`. The container still reached `healthy` and `pg_isready` succeeded. That warning is not a failed row.
 
-### API port
+### Port alignment
 
-`backend/.env` sets `PORT=3000`. Host port 3000 was already taken by an unrelated Next.js process (a portfolio site, not this repo). It was not stopped. `GET http://127.0.0.1:3000/api/v1/health` returned that app's HTML 404. The Neighborly API was started with `PORT=3001 pnpm start` from `backend/` (`pnpm start` runs `node dist/main.js`). A first `nohup` child exited when its launching shell ended, after Nest had logged a successful start. The process that served the checks below stayed up for the health calls and the API loop, then was stopped. Compose was left running. `tmux` is not installed on this Mac, so that process was a background `pnpm start`.
+The 15:06 and 15:10 EDT API loops used port 3001 because port 3000 was already taken. Local `PORT` and `VITE_API_URL` were left at 3000, which is what `env.example` specifies.
+
+Listeners on TCP 3000 before they were stopped, both from `/Users/gadimani/copilot-worktrees/gad-os/igadsme-supreme-fishstick` (a portfolio Next.js app, not Neighborly):
+
+| PID | Command | Role |
+| --- | --- | --- |
+| 70994 | `pnpm exec next dev --hostname 0.0.0.0` | parent of the dev server |
+| 71023 | `next dev --hostname 0.0.0.0` | child |
+| 88956 | `next-server (v16.3.3)` | listened on `*:3000` |
+| 81375 | `pnpm start --hostname 127.0.0.1` | parent of the production server |
+| 81419 | `next-server (v16.3.3)` | listened on `127.0.0.1:3000` |
+
+Those two process trees were stopped with SIGTERM. Docker, Cursor, and other system processes were not touched. After that, nothing listened on 3000.
+
+Neighborly was then started with `cd backend && pnpm start`, which reads `PORT=3000` from `backend/.env`. Vite was started with `PORT=8443 pnpm dev` so the root `.env` value `PORT=3000` did not take the API port. `VITE_API_URL` stayed `http://localhost:3000/api/v1`. `CORS_ORIGIN` stayed `http://localhost:8443`. Neither `.env` file was committed.
+
+`GET http://127.0.0.1:3000/api/v1/health` HTTP 200:
+
+```json
+{"status":"ok","service":"neighborly-api","timestamp":"2026-09-23T19:25:18.240Z"}
+```
+
+`GET http://127.0.0.1:3000/api/v1/ready` HTTP 200:
+
+```json
+{"status":"ready","dependencies":{"postgres":"up"}}
+```
+
+Final ports for this smoke: API `http://localhost:3000`, Vite `http://localhost:8443`.
 
 ### Health bodies
 
@@ -301,9 +329,31 @@ Redacted and command output for this run:
 - `artifacts/docker-release-verification/env-check.json` (lengths and matches only, no secret)
 - Confirmation run: `migrate-rerun.log`, `seed-rerun.log`, `health-rerun.log`, `datastore-rerun.log`, `e2e-stdout-rerun.log`, `e2e-exit-rerun.txt`, `e2e-report-rerun.json`, `compose-ps-rerun.txt`, `rerun-started-at.txt`
 
-### Not run
+### Browser smoke
 
-Signed-in browser pass. Housing, Jobs, Services, and Community pages were not clicked. `VITE_API_URL` still points at port 3000, which this gate did not use for the API.
+Signed-in Chrome walk at 2026-09-23 15:31:37 EDT (`2026-09-23T19:31:37.166Z`), `http://localhost:8443`, user `seed.marcus@example.com`. Script: `node scripts/docker-release-browser-smoke.mjs`. Screenshots and `results.json` are under `artifacts/docker-release-verification/browser-smoke/`. This is not a feature-complete claim. Pages that rendered are not a release.
+
+| Page | Result | Note |
+| --- | --- | --- |
+| Landing | Pass | Sign in and Get started were visible. `01-landing.png` |
+| Onboarding | Pass | Get started opened the account step. No new account was submitted. `02-onboarding.png` |
+| Sign-in dialog | Capture miss | The Sign in click returned true, but `03-sign-in-dialog.png` still shows the landing hero without the modal copy. The next step submitted the form |
+| Home | Pass | Signed-in shell. Greeting was captured as "Good afternoon, there" before the first name arrived. Copy included "No free items posted nearby". `04-home.png` |
+| Explore | Pass | Filters and a results count rendered. No listing card was available to open. `05-explore.png` |
+| Categories | Pass, empty strip | "Browse by category" rendered. The featured strip contained both "Featured in Atlanta" and "No featured listings yet". `06-categories.png` |
+| Map | Pass | Search area and neighborhood labels rendered. Not a crash. `07-map.png` |
+| Listing Detail | Fail | No card to open. `GET /listings` returned `[]`. `backend/prisma/seed.ts` does not insert marketplace listings. `12-listing-detail.png` |
+| Save / favorite | Not run | Depends on a listing detail page |
+| Message seller | Not run | Depends on a listing detail page. The API message loop already passed |
+| Create | Pass | Chose "Item for Sale" and reached the photos step. Did not publish. `15-create.png` |
+| Messages | Pass | Inbox loaded the Priya Patel threads from the API loop ("Docker gate need…"). `16-messages.png` |
+| Saved | Pass | Empty state: "No saved listings yet". `17-saved.png` |
+| Profile | Pass | Loaded Marcus Johnson, Decatur, member since September 2026, 0 reviews. `18-profile.png` |
+| Dashboard | Pass with painted trust copy | "My dashboard" and Marcus Johnson loaded. The trust banner still shows painted "52 transactions" and "4.9 rating". `19-dashboard.png` |
+| Housing | Pass | "Find your next home" rendered. Not a 401. `08-housing.png` |
+| Services | Pass | "Local services" rendered. Not a 401. Some category counts are painted. `09-services.png` |
+| Jobs | Pass | "Local jobs & gigs" rendered. Not a 401. `10-jobs.png` |
+| Community | Pass | Community shell rendered. Not a 401. Header counts such as "2,847 Neighbors active" are painted. `11-community.png` |
 
 **Release readiness: NOT claimed until a fully green run is reviewed.**
 

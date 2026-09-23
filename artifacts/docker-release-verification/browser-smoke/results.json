@@ -1,0 +1,159 @@
+{
+  "appUrl": "http://localhost:8443",
+  "finishedAt": "2026-09-23T19:31:37.166Z",
+  "failed": true,
+  "results": [
+    {
+      "name": "01-landing",
+      "ok": true,
+      "note": "Visible: Sign in",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/01-landing.png",
+      "excerpt": "Neighborly Browse Services Housing Jobs Sign in Get started 3,200+ active listings in Atlanta Your neighborhood has more to offer. Buy, sell, rent, hire, trade, donate, and connect — all within a few miles of home. With real neighbors. Safely. Atlanta, GA Decatur, GA Midtown, ATL",
+      "extra": ""
+    },
+    {
+      "name": "02-onboarding",
+      "ok": true,
+      "note": "Opened Get started. Did not submit a new account.",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/02-onboarding.png",
+      "excerpt": "Neighborly Your neighborhood, your community. Join 47,000+ neighbors buying, selling, and connecting across Atlanta. +47k neighbors Skip for now Account Location Interests Notifications Done! Create your account Free to join. No credit card required. Continue with Google Continue",
+      "extra": ""
+    },
+    {
+      "name": "03-sign-in-dialog",
+      "ok": false,
+      "note": "Sign-in dialog opened from Landing.",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/03-sign-in-dialog.png",
+      "excerpt": "Neighborly Browse Services Housing Jobs Sign in Get started 3,200+ active listings in Atlanta Your neighborhood has more to offer. Buy, sell, rent, hire, trade, donate, and connect — all within a few miles of home. With real neighbors. Safely. Atlanta, GA Decatur, GA Midtown, ATL",
+      "extra": ""
+    },
+    {
+      "name": "04-home",
+      "ok": true,
+      "note": "Sign-in action: submitted. Home greeting was checked.",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/04-home.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Good afternoon, there 👋 Inman Park · Atlanta, GA My Dashboard Post 🛋️ Furniture 📱 Electronics 🚗 Vehicles 🏠 Housing 🎁 Free 🔧 Services 💼 Jobs 🌳 Community All → 🎁 No free items posted nearby ye",
+      "extra": ""
+    },
+    {
+      "name": "05-explore",
+      "ok": true,
+      "note": "Visible: results",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/05-explore.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Map view Search All Furniture Electronics Vehicles Housing Services Free Jobs Pets Clothing Filters Clear all PRICE RANGE – DISTANCE: WITHIN 10 MILES 1 mi 25 mi 50 mi CONDITION Any New Like New Good",
+      "extra": ""
+    },
+    {
+      "name": "06-categories",
+      "ok": true,
+      "note": "Visible: Browse by category",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/06-categories.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Browse by category From furniture to jobs, housing to community events — everything happening in your neighborhood, organized. TRENDING IN ATLANTA iPhone near Midtown Moving help this weekend Apartm",
+      "extra": ""
+    },
+    {
+      "name": "07-map",
+      "ok": true,
+      "note": "Visible: Search area",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/07-map.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Search area All Furniture Electronics Free Vehicles Housing I-285 Ponce de Leon Ave Peachtree St BeltLine Trail Inman Park Decatur Midtown Buckhead Grant Park East ATL Westside Safe spots Split Map ",
+      "extra": ""
+    },
+    {
+      "name": "08-housing",
+      "ok": true,
+      "note": "Visible: Find your next home",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/08-housing.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Find your next home Apartments, rooms, houses, and more in Atlanta For Rent For Sale Any Apartment House Room Studio Condo Sublet Any beds 1+ bed 2+ beds 3+ beds $ Pet-friendly Search homes Furnishe",
+      "extra": ""
+    },
+    {
+      "name": "09-services",
+      "ok": true,
+      "note": "Visible: Local services",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/09-services.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Local services Hire trusted neighbors for cleaning, moving, tutoring, repairs, and more. Search All services 🧹 Cleaning (24) 📦 Moving (12) 📚 Tutoring (18) 🔧 Repair (31) 📷 Photography (9) 🌱 Law",
+      "extra": ""
+    },
+    {
+      "name": "10-jobs",
+      "ok": true,
+      "note": "Visible: Local jobs",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/10-jobs.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Local jobs & gigs Full-time, part-time, freelance, and one-time work in Atlanta. Search jobs All Full-time Part-time Freelance Internship Any Remote Hybrid On-site Any level Entry Mid Senior Executi",
+      "extra": ""
+    },
+    {
+      "name": "11-community",
+      "ok": true,
+      "note": "Visible: Community",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/11-community.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Community Inman Park + nearby neighborhoods Post 2,847 Neighbors active 6 Posts this week 4 Upcoming events 📰 Feed 🎭 Events 🔍 Lost & Found 🎁 Giveaways All posts 💬 Discussion 📢 Announcement 🔍 ",
+      "extra": ""
+    },
+    {
+      "name": "12-listing-detail",
+      "ok": false,
+      "note": "Featured strip state {\"featured\":true,\"empty\":true,\"error\":false}. No listing card was opened.",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/12-listing-detail.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Browse by category From furniture to jobs, housing to community events — everything happening in your neighborhood, organized. TRENDING IN ATLANTA iPhone near Midtown Moving help this weekend Apartm",
+      "extra": ""
+    },
+    {
+      "name": "13-listing-save",
+      "ok": false,
+      "note": "Save button was not clicked.",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/13-listing-save.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Browse by category From furniture to jobs, housing to community events — everything happening in your neighborhood, organized. TRENDING IN ATLANTA iPhone near Midtown Moving help this weekend Apartm",
+      "extra": ""
+    },
+    {
+      "name": "14-message-modal",
+      "ok": false,
+      "note": "Message seller was not clicked.",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/14-message-modal.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Browse by category From furniture to jobs, housing to community events — everything happening in your neighborhood, organized. TRENDING IN ATLANTA iPhone near Midtown Moving help this weekend Apartm",
+      "extra": ""
+    },
+    {
+      "name": "15-create",
+      "ok": true,
+      "note": "Post Listing opened. Type card: 📦 Item for Sale Sell a physical item locally. Continue clicked: true.",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/15-create.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Post a listing Save draft Type Photos Details AI Review Preview Publish Add photos High-quality photos sell faster. Add up to 12 photos. The first photo is your cover image. COVER ⭐ ⭐ Add photo ✨ AI",
+      "extra": ""
+    },
+    {
+      "name": "16-messages",
+      "ok": true,
+      "note": "Opened the messages icon and waited past the loading line.",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/16-messages.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Messages All Active Archived Transactions PP Priya Patel 21m ago Re: Docker gate need 1790190618090 I can start tomorrow morning. 1 PP Priya Patel 25m ago Re: Docker gate need 1790190387884 I can st",
+      "extra": ""
+    },
+    {
+      "name": "17-saved",
+      "ok": true,
+      "note": "Opened the saved icon.",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/17-saved.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Saved items 0 items saved · 0 saved searches Browse more Saved Listings Saved Searches Price Alerts All saved 0 New collection No saved listings yet Browse listings and tap the heart icon to save it",
+      "extra": ""
+    },
+    {
+      "name": "18-profile",
+      "ok": true,
+      "note": "Opened My Profile from the account menu.",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/18-profile.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing MJ Marcus Johnson Decatur, Atlanta · Member since September 2026 Follow Message ⭐ — Rating 💬 0 Reviews ✅ 0 Sales ⚡ — Response 👤 0 completed sales About No bio yet. Neighborly member Marcus Johnson",
+      "extra": ""
+    },
+    {
+      "name": "19-dashboard",
+      "ok": true,
+      "note": "Opened My Dashboard.",
+      "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/19-dashboard.png",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing My dashboard Marcus Johnson · Decatur Post listing Overview My Listings Offers Activity ACCOUNT TRUST LEVEL Verified Neighbor 🏆 ID verified · Email confirmed · 52 transactions · 4.9 rating 98% Trus",
+      "extra": ""
+    }
+  ]
+}
