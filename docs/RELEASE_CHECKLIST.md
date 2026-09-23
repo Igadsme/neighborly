@@ -54,15 +54,15 @@ Checked items below were read in `src/pages/Dashboard.tsx`, `src/pages/Messages.
 - [x] "Reviews to complete" stays the Overview card row, built from `COMPLETED` transactions the caller is on
 - [x] Rate opens the existing Listing Detail message-modal shell
 - [x] Skip and the modal X close without a network call. Skip is session-local
-- [x] The success check (`Review submitted`) renders only after `POST /reviews` resolves. There is still no reviews list route
-- [x] Profile reviews tab stays the read-only Figma layout (`sellers[0]` and inline review copy)
+- [x] The success check (`Review submitted`) renders only after `POST /reviews` resolves. `GET /users/:id/reviews` exists; Dashboard does not call it yet
+- [x] Profile reviews tab stays the read-only Figma layout and loads `GET /users/:id/reviews`
 
 ### Regression
 
 - [ ] Landing login, onboarding register, create-listing category load, and Saved Items favorites still behave as they do in the current pages (not re-run against a database in this docs pass)
 - [ ] Signed-out gate and the landing Preview bar still work when clicked (both are still in `src/App.tsx` / `Landing`; this docs pass did not exercise them)
 - [x] Housing, Services, Jobs, and Community call `/api/v1` with loading, empty, error, and 401 copy (`Sign in to continue.`). Home listing rails and the service, event, and discussion strips call the APIs. They do not render the old vertical fixture arrays
-- [x] Explore loads `GET /listings` and still applies extra filters in the browser. Map still imports `mapListings`. Landing, Categories, and Profile still import `src/data/index.ts` for the surfaces with no read endpoint
+- [x] Explore loads `GET /listings` and still applies extra filters in the browser. Map loads `GET /listings` and places pins from public neighborhood labels. Landing and Categories still import `src/data/index.ts` for surfaces with no read endpoint. Profile does not
 
 ## C. Not a release
 
@@ -72,7 +72,7 @@ These are outside the June docs PR. A checked line is in the tree at `1f38563` w
 
 - [x] `GET /requests/:id` includes offer amount, message, and a public offerer card. `GET /requests` is still every published request, not requester-scoped
 - [x] Accept and reject exist. Accept creates one conversation and one `ACCEPTED` transaction. Withdraw is not implemented. There is no appointment write route
-- [x] `POST /reviews` exists for a participant when the transaction is `COMPLETED`. There is no reviews list. The Dashboard trust banner stays painted copy
+- [x] `POST /reviews` exists for a participant when the transaction is `COMPLETED`. `GET /users/:id/reviews` lists them for Profile. The Dashboard trust banner stays painted copy
 - [x] `/realtime` requires a JWT, and send emits `message.created`. Typing, attachments, and `POST /conversations` are not implemented
 - [x] Housing, jobs, services, and community PostgreSQL APIs exist (`cfd0db3`), including public list/get and the mutations those pages call (jobs apply/save, service quotes, community post/reaction/RSVP/claim). `pnpm prisma:seed` loads fixture-shaped rows. Remaining UI gaps are the unchecked list below
 
@@ -82,10 +82,10 @@ These are outside the June docs PR. A checked line is in the tree at `1f38563` w
 - Draft requests and draft listings
 - Withdraw an offer
 - Create a conversation from a listing or the Messages plus button; typing; attachments
-- Review list, and trust scores computed from reviews
+- Trust scores computed from reviews. The reviews list route exists; Dashboard still does not use it to hide a prompt
 - Lost-and-found and giveaway composers (`+ Post lost/found` and `+ Give something` have no form). Reply, Share, and lost-and-found Contact do not start a thread
 - Dashboard Pause, Promote, and Mark sold (the buttons render and have no route)
-- Landing marketing cards, Categories, Map (`mapListings`), and Profile (`sellers[0]`, fixture reviews)
+- Landing marketing cards and the Categories featured strip (`listings` fixtures). Map and Profile primary content read the API
 - `Navigation` unread badge (`unreadMessages={2}` in `src/App.tsx`). Dashboard's own message count reads conversations
 - Image upload (S3 is env-only)
 - Price history writes and real price-drop alerts

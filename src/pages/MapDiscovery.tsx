@@ -1,6 +1,9 @@
-import { useState } from 'react'
-import { Badge, Avatar, StarRating, Button, Icon, Chip, Toggle } from '../components/ui'
-import { mapListings, listings } from '../data'
+import { useEffect, useMemo, useState } from 'react'
+import { api, readStatus } from '../api/client'
+import type { ApiListing } from '../api/types'
+import { Badge, Icon, LoadState } from '../components/ui'
+import { isPaintedNeighborhood, PAINTED_NEIGHBORHOODS, pinPosition } from '../lib/map-pins'
+import { listingFromApi, mediaSrc } from '../lib/view'
 
 type Page = 'listing' | 'explore'
 
@@ -8,33 +11,124 @@ interface MapDiscoveryProps {
   onNavigate: (p: Page, id?: string) => void
 }
 
-const neighborhoods = [
-  { name: 'Inman Park', x: 55, y: 40, listings: 47 },
-  { name: 'Decatur', x: 72, y: 35, listings: 83 },
-  { name: 'Midtown', x: 42, y: 32, listings: 124 },
-  { name: 'Buckhead', x: 35, y: 18, listings: 67 },
-  { name: 'Grant Park', x: 58, y: 55, listings: 39 },
-  { name: 'East ATL', x: 68, y: 58, listings: 52 },
-  { name: 'Westside', x: 22, y: 42, listings: 61 },
+interface MapPin {
+  id: string
+  title: string
+  category: string
+  price: number | null
+  image: string
+  x: number
+  y: number
+  createdAt: string
+  neighborhood: string
+}
+
+const safeSpots = [
+  { name: 'Publix Parking', x: 48, y: 45, type: 'grocery' },
+  { name: 'APD Precinct 6', x: 60, y: 28, type: 'police' },
+  { name: 'Chase Bank ATM', x: 35, y: 50, type: 'bank' },
+  { name: 'Starbucks', x: 55, y: 25, type: 'coffee' },
 ]
 
+function toPin(listing: ApiListing): MapPin {
+  const view = listingFromApi(listing)
+  const position = pinPosition({
+    id: listing.id,
+    neighborhood: listing.neighborhood,
+    city: listing.city,
+  })
+  const free = listing.priceCents == null || listing.priceCents === 0
+  return {
+    id: listing.id,
+    title: view.title,
+    category: view.category,
+    price: free ? null : view.price,
+    image: view.images[0] ?? '',
+    x: position.x,
+    y: position.y,
+    createdAt: listing.createdAt ?? '',
+    neighborhood: listing.neighborhood ?? '',
+  }
+}
+
 export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
-  const [selectedPin, setSelectedPin] = useState<string | null>('m1')
+  const [pins, setPins] = useState<MapPin[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [selectedPin, setSelectedPin] = useState<string | null>(null)
   const [view, setView] = useState<'split' | 'map' | 'list'>('split')
   const [priceFilter, setPriceFilter] = useState<string | null>(null)
   const [showSafeSpots, setShowSafeSpots] = useState(false)
   const [searchArea, setSearchArea] = useState(false)
-  const [mapStyle, setMapStyle] = useState<'street' | 'satellite'>('street')
+  const [searchText, setSearchText] = useState('')
+  const [sort, setSort] = useState('closest')
+  const [savedIds, setSavedIds] = useState<Record<string, boolean>>({})
+  const [saveError, setSaveError] = useState('')
 
-  const selectedListing = selectedPin ? mapListings.find(l => l.id === selectedPin) : null
-  const fullListing = selectedListing ? listings.find(l => l.images[0] === selectedListing.image) || listings[0] : listings[0]
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError('')
+    api.listings
+      .list({ limit: 100 })
+      .then((rows) => {
+        if (!active) return
+        const next = rows.map(toPin)
+        setPins(next)
+        setSelectedPin((current) => (current && next.some((pin) => pin.id === current) ? current : next[0]?.id ?? null))
+      })
+      .catch((cause) => {
+        if (!active) return
+        setPins([])
+        setError(readStatus(cause, 'Listings could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
-  const safeSpots = [
-    { name: 'Publix Parking', x: 48, y: 45, type: 'grocery' },
-    { name: 'APD Precinct 6', x: 60, y: 28, type: 'police' },
-    { name: 'Chase Bank ATM', x: 35, y: 50, type: 'bank' },
-    { name: 'Starbucks', x: 55, y: 25, type: 'coffee' },
-  ]
+  const visible = useMemo(() => {
+    const query = searchText.trim().toLowerCase()
+    const filtered = pins.filter((pin) => {
+      if (priceFilter && priceFilter !== 'All') {
+        if (priceFilter === 'Free') {
+          if (pin.price !== null) return false
+        } else if (pin.category.toLowerCase() !== priceFilter.toLowerCase()) {
+          return false
+        }
+      }
+      if (searchArea && !isPaintedNeighborhood(pin.neighborhood)) return false
+      if (!query) return true
+      return `${pin.title} ${pin.category} ${pin.neighborhood}`.toLowerCase().includes(query)
+    })
+    const sorted = [...filtered]
+    sorted.sort((a, b) => {
+      if (sort === 'price') return (a.price ?? 0) - (b.price ?? 0) || a.id.localeCompare(b.id)
+      if (sort === 'closest') {
+        const da = (a.x - 55) ** 2 + (a.y - 40) ** 2
+        const db = (b.x - 55) ** 2 + (b.y - 40) ** 2
+        return da - db || a.id.localeCompare(b.id)
+      }
+      return b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id)
+    })
+    return sorted
+  }, [pins, priceFilter, searchArea, searchText, sort])
+
+  const selectedListing = visible.find((pin) => pin.id === selectedPin) ?? null
+
+  async function saveSelected() {
+    if (!selectedListing) return
+    setSaveError('')
+    try {
+      const result = await api.listings.toggleFavorite(selectedListing.id)
+      setSavedIds((current) => ({ ...current, [selectedListing.id]: result.saved }))
+    } catch (cause) {
+      setSaveError(readStatus(cause, 'Could not save this listing.'))
+    }
+  }
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-[#FAFAF7] overflow-hidden">
@@ -50,6 +144,8 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
               <Icon name="search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9AB5] pointer-events-none" />
               <input
                 type="text"
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
                 placeholder="Search this area..."
                 className="w-full h-10 pl-9 pr-4 bg-white border border-[#E8E6DF] rounded-full text-sm text-[#1B2A4A] shadow-md focus:outline-none focus:border-[#2D6A4F]"
               />
@@ -124,7 +220,7 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
             <div className="absolute top-[35%] left-[24%] text-[7px] text-[#2D6A4F] font-semibold bg-[#D8F3DC]/90 px-1 rounded rotate-12">BeltLine Trail</div>
 
             {/* Neighborhood labels */}
-            {neighborhoods.map(n => (
+            {PAINTED_NEIGHBORHOODS.map(n => (
               <div
                 key={n.name}
                 className="absolute text-[9px] font-semibold text-[#5C6E8A] bg-white/80 backdrop-blur-sm px-1.5 py-0.5 rounded-md pointer-events-none"
@@ -151,7 +247,7 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
             ))}
 
             {/* Listing pins */}
-            {mapListings.map(pin => {
+            {visible.map(pin => {
               const isSelected = selectedPin === pin.id
               return (
                 <div
@@ -221,7 +317,7 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
         <div className="p-4 border-b border-[#E8E6DF]">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="font-semibold text-[#1B2A4A]">{mapListings.length} listings nearby</h2>
+              <h2 className="font-semibold text-[#1B2A4A]">{loading ? 'Listings nearby' : `${visible.length} listings nearby`}</h2>
               <p className="text-xs text-[#8A9AB5]">Within 5 miles of Inman Park</p>
             </div>
             <div className="flex items-center gap-2">
@@ -230,11 +326,15 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
               </button>
             </div>
           </div>
-          <select className="w-full h-9 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none">
-            <option>Sort: Closest first</option>
-            <option>Sort: Newest first</option>
-            <option>Sort: Price low to high</option>
-            <option>Sort: Most popular</option>
+          <select
+            value={sort}
+            onChange={(event) => setSort(event.target.value)}
+            className="w-full h-9 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none"
+          >
+            <option value="closest">Sort: Closest first</option>
+            <option value="newest">Sort: Newest first</option>
+            <option value="price">Sort: Price low to high</option>
+            <option value="popular">Sort: Most popular</option>
           </select>
         </div>
 
@@ -243,11 +343,13 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
           <div className="mx-4 mt-4 bg-[#F0FBF3] border-2 border-[#2D6A4F] rounded-2xl overflow-hidden">
             <div className="flex gap-3 p-3">
               <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-[#E8E6DF]">
-                <img
-                  src={`https://images.unsplash.com/${selectedListing.image}?w=160&h=160&fit=crop&auto=format`}
-                  alt={selectedListing.title}
-                  className="w-full h-full object-cover"
-                />
+                {mediaSrc(selectedListing.image, 'w=160&h=160&fit=crop&auto=format') && (
+                  <img
+                    src={mediaSrc(selectedListing.image, 'w=160&h=160&fit=crop&auto=format')!}
+                    alt={selectedListing.title}
+                    className="w-full h-full object-cover"
+                  />
+                )}
               </div>
               <div className="flex-1">
                 <p className="font-semibold text-sm text-[#1B2A4A] leading-tight">{selectedListing.title}</p>
@@ -261,17 +363,25 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
               </div>
             </div>
             <div className="flex border-t border-[#74C69D]/30">
-              <button className="flex-1 py-2.5 text-xs font-semibold text-[#2D6A4F] hover:bg-[#D8F3DC]/50 transition-colors">Save</button>
+              <button onClick={() => void saveSelected()} className="flex-1 py-2.5 text-xs font-semibold text-[#2D6A4F] hover:bg-[#D8F3DC]/50 transition-colors">
+                {savedIds[selectedListing.id] ? 'Saved' : 'Save'}
+              </button>
               <div className="w-px bg-[#74C69D]/30" />
-              <button onClick={() => onNavigate('listing', fullListing.id)} className="flex-1 py-2.5 text-xs font-semibold text-[#2D6A4F] hover:bg-[#D8F3DC]/50 transition-colors">View listing →</button>
+              <button onClick={() => onNavigate('listing', selectedListing.id)} className="flex-1 py-2.5 text-xs font-semibold text-[#2D6A4F] hover:bg-[#D8F3DC]/50 transition-colors">View listing →</button>
             </div>
+            {saveError && <p className="px-3 py-2 text-xs text-[#C4512D]">{saveError}</p>}
           </div>
         )}
 
         {/* Listings list */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {mapListings.map(pin => {
+          {(loading || error) && <LoadState loading={loading} error={error} loadingLabel="Loading listings…" />}
+          {!loading && !error && visible.length === 0 && (
+            <p className="text-sm text-[#8A9AB5] text-center py-8">No listings nearby.</p>
+          )}
+          {visible.map(pin => {
             const isSelected = selectedPin === pin.id
+            const image = mediaSrc(pin.image, 'w=120&h=120&fit=crop&auto=format')
             return (
               <div
                 key={pin.id}
@@ -279,11 +389,13 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
                 className={`flex gap-3 rounded-2xl border p-3 cursor-pointer transition-all ${isSelected ? 'border-[#2D6A4F] bg-[#F0FBF3]' : 'border-[#E8E6DF] bg-white hover:border-[#2D6A4F]/40'}`}
               >
                 <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF]">
-                  <img
-                    src={`https://images.unsplash.com/${pin.image}?w=120&h=120&fit=crop&auto=format`}
-                    alt={pin.title}
-                    className="w-full h-full object-cover"
-                  />
+                  {image && (
+                    <img
+                      src={image}
+                      alt={pin.title}
+                      className="w-full h-full object-cover"
+                    />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-1">{pin.title}</p>
@@ -295,8 +407,7 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
                     <button
                       onClick={e => {
                         e.stopPropagation()
-                        const matched = listings.find(l => l.images[0] === pin.image)
-                        onNavigate('listing', matched?.id ?? fullListing.id)
+                        onNavigate('listing', pin.id)
                       }}
                       className="text-xs text-[#2D6A4F] font-medium hover:underline"
                     >

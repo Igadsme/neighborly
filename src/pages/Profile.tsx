@@ -1,37 +1,81 @@
-import { useState } from 'react'
-import { Avatar, StarRating, Badge, Button, ListingCard, Icon } from '../components/ui'
-import { sellers, listings } from '../data'
+import { useEffect, useState } from 'react'
+import { api, readStatus } from '../api/client'
+import type { ApiListing, ProfileReview, PublicProfile } from '../api/types'
+import { Avatar, Badge, Button, Icon, ListingCard, LoadState } from '../components/ui'
+import { listingFromApi, memberSince, personName, relativeTime } from '../lib/view'
 
 type Page = 'listing' | 'messages'
 
 interface ProfileProps {
   onNavigate: (p: Page, id?: string) => void
+  userId?: string | null
 }
 
-const seller = sellers[0]
+function profileName(profile: PublicProfile) {
+  const named = [profile.firstName, profile.lastName].filter(Boolean).join(' ')
+  return profile.displayName || named || 'Neighbor'
+}
 
-const reviews = [
-  { reviewer: sellers[1], rating: 5, text: 'Marcus was very easy to work with — responsive, honest about the item\'s condition, and flexible on timing. Would definitely buy from him again!', date: '2 weeks ago', item: 'West Elm Sofa' },
-  { reviewer: sellers[2], rating: 5, text: 'Fast communication, everything as described. The pickup was smooth and he helped carry it out.', date: '1 month ago', item: 'IKEA Bookshelf' },
-  { reviewer: sellers[3], rating: 5, text: 'Excellent seller! Answered every question quickly and the item was in even better condition than the photos showed.', date: '2 months ago', item: 'Standing Desk' },
-  { reviewer: sellers[5], rating: 4, text: 'Good seller overall. Took a couple days to respond initially, but once we connected everything went smoothly.', date: '3 months ago', item: 'Coffee Table' },
-]
+function ratingLabel(value: number | null) {
+  if (value == null) return '—'
+  const text = Number.isInteger(value) ? String(value) : value.toFixed(1)
+  return `${text}★`
+}
 
-const userListings = listings.slice(0, 4)
-const soldListings = listings.slice(2, 5)
+function ratingBreakdown(reviews: ProfileReview[]) {
+  return [5, 4, 3, 2, 1].map((stars) => ({
+    stars,
+    percent: reviews.length === 0 ? 0 : Math.round((reviews.filter((review) => review.rating === stars).length / reviews.length) * 100),
+  }))
+}
 
-export default function Profile({ onNavigate }: ProfileProps) {
+export default function Profile({ onNavigate, userId }: ProfileProps) {
   const [activeTab, setActiveTab] = useState<'listings' | 'reviews' | 'sold'>('listings')
   const [reported, setReported] = useState(false)
   const [following, setFollowing] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [profile, setProfile] = useState<PublicProfile | null>(null)
+  const [reviews, setReviews] = useState<ProfileReview[]>([])
+  const [activeListings, setActiveListings] = useState<ApiListing[]>([])
+  const [soldListings, setSoldListings] = useState<ApiListing[]>([])
 
-  const ratingBreakdown = [
-    { stars: 5, percent: 89 },
-    { stars: 4, percent: 8 },
-    { stars: 3, percent: 2 },
-    { stars: 2, percent: 1 },
-    { stars: 1, percent: 0 },
-  ]
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError('')
+    const load = async () => {
+      const id = userId || (await api.auth.me()).id
+      const [nextProfile, nextReviews, published, sold] = await Promise.all([
+        api.users.profile(id),
+        api.users.reviews(id),
+        api.listings.list({ sellerId: id, limit: 24 }),
+        api.listings.list({ sellerId: id, status: 'SOLD', limit: 24 }),
+      ])
+      if (!active) return
+      setProfile(nextProfile)
+      setReviews(nextReviews)
+      setActiveListings(published)
+      setSoldListings(sold)
+    }
+    load()
+      .catch((cause) => {
+        if (!active) return
+        setProfile(null)
+        setError(readStatus(cause, 'Profile could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [userId])
+
+  const name = profile ? profileName(profile) : ''
+  const since = profile ? memberSince(profile.memberSince) : ''
+  const area = profile?.neighborhood || profile?.city || 'Nearby'
+  const desktopPlace = profile ? [profile.neighborhood, profile.city].filter(Boolean).join(', ') || 'Nearby' : ''
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-24 md:pb-0">
@@ -48,18 +92,25 @@ export default function Profile({ onNavigate }: ProfileProps) {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 md:px-6">
+        {(loading || error || !profile) && (
+          <div className="py-8">
+            <LoadState loading={loading} error={error || (!loading ? 'Profile could not be loaded.' : '')} loadingLabel="Loading profile…" />
+          </div>
+        )}
+
+        {profile && !loading && !error && (
+          <>
         {/* Profile header */}
         <div className="relative -mt-16 md:-mt-20 mb-6">
           <div className="flex items-end justify-between">
             <div className="flex items-end gap-4">
               <div className="relative">
                 <Avatar
-                  src={seller.avatar}
-                  name={seller.name}
+                  name={name}
                   size="xl"
                   className="border-4 border-white shadow-lg"
                 />
-                {seller.verified && (
+                {profile.emailVerified && (
                   <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#2D6A4F] rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                     <Icon name="check" size={12} className="text-white" />
                   </div>
@@ -67,10 +118,9 @@ export default function Profile({ onNavigate }: ProfileProps) {
               </div>
               <div className="pb-2 hidden md:block">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <h1 className="font-display text-2xl font-semibold text-[#1B2A4A]">{seller.name}</h1>
-                  {seller.idVerified && <Badge variant="green">🪪 ID Verified</Badge>}
+                  <h1 className="font-display text-2xl font-semibold text-[#1B2A4A]">{name}</h1>
                 </div>
-                <p className="text-[#8A9AB5] text-sm">{seller.neighborhood}, Atlanta · Member since {seller.memberSince}</p>
+                <p className="text-[#8A9AB5] text-sm">{desktopPlace} · Member since {since}</p>
               </div>
             </div>
             <div className="flex gap-2 pb-2">
@@ -90,20 +140,19 @@ export default function Profile({ onNavigate }: ProfileProps) {
           {/* Mobile name */}
           <div className="mt-4 md:hidden">
             <div className="flex items-center gap-2 mb-0.5">
-              <h1 className="font-display text-2xl font-semibold text-[#1B2A4A]">{seller.name}</h1>
-              {seller.idVerified && <Badge variant="green">🪪 ID</Badge>}
+              <h1 className="font-display text-2xl font-semibold text-[#1B2A4A]">{name}</h1>
             </div>
-            <p className="text-[#8A9AB5] text-sm">{seller.neighborhood} · Member since {seller.memberSince}</p>
+            <p className="text-[#8A9AB5] text-sm">{area} · Member since {since}</p>
           </div>
         </div>
 
         {/* Trust stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { label: 'Rating', value: `${seller.rating}★`, color: 'text-[#F59E0B]', bg: 'bg-[#FEF3C7]', icon: '⭐' },
-            { label: 'Reviews', value: `${seller.reviews}`, color: 'text-[#1B2A4A]', bg: 'bg-[#F0FBF3]', icon: '💬' },
-            { label: 'Sales', value: `${seller.transactions}`, color: 'text-[#1B2A4A]', bg: 'bg-[#DDEEFF]', icon: '✅' },
-            { label: 'Response', value: seller.responseTime, color: 'text-[#1B2A4A]', bg: 'bg-[#FDE8E0]', icon: '⚡' },
+            { label: 'Rating', value: ratingLabel(profile.ratingAverage), color: 'text-[#F59E0B]', bg: 'bg-[#FEF3C7]', icon: '⭐' },
+            { label: 'Reviews', value: `${profile.reviewCount}`, color: 'text-[#1B2A4A]', bg: 'bg-[#F0FBF3]', icon: '💬' },
+            { label: 'Sales', value: `${profile.soldCount}`, color: 'text-[#1B2A4A]', bg: 'bg-[#DDEEFF]', icon: '✅' },
+            { label: 'Response', value: '—', color: 'text-[#1B2A4A]', bg: 'bg-[#FDE8E0]', icon: '⚡' },
           ].map(stat => (
             <div key={stat.label} className={`${stat.bg} rounded-2xl p-4 text-center`}>
               <div className="text-2xl mb-1">{stat.icon}</div>
@@ -115,18 +164,15 @@ export default function Profile({ onNavigate }: ProfileProps) {
 
         {/* Verification badges */}
         <div className="flex flex-wrap gap-2 mb-8">
-          <Badge variant="green">✓ Email verified</Badge>
-          {seller.idVerified && <Badge variant="green">🪪 ID verified</Badge>}
-          <Badge variant="blue">⚡ Responds in {seller.responseTime}</Badge>
-          <Badge variant="navy">👤 {seller.transactions} completed transactions</Badge>
-          <Badge variant="amber">🏆 Top seller — Decatur</Badge>
+          {profile.emailVerified && <Badge variant="green">✓ Email verified</Badge>}
+          <Badge variant="navy">👤 {profile.soldCount} completed sales</Badge>
         </div>
 
         {/* About */}
         <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 mb-6">
           <h2 className="font-semibold text-[#1B2A4A] mb-2">About</h2>
           <p className="text-sm text-[#5C6E8A] leading-relaxed">
-            Hey, I'm Marcus — been in the Decatur area for 8 years. I sell quality items that I've actually used and cared for. Honest descriptions, fair prices, flexible on pickup times. Happy to answer any questions before you decide.
+            {profile.bio?.trim() || 'No bio yet.'}
           </p>
         </div>
 
@@ -134,21 +180,21 @@ export default function Profile({ onNavigate }: ProfileProps) {
         <div className="bg-[#F0FBF3] border border-[#74C69D]/30 rounded-2xl p-4 mb-6 flex items-start gap-3">
           <Icon name="shield" size={16} className="text-[#2D6A4F] mt-0.5 flex-shrink-0" />
           <div>
-            <p className="font-semibold text-sm text-[#1B2A4A]">Neighborly verified seller</p>
-            <p className="text-xs text-[#5C6E8A] mt-0.5">Marcus has completed identity verification, has 47 positive reviews, and has been a member since January 2022. His response rate is 98%.</p>
+            <p className="font-semibold text-sm text-[#1B2A4A]">{profile.emailVerified ? 'Email verified neighbor' : 'Neighborly member'}</p>
+            <p className="text-xs text-[#5C6E8A] mt-0.5">{name} has {profile.reviewCount} {profile.reviewCount === 1 ? 'review' : 'reviews'} and has been a member since {since}.</p>
           </div>
         </div>
 
         {/* Tabs */}
         <div className="flex gap-1 bg-[#F5F4EF] p-1 rounded-xl mb-6">
           {[
-            { id: 'listings', label: `Active Listings (${userListings.length})` },
-            { id: 'reviews', label: `Reviews (${seller.reviews})` },
+            { id: 'listings', label: `Active Listings (${activeListings.length})` },
+            { id: 'reviews', label: `Reviews (${profile.reviewCount})` },
             { id: 'sold', label: `Sold (${soldListings.length})` },
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as 'listings' | 'reviews' | 'sold')}
               className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-white text-[#1B2A4A] shadow-sm' : 'text-[#8A9AB5] hover:text-[#1B2A4A]'}`}
             >
               {tab.label}
@@ -158,11 +204,15 @@ export default function Profile({ onNavigate }: ProfileProps) {
 
         {/* Listings tab */}
         {activeTab === 'listings' && (
-          <div className="listing-grid">
-            {userListings.map(listing => (
-              <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing', listing.id)} />
-            ))}
-          </div>
+          activeListings.length === 0 ? (
+            <p className="text-sm text-[#8A9AB5] text-center py-8">No active listings yet.</p>
+          ) : (
+            <div className="listing-grid">
+              {activeListings.map(listing => (
+                <ListingCard key={listing.id} listing={listingFromApi(listing)} onClick={() => onNavigate('listing', listing.id)} />
+              ))}
+            </div>
+          )
         )}
 
         {/* Reviews tab */}
@@ -172,12 +222,16 @@ export default function Profile({ onNavigate }: ProfileProps) {
             <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 mb-6">
               <div className="flex items-center gap-6">
                 <div className="text-center">
-                  <p className="text-5xl font-bold font-display text-[#1B2A4A]">{seller.rating}</p>
-                  <div className="flex text-[#F59E0B] my-1">{'★★★★★'.split('').map((s, i) => <span key={i}>{s}</span>)}</div>
-                  <p className="text-xs text-[#8A9AB5]">{seller.reviews} reviews</p>
+                  <p className="text-5xl font-bold font-display text-[#1B2A4A]">{profile.ratingAverage ?? '—'}</p>
+                  <div className="flex my-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span key={star} className={profile.ratingAverage != null && star <= Math.round(profile.ratingAverage) ? 'text-[#F59E0B]' : 'text-[#E8E6DF]'}>★</span>
+                    ))}
+                  </div>
+                  <p className="text-xs text-[#8A9AB5]">{profile.reviewCount} reviews</p>
                 </div>
                 <div className="flex-1">
-                  {ratingBreakdown.map(({ stars, percent }) => (
+                  {ratingBreakdown(reviews).map(({ stars, percent }) => (
                     <div key={stars} className="flex items-center gap-2 mb-1">
                       <span className="text-xs text-[#8A9AB5] w-4">{stars}</span>
                       <span className="text-[#F59E0B] text-xs">★</span>
@@ -191,44 +245,56 @@ export default function Profile({ onNavigate }: ProfileProps) {
               </div>
             </div>
 
-            <div className="space-y-4">
-              {reviews.map((review, i) => (
-                <div key={i} className="bg-white rounded-2xl border border-[#E8E6DF] p-5">
-                  <div className="flex items-start gap-3">
-                    <Avatar src={review.reviewer.avatar} name={review.reviewer.name} size="sm" />
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="font-semibold text-sm text-[#1B2A4A]">{review.reviewer.name}</p>
-                        <span className="text-xs text-[#C5CCDA]">{review.date}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="flex">
-                          {[...Array(review.rating)].map((_, j) => <span key={j} className="text-[#F59E0B] text-xs">★</span>)}
+            {reviews.length === 0 ? (
+              <p className="text-sm text-[#8A9AB5] text-center py-8">No reviews yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {reviews.map((review) => (
+                  <div key={review.id} className="bg-white rounded-2xl border border-[#E8E6DF] p-5">
+                    <div className="flex items-start gap-3">
+                      <Avatar name={personName(review.author)} size="sm" />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-semibold text-sm text-[#1B2A4A]">{personName(review.author)}</p>
+                          <span className="text-xs text-[#C5CCDA]">{relativeTime(review.createdAt)}</span>
                         </div>
-                        <span className="text-xs text-[#C5CCDA]">·</span>
-                        <span className="text-xs text-[#8A9AB5]">{review.item}</span>
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="flex">
+                            {[...Array(review.rating)].map((_, j) => <span key={j} className="text-[#F59E0B] text-xs">★</span>)}
+                          </div>
+                          {review.itemTitle && (
+                            <>
+                              <span className="text-xs text-[#C5CCDA]">·</span>
+                              <span className="text-xs text-[#8A9AB5]">{review.itemTitle}</span>
+                            </>
+                          )}
+                        </div>
+                        <p className="text-sm text-[#5C6E8A] leading-relaxed">{review.body}</p>
                       </div>
-                      <p className="text-sm text-[#5C6E8A] leading-relaxed">{review.text}</p>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {/* Sold tab */}
         {activeTab === 'sold' && (
-          <div className="listing-grid">
-            {soldListings.map(listing => (
-              <div key={listing.id} className="relative">
-                <ListingCard listing={{ ...listing, saved: false }} onClick={() => {}} />
-                <div className="absolute inset-0 bg-white/70 rounded-2xl flex items-center justify-center">
-                  <Badge variant="navy">Sold</Badge>
+          soldListings.length === 0 ? (
+            <p className="text-sm text-[#8A9AB5] text-center py-8">No sold listings yet.</p>
+          ) : (
+            <div className="listing-grid">
+              {soldListings.map(listing => (
+                <div key={listing.id} className="relative">
+                  <ListingCard listing={{ ...listingFromApi(listing), saved: false }} onClick={() => {}} />
+                  <div className="absolute inset-0 bg-white/70 rounded-2xl flex items-center justify-center">
+                    <Badge variant="navy">Sold</Badge>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )
         )}
 
         {/* Report */}
@@ -240,6 +306,8 @@ export default function Profile({ onNavigate }: ProfileProps) {
             {reported ? '✓ Report submitted. Our team will review this profile.' : 'Report this profile'}
           </button>
         </div>
+          </>
+        )}
       </div>
     </div>
   )
