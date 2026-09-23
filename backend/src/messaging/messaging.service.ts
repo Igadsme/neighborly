@@ -1,9 +1,13 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { ForbiddenException, Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { MessagingGateway } from './messaging.gateway'
 
 @Injectable()
 export class MessagingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: MessagingGateway
+  ) {}
 
   listConversations(userId: string) {
     return this.prisma.conversation.findMany({
@@ -21,11 +25,13 @@ export class MessagingService {
 
   async sendMessage(userId: string, conversationId: string, body: string) {
     await this.assertParticipant(userId, conversationId)
-    return this.prisma.$transaction(async tx => {
-      const message = await tx.message.create({ data: { conversationId, senderId: userId, body: body.trim() } })
+    const message = await this.prisma.$transaction(async tx => {
+      const created = await tx.message.create({ data: { conversationId, senderId: userId, body: body.trim() } })
       await tx.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })
-      return message
+      return created
     })
+    this.realtime.publishMessage(conversationId, message)
+    return message
   }
 
   async markRead(userId: string, conversationId: string) {

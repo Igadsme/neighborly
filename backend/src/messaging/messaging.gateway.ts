@@ -7,6 +7,6 @@ export class MessagingGateway {
   server!: Server
 
   publishMessage(conversationId: string, message: unknown) {
-    this.server.to(`conversation:${conversationId}`).emit('message.created', message)
+    this.server?.to(`conversation:${conversationId}`).emit('message.created', message)
   }
 }
