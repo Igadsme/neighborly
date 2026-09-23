@@ -1,14 +1,14 @@
 {
   "appUrl": "http://localhost:8443",
-  "finishedAt": "2026-09-23T19:31:37.166Z",
-  "failed": true,
+  "finishedAt": "2026-09-23T19:56:24.663Z",
+  "failed": false,
   "results": [
     {
       "name": "01-landing",
       "ok": true,
       "note": "Visible: Sign in",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/01-landing.png",
-      "excerpt": "Neighborly Browse Services Housing Jobs Sign in Get started 3,200+ active listings in Atlanta Your neighborhood has more to offer. Buy, sell, rent, hire, trade, donate, and connect — all within a few miles of home. With real neighbors. Safely. Atlanta, GA Decatur, GA Midtown, ATL",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Neighborly Browse Services Housing Jobs Sign in Get started 3,200+ active listings in Atlanta Your neighborhood has more to offer. Buy, sell, rent, hire, trade, donate, and connect — all within a few ",
       "extra": ""
     },
     {
@@ -21,10 +21,10 @@
     },
     {
       "name": "03-sign-in-dialog",
-      "ok": false,
-      "note": "Sign-in dialog opened from Landing.",
+      "ok": true,
+      "note": "Sign-in dialog is in the layout (1440x1100).",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/03-sign-in-dialog.png",
-      "excerpt": "Neighborly Browse Services Housing Jobs Sign in Get started 3,200+ active listings in Atlanta Your neighborhood has more to offer. Buy, sell, rent, hire, trade, donate, and connect — all within a few miles of home. With real neighbors. Safely. Atlanta, GA Decatur, GA Midtown, ATL",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Neighborly Browse Services Housing Jobs Sign in Get started 3,200+ active listings in Atlanta Your neighborhood has more to offer. Buy, sell, rent, hire, trade, donate, and connect — all within a few ",
       "extra": ""
     },
     {
@@ -32,7 +32,7 @@
       "ok": true,
       "note": "Sign-in action: submitted. Home greeting was checked.",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/04-home.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Good afternoon, there 👋 Inman Park · Atlanta, GA My Dashboard Post 🛋️ Furniture 📱 Electronics 🚗 Vehicles 🏠 Housing 🎁 Free 🔧 Services 💼 Jobs 🌳 Community All → 🎁 No free items posted nearby ye",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Good afternoon, Marcus 👋 Inman Park · Atlanta, GA My Dashboard Post 🛋️ Furniture 📱 Electronics 🚗 Vehicles 🏠 Housing 🎁 Free 🔧 Services 💼 Jobs 🌳 Community All → 🎁 No free items posted nearby y",
       "extra": ""
     },
     {
@@ -40,15 +40,15 @@
       "ok": true,
       "note": "Visible: results",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/05-explore.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Map view Search All Furniture Electronics Vehicles Housing Services Free Jobs Pets Clothing Filters Clear all PRICE RANGE – DISTANCE: WITHIN 10 MILES 1 mi 25 mi 50 mi CONDITION Any New Like New Good",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Map view Search All Furniture Electronics Vehicles Housing Services Free Jobs Pets Clothing Filters Clear all PRICE RANGE – DISTANCE: WITHIN 10 MILES 1 mi 25 mi 50 mi CONDITION Any New Like New Good F",
       "extra": ""
     },
     {
       "name": "06-categories",
       "ok": true,
-      "note": "Visible: Browse by category",
+      "note": "Visible: Walnut mid-century dining table Featured cards: 6. Scrolled to Walnut mid-century dining table.",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/06-categories.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Browse by category From furniture to jobs, housing to community events — everything happening in your neighborhood, organized. TRENDING IN ATLANTA iPhone near Midtown Moving help this weekend Apartm",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Browse by category From furniture to jobs, housing to community events — everything happening in your neighborhood, organized. TRENDING IN ATLANTA iPhone near Midtown Moving help this weekend Apartmen",
       "extra": ""
     },
     {
@@ -56,7 +56,7 @@
       "ok": true,
       "note": "Visible: Search area",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/07-map.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Search area All Furniture Electronics Free Vehicles Housing I-285 Ponce de Leon Ave Peachtree St BeltLine Trail Inman Park Decatur Midtown Buckhead Grant Park East ATL Westside Safe spots Split Map ",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Search area All Furniture Electronics Free Vehicles Housing I-285 Ponce de Leon Ave Peachtree St BeltLine Trail Inman Park Decatur Midtown Buckhead Grant Park East ATL Westside $425 $85 $120 $480 $560",
       "extra": ""
     },
     {
@@ -64,7 +64,7 @@
       "ok": true,
       "note": "Visible: Find your next home",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/08-housing.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Find your next home Apartments, rooms, houses, and more in Atlanta For Rent For Sale Any Apartment House Room Studio Condo Sublet Any beds 1+ bed 2+ beds 3+ beds $ Pet-friendly Search homes Furnishe",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Find your next home Apartments, rooms, houses, and more in Atlanta For Rent For Sale Any Apartment House Room Studio Condo Sublet Any beds 1+ bed 2+ beds 3+ beds $ Pet-friendly Search homes Furnished ",
       "extra": ""
     },
     {
@@ -72,7 +72,7 @@
       "ok": true,
       "note": "Visible: Local services",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/09-services.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Local services Hire trusted neighbors for cleaning, moving, tutoring, repairs, and more. Search All services 🧹 Cleaning (24) 📦 Moving (12) 📚 Tutoring (18) 🔧 Repair (31) 📷 Photography (9) 🌱 Law",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Local services Hire trusted neighbors for cleaning, moving, tutoring, repairs, and more. Search All services 🧹 Cleaning (24) 📦 Moving (12) 📚 Tutoring (18) 🔧 Repair (31) 📷 Photography (9) 🌱 Lawn ",
       "extra": ""
     },
     {
@@ -80,7 +80,7 @@
       "ok": true,
       "note": "Visible: Local jobs",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/10-jobs.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Local jobs & gigs Full-time, part-time, freelance, and one-time work in Atlanta. Search jobs All Full-time Part-time Freelance Internship Any Remote Hybrid On-site Any level Entry Mid Senior Executi",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Local jobs & gigs Full-time, part-time, freelance, and one-time work in Atlanta. Search jobs All Full-time Part-time Freelance Internship Any Remote Hybrid On-site Any level Entry Mid Senior Executive",
       "extra": ""
     },
     {
@@ -88,55 +88,55 @@
       "ok": true,
       "note": "Visible: Community",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/11-community.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Community Inman Park + nearby neighborhoods Post 2,847 Neighbors active 6 Posts this week 4 Upcoming events 📰 Feed 🎭 Events 🔍 Lost & Found 🎁 Giveaways All posts 💬 Discussion 📢 Announcement 🔍 ",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Community Inman Park + nearby neighborhoods Post 2,847 Neighbors active … Posts this week … Upcoming events 📰 Feed 🎭 Events 🔍 Lost & Found 🎁 Giveaways Loading community…",
       "extra": ""
     },
     {
       "name": "12-listing-detail",
-      "ok": false,
-      "note": "Featured strip state {\"featured\":true,\"empty\":true,\"error\":false}. No listing card was opened.",
+      "ok": true,
+      "note": "Opened Walnut mid-century dining table.",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/12-listing-detail.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Browse by category From furniture to jobs, housing to community events — everything happening in your neighborhood, organized. TRENDING IN ATLANTA iPhone near Midtown Moving help this weekend Apartm",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Explore Furniture Walnut mid-century dining table 1 / 2 Like New Video Walnut mid-century dining table $425 or best offer Like New Pickup available Inman Park, Atlanta · Nearby Posted 4h ago — views —",
       "extra": ""
     },
     {
       "name": "13-listing-save",
-      "ok": false,
-      "note": "Save button was not clicked.",
+      "ok": true,
+      "note": "Listing Detail already showed Saved for this favorite.",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/13-listing-save.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Browse by category From furniture to jobs, housing to community events — everything happening in your neighborhood, organized. TRENDING IN ATLANTA iPhone near Midtown Moving help this weekend Apartm",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Explore Furniture Walnut mid-century dining table 1 / 2 Like New Video Walnut mid-century dining table $425 or best offer Like New Pickup available Inman Park, Atlanta · Nearby Posted 4h ago — views —",
       "extra": ""
     },
     {
       "name": "14-message-modal",
-      "ok": false,
-      "note": "Message seller was not clicked.",
+      "ok": true,
+      "note": "Quick reply: true. Send: true.",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/14-message-modal.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Browse by category From furniture to jobs, housing to community events — everything happening in your neighborhood, organized. TRENDING IN ATLANTA iPhone near Midtown Moving help this weekend Apartm",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Explore Furniture Walnut mid-century dining table 1 / 2 Like New Video Walnut mid-century dining table $425 or best offer Like New Pickup available Inman Park, Atlanta · Nearby Posted 4h ago — views —",
       "extra": ""
     },
     {
       "name": "15-create",
       "ok": true,
-      "note": "Post Listing opened. Type card: 📦 Item for Sale Sell a physical item locally. Continue clicked: true.",
+      "note": "Type card: 📦 Item for Sale Sell a physical item locally. Steps: Continue → | Continue → | Continue → | Continue → | Continue to publish →. Publish clicked: true.",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/15-create.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Post a listing Save draft Type Photos Details AI Review Preview Publish Add photos High-quality photos sell faster. Add up to 12 photos. The first photo is your cover image. COVER ⭐ ⭐ Add photo ✨ AI",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Post a listing Save draft Type Photos Details AI Review Preview Publish Ready to go live? Choose when to publish your listing. 🎉 Listing published! Your listing is live and visible to neighbors nearb",
       "extra": ""
     },
     {
       "name": "16-messages",
       "ok": true,
-      "note": "Opened the messages icon and waited past the loading line.",
+      "note": "The walnut-table message is in the inbox.",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/16-messages.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Messages All Active Archived Transactions PP Priya Patel 21m ago Re: Docker gate need 1790190618090 I can start tomorrow morning. 1 PP Priya Patel 25m ago Re: Docker gate need 1790190387884 I can st",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Messages All Active Archived Transactions PP Priya Patel just now Re: Docker gate need 1790190618090 Can I pick up the walnut table on Saturday morning? PP Priya Patel 50m ago Re: Docker gate need 179",
       "extra": ""
     },
     {
       "name": "17-saved",
       "ok": true,
-      "note": "Opened the saved icon.",
+      "note": "Saved items shows the walnut table.",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/17-saved.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing Saved items 0 items saved · 0 saved searches Browse more Saved Listings Saved Searches Price Alerts All saved 0 New collection No saved listings yet Browse listings and tap the heart icon to save it",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing Saved items 1 items saved · 0 saved searches Browse more Saved Listings Saved Searches Price Alerts All saved 1 New collection Like New Walnut mid-century dining table $425 Inman Park · Nearby · 4h ag",
       "extra": ""
     },
     {
@@ -144,7 +144,7 @@
       "ok": true,
       "note": "Opened My Profile from the account menu.",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/18-profile.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing MJ Marcus Johnson Decatur, Atlanta · Member since September 2026 Follow Message ⭐ — Rating 💬 0 Reviews ✅ 0 Sales ⚡ — Response 👤 0 completed sales About No bio yet. Neighborly member Marcus Johnson",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing MJ Marcus Johnson Decatur, Atlanta · Member since September 2026 Follow Message ⭐ — Rating 💬 0 Reviews ✅ 0 Sales ⚡ — Response 👤 0 completed sales About No bio yet. Neighborly member Marcus Johnson h",
       "extra": ""
     },
     {
@@ -152,7 +152,7 @@
       "ok": true,
       "note": "Opened My Dashboard.",
       "screenshot": "/Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/browser-smoke/19-dashboard.png",
-      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community 1 Post Listing My dashboard Marcus Johnson · Decatur Post listing Overview My Listings Offers Activity ACCOUNT TRUST LEVEL Verified Neighbor 🏆 ID verified · Email confirmed · 52 transactions · 4.9 rating 98% Trus",
+      "excerpt": "Neighborly Atlanta, GA Explore Map Housing Services Jobs Community Post Listing My dashboard Marcus Johnson · Decatur Post listing Overview My Listings Offers Activity ACCOUNT TRUST LEVEL Verified Neighbor 🏆 ID verified · Email confirmed · 52 transactions · 4.9 rating 98% Trust ",
       "extra": ""
     }
   ]
