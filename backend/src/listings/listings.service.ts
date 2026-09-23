@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { publicUserSelect } from '../common/public-user.select'
+import { sanitizeOptional, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateListingDto, ListListingsQuery, SaveSearchDto, UpdateListingDto } from './dto'
 
@@ -89,10 +90,10 @@ export class ListingsService {
     return this.prisma.listing.update({
       where: { id },
       data: {
-        title: input.title?.trim(),
-        description: input.description?.trim(),
+        title: sanitizeOptional(input.title, 140),
+        description: sanitizeOptional(input.description),
         priceCents: input.priceCents,
-        condition: input.condition?.trim(),
+        condition: sanitizeOptional(input.condition, 40),
         pickupAvailable: input.pickupAvailable,
         deliveryAvailable: input.deliveryAvailable,
         shippingAvailable: input.shippingAvailable
@@ -189,12 +190,12 @@ export class ListingsService {
       data: {
         sellerId,
         categoryId: input.categoryId,
-        title: input.title.trim(),
-        description: input.description.trim(),
+        title: sanitizeText(input.title, 140),
+        description: sanitizeText(input.description),
         priceCents: input.priceCents,
-        condition: input.condition?.trim(),
-        neighborhood: input.neighborhood?.trim(),
-        city: input.city?.trim(),
+        condition: sanitizeOptional(input.condition, 40),
+        neighborhood: sanitizeOptional(input.neighborhood, 80),
+        city: sanitizeOptional(input.city, 80),
         latitude: input.latitude,
         longitude: input.longitude,
         radiusMiles: input.radiusMiles,

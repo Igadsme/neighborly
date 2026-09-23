@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Avatar, Badge, EmptyState, Icon } from '../components/ui'
-import { api, readError } from '../api/client'
+import { api, readError, readStatus } from '../api/client'
 import type { ApiConversation, ApiMessage, ApiOfferDetail, ApiTransaction } from '../api/types'
 import {
   dollars,
@@ -167,6 +167,28 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
     }
   }
 
+  const reportConversation = async () => {
+    if (!activeConversation) return
+    const other = otherOf(activeConversation)
+    const otherId = other?.userId
+    if (!otherId || otherId === userId) {
+      setSendError('There is no one to report in this conversation.')
+      return
+    }
+    const incoming = [...messages].reverse().find((message) => message.senderId === otherId)
+    setSendError('')
+    try {
+      if (incoming) {
+        await api.safety.report({ targetType: 'MESSAGE', targetId: incoming.id, reason: 'HARASSMENT' })
+      } else {
+        await api.safety.report({ targetType: 'USER', targetId: otherId, reason: 'HARASSMENT' })
+      }
+      setSendError('Report submitted.')
+    } catch (cause: unknown) {
+      setSendError(readStatus(cause, 'Unable to submit this report.'))
+    }
+  }
+
   const decideOffer = async (action: 'accept' | 'reject') => {
     if (!offer || !linked) return
     setActing(true)
@@ -296,7 +318,12 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <button className="w-8 h-8 rounded-full hover:bg-[#F5F4EF] flex items-center justify-center text-[#8A9AB5] transition-colors">
+              <button
+                type="button"
+                aria-label="Report this conversation"
+                onClick={() => void reportConversation()}
+                className="w-8 h-8 rounded-full hover:bg-[#F5F4EF] flex items-center justify-center text-[#8A9AB5] transition-colors"
+              >
                 <Icon name="shield" size={16} />
               </button>
               <button className="w-8 h-8 rounded-full hover:bg-[#F5F4EF] flex items-center justify-center text-[#8A9AB5] transition-colors">

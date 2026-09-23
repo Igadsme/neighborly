@@ -75,6 +75,7 @@ describe('Jobs HTTP', () => {
   let existingApplication: Record<string, unknown> | null = null
   let saved: Record<string, unknown> | null = null
   const prisma = {
+    blockedUser: { findFirst: jest.fn(async () => null) },
     jobListing: {
       findMany: jest.fn(async (args: { select: SelectSpec }) => [projectSelect(job, args.select)]),
       findFirst: jest.fn(async (args: { select?: SelectSpec }) => {

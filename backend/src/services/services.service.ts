@@ -1,7 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma, QuoteStatus } from '@prisma/client'
+import { assertNotBlocked } from '../common/blocks'
 import { publicUserSelect } from '../common/public-user.select'
-import { cleanList, cleanText } from '../common/text'
+import { cleanList, cleanText, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateQuoteDto, CreateServiceDto, ListServicesQuery, UpdateServiceDto } from './dto'
 
@@ -111,7 +112,7 @@ export class ServicesService {
         ownerId,
         title: input.title.trim(),
         businessName: input.businessName.trim(),
-        description: input.description.trim(),
+        description: sanitizeText(input.description),
         category: input.category,
         startingPriceCents: input.startingPriceCents,
         location: input.location.trim(),
@@ -161,13 +162,14 @@ export class ServicesService {
     })
     if (!service) throw new NotFoundException('Service not found')
     if (service.ownerId === userId) throw new BadRequestException('You cannot request a quote on your own service')
+    await assertNotBlocked(this.prisma, userId, service.ownerId)
     return this.prisma.serviceQuote.create({
       data: {
         serviceId,
         requesterId: userId,
         preferredDate: cleanText(input.preferredDate),
         preferredTime: cleanText(input.preferredTime),
-        notes: input.notes.trim(),
+        notes: sanitizeText(input.notes, 4000),
         address: cleanText(input.address),
         status: 'PENDING'
       },

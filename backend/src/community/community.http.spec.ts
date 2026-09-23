@@ -110,6 +110,7 @@ describe('Community HTTP', () => {
   let claimResult = { count: 1 }
   let rsvp: { userId: string } | null = null
   const prisma = {
+    blockedUser: { findFirst: jest.fn(async () => null) },
     communityPost: {
       findMany: jest.fn(async (args: { select: SelectSpec }) => [projectSelect(postRecord(), args.select)]),
       findFirst: jest.fn(async (args: { select: SelectSpec }) => projectSelect(postRecord(), args.select)),

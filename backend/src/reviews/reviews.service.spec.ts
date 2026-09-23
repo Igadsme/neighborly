@@ -14,7 +14,8 @@ describe('ReviewsService', () => {
   }
   const prisma = {
     transaction: { findUnique: jest.fn() },
-    review: { create: jest.fn() }
+    review: { create: jest.fn() },
+    blockedUser: { findFirst: jest.fn().mockResolvedValue(null) }
   }
   let service: ReviewsService
 

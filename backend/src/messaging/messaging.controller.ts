@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nest
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
+import { enforceRateLimit } from '../common/rate-limit'
 import { CreateConversationDto, SendMessageDto } from './dto'
 import { MessagingService } from './messaging.service'
 
@@ -16,7 +17,8 @@ export class MessagingController {
   list(@Req() req: AuthenticatedRequest) { return this.messaging.listConversations(req.user.id) }
 
   @Post()
-  create(@Req() req: AuthenticatedRequest, @Body() input: CreateConversationDto) {
+  async create(@Req() req: AuthenticatedRequest, @Body() input: CreateConversationDto) {
+    await enforceRateLimit('messaging', req.user.id)
     return this.messaging.createConversation(req.user.id, input)
   }
 
@@ -25,6 +27,7 @@ export class MessagingController {
 
   @Post(':id/messages')
   async send(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() input: SendMessageDto) {
+    await enforceRateLimit('messaging', req.user.id)
     return this.messaging.sendMessage(req.user.id, id, input.body)
   }
 

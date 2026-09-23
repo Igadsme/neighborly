@@ -80,6 +80,7 @@ function listingRoutes(options: {
   favoriteStatus?: number
   listFails?: boolean
   messageStatus?: number
+  reportStatus?: number
   messageResult?: unknown
   messageBody?: { current: unknown }
   urls?: string[]
@@ -105,6 +106,10 @@ function listingRoutes(options: {
         },
         options.messageStatus ?? 201,
       )
+    }
+    if (init?.method === "POST" && url.includes("/safety/reports")) {
+      options.messageBody && (options.messageBody.current = init.body ? JSON.parse(String(init.body)) : null)
+      return json({ id: "report-1", status: "OPEN" }, options.reportStatus ?? 201)
     }
     if (init?.method === "POST" && url.includes("/favorite")) {
       return json(options.favoriteResult ?? { saved: true }, options.favoriteStatus ?? 200)
@@ -310,6 +315,23 @@ describe("Listing detail", () => {
     })
     render(<ListingDetail listingId={listingId} onNavigate={() => undefined} />)
     expect(await screen.findByRole("button", { name: "Saved" })).toBeTruthy()
+  })
+
+  it("submits a listing report from the existing control", async () => {
+    const reportBody = { current: null as unknown }
+    listingRoutes({ messageBody: reportBody })
+    render(<ListingDetail listingId={listingId} onNavigate={() => undefined} />)
+    expect(await screen.findByRole("button", { name: "Report this listing" })).toBeTruthy()
+    fireEvent.click(screen.getAllByRole("button", { name: "Report this listing" })[0])
+    expect((await screen.findAllByText("Report submitted.")).length).toBeGreaterThan(0)
+    expect(reportBody.current).toEqual({ targetType: "LISTING", targetId: listingId, reason: "OTHER" })
+  })
+
+  it("keeps fixture reporting local", () => {
+    vi.stubGlobal("fetch", vi.fn())
+    render(<ListingDetail listingId="l1" onNavigate={() => undefined} />)
+    fireEvent.click(screen.getAllByRole("button", { name: "Report this listing" })[0])
+    expect(screen.getAllByText("Reporting isn't available yet.").length).toBeGreaterThan(0)
   })
 
   it("keeps fixture detail for non-uuid ids without calling the API", () => {

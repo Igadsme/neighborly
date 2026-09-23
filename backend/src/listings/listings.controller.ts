@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuard
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
+import { enforceRateLimit } from '../common/rate-limit'
 import { CreateListingDto, ListListingsQuery, SaveSearchDto, UpdateListingDto } from './dto'
 import { ListingsService } from './listings.service'
 
@@ -49,14 +50,16 @@ export class ListingsController {
   @Post()
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  create(@Req() request: AuthenticatedRequest, @Body() input: CreateListingDto) {
+  async create(@Req() request: AuthenticatedRequest, @Body() input: CreateListingDto) {
+    await enforceRateLimit('listings', request.user.id)
     return this.listings.create(request.user.id, input)
   }
 
   @Post('drafts')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  saveDraft(@Req() request: AuthenticatedRequest, @Body() input: CreateListingDto) {
+  async saveDraft(@Req() request: AuthenticatedRequest, @Body() input: CreateListingDto) {
+    await enforceRateLimit('listings', request.user.id)
     return this.listings.saveDraft(request.user.id, input)
   }
 

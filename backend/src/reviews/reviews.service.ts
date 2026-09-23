@@ -1,6 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { TransactionStatus } from '@prisma/client'
+import { assertNotBlocked } from '../common/blocks'
 import { publicUserSelect } from '../common/public-user.select'
+import { sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateReviewDto } from './dto'
 
@@ -20,7 +22,12 @@ export class ReviewsService {
     if (transaction.status !== TransactionStatus.COMPLETED) {
       throw new BadRequestException('Reviews are only allowed when the transaction is COMPLETED')
     }
-    const body = input.body.trim()
+    if (input.subjectId === authorId) throw new BadRequestException('You cannot review yourself')
+    if (!transaction.participants.some(participant => participant.userId === input.subjectId)) {
+      throw new ForbiddenException('You can only review the other person in this transaction')
+    }
+    await assertNotBlocked(this.prisma, authorId, input.subjectId)
+    const body = sanitizeText(input.body, 4000)
     if (!body) throw new BadRequestException('Review body is required')
     return this.prisma.review.create({
       data: {

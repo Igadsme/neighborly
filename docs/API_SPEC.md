@@ -25,7 +25,6 @@ Not built. Do not code the UI against these as if they return today.
 - Refresh-token rotation and a `POST /auth/refresh` body.
 - A single error envelope `{ code, message, details, timestamp }`.
 - Cursor pagination and shared filter operators (`distance`, `verified`, `sort`) on every collection.
-- Rate limits (Redis is required in env and unused by controllers).
 - Zod schemas at the boundary. The server uses class-validator; a second schema library is not required for v1 wiring.
 
 ## IMPLEMENTED
@@ -75,7 +74,7 @@ Guarded.
 - `GET /users/me` — user without `passwordHash`, plus `profile`, `preference`, `notificationPreference`.
 - `PATCH /users/me/onboarding` — optional `neighborhood`, `city`, `state`, `interests[]`, `capabilities[]`, `newListings`, `priceDrops`, `messages`, `events`, `community`. Upserts preference (`completedAt` set) and notification preference. Returns the same shape as `GET /users/me`.
 
-Not implemented: `PATCH /users/me/profile`. The Profile screen has no edit control. Follow, message, and report stay local.
+Not implemented: `PATCH /users/me/profile`. The Profile screen has no edit control. Follow stays local. Message on another profile calls `POST /conversations`. Report and block call `/safety` (see Safety).
 
 ### Public profile
 
@@ -412,6 +411,42 @@ Pagination matches listings: `limit` (1–100, default 24) and `offset` (default
 | `DELETE` | `/community/giveaways/:id` | Yes | Author only. |
 | `POST` | `/community/giveaways/:id/claim` | Yes | First caller sets `claimed`. `{ claimed: true, giveaway }`. A second person is 409 `"This giveaway has already been claimed"`. The same person claiming again is `{ claimed: true, giveaway }`. |
 
+### Safety
+
+All guarded. Reports and blocks use the caller id from the access token. A caller cannot read another person’s reports or blocks.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| `POST` | `/safety/reports` | Body: `targetType` (`LISTING`, `USER`, `MESSAGE`, `COMMUNITY_POST`), `targetId` (UUID), `reason` (`SPAM`, `SCAM`, `HARASSMENT`, `INAPPROPRIATE`, `OTHER`), optional `details` (max 2000, sanitized). Missing target is 404 `"Report target not found"`. A message the caller does not participate in is the same 404. Reporting your own content is 409 `"You cannot report your own content"`. A second report of the same target by the same caller is 409 `"You already reported this"`. Rate limited. |
+| `GET` | `/safety/reports` | The caller’s reports only. |
+| `GET` | `/safety/blocks` | People the caller has blocked: `{ userId, createdAt }[]`. |
+| `POST` | `/safety/blocks` | Body `{ "userId" }`. 404 `"User not found"`. 409 `"You cannot block yourself"` or `"This person is already blocked"`. |
+| `DELETE` | `/safety/blocks/:userId` | 404 `"Block not found"` when that block is not the caller’s. A non-UUID is 400. |
+| `GET` | `/moderation/reports` | `MODERATOR` or `ADMIN` only. Query `status` defaults to `OPEN`. Anyone else is 403 `"Moderator access is required"`. |
+| `GET` | `/moderation/reports/:id` | Staff only. Includes a short `preview` of the target. 404 `"Report not found"`. |
+| `POST` | `/moderation/reports/:id/actions` | Body `{ "kind", "note?" }`. `kind` is `DISMISS`, `RESOLVE`, `HIDE`, `SUSPEND_USER`, or `RESTORE_USER`. A closed report is 409 `"This report is already closed"`. `HIDE` archives a listing or community post (`deletedAt` set) or sets `Message.hiddenAt`. `HIDE` on a user report is 409 `"This action does not apply to that report"`. `SUSPEND_USER` sets that account to `SUSPENDED`. `RESTORE_USER` sets it back to `ACTIVE`. Staff cannot suspend or restore their own account from a report (409). |
+
+There is no screen that grants `StaffRole`. Insert `StaffRoleAssignment` directly. There is no notification list.
+
+Blocking is symmetric for new interactions: either person blocking the other returns 403 `"You cannot interact with this person"` on a new conversation, a message in an existing thread, an offer, a counter, an accept, a reject, a job application, a service quote, a community reaction, a community comment, and a review of that person. Existing threads stay readable. The original message text stays in the database when a message is hidden; participant reads are redacted.
+
+### Rate limits
+
+Counted in Redis when `REDIS_URL` is set. Otherwise the API process keeps the window in memory. A Redis error uses that same in-memory window. Limits are off when `NODE_ENV=test` unless `RATE_LIMIT_ENFORCE=1`. Each cap can be overridden with the env name in the table. Over the cap is 429 `"Too many requests"`.
+
+| Scope | Env override | Default | Window | Key |
+| --- | --- | --- | --- | --- |
+| `POST /auth/register` | `RATE_LIMIT_AUTH_REGISTER` | 5 | 15 minutes | client address |
+| `POST /auth/login` | `RATE_LIMIT_AUTH_LOGIN` | 10 | 15 minutes | client address |
+| `POST /conversations` and `POST /conversations/:id/messages` | `RATE_LIMIT_MESSAGING` | 30 | 1 minute | caller id |
+| `POST /listings` and `POST /listings/drafts` | `RATE_LIMIT_LISTINGS` | 20 | 1 hour | caller id |
+| `POST /requests/:id/offers` and `POST /requests/offers/:id/counter` | `RATE_LIMIT_OFFERS` | 30 | 1 hour | caller id |
+| `POST /safety/reports` | `RATE_LIMIT_REPORTS` | 10 | 1 hour | caller id |
+
+The client address is the first `X-Forwarded-For` hop, then the socket address. The edge proxy must set that header. A failed login still counts.
+
+Stored free text is passed through `sanitizeText` (markup and control characters removed, then trimmed) on registration names, listings, requests, offers, messages, reviews, community posts and comments, housing and job and service create text, quote notes, and report details.
+
 ## TARGET
 
 These routes are the remainder of the v1 contract. They are not implemented. Paths below supersede older aliases in the previous revision of this file (`POST /listings/:id/save`, `PATCH /offers/:id`, `POST /conversations/:id/read`).
@@ -443,7 +478,7 @@ These routes are the remainder of the v1 contract. They are not implemented. Pat
 
 - `POST /transactions/:id/appointments` — `startsAt`, `locationNote`. The Dashboard meetup cards bind here later.
 - One review per author per transaction (constraint still target). `POST /reviews` and `GET /users/:id/reviews` are implemented. Dashboard does not yet hide a prompt when that list already contains the author's review.
-- Reports, blocks, moderation actions, a notification list, and notification mark-read. Buttons exist on Listing Detail and Profile and only flip local React state. Conversation read state is already `PATCH /conversations/:id/read`. The nav message badge reads `GET /conversations` and does not add `GET /notifications`.
+- A notification list and notification mark-read. Conversation read state is already `PATCH /conversations/:id/read`. The nav message badge reads `GET /conversations` and does not add `GET /notifications`. Reports, blocks, and moderation actions are implemented under Safety.
 
 ### Explicitly out of v1
 
