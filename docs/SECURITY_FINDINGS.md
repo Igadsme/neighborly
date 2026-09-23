@@ -1,6 +1,6 @@
 # Security findings — Sprint 1
 
-Handoff from Sentinel to Forge. Rechecked against `main` at `5d079e8` (offer accept, reviews, and realtime send). That audit pass did not change controllers, gateways, or services.
+Rechecked against `main` at `f9c9ff3` (public listing seller card and `/realtime` JWT handshake). Public listing reads and SF-2 stay **fixed**. This recheck adds regression specs only. It does not change controllers, gateways, or services.
 
 Forge closed the two items that were still open: public listing seller PII, and unauthenticated `/realtime`. Request reads and JWT `sub` mapping were already fixed.
 
@@ -28,7 +28,7 @@ Forge closed the two items that were still open: public listing seller PII, and 
 | | |
 | --- | --- |
 | Severity | Critical (was) |
-| Status | Fixed |
+| Status | Fixed on `main` (`f9c9ff3`) |
 | Owner | Forge |
 | Routes | `GET /api/v1/listings`, `GET /api/v1/listings/:id`, `GET /api/v1/listings/favorites` |
 
@@ -40,7 +40,12 @@ Forge closed the two items that were still open: public listing seller PII, and 
 - `profile.neighborhood`
 - `profile.city`
 
-`passwordHash`, `email`, account status, verification flags, and profile coordinates are not in that select. Those three reads also select listing columns explicitly and omit listing `latitude` / `longitude`. `backend/src/listings/listings.service.spec.ts` asserts the seller query select does not include `passwordHash`.
+`passwordHash`, `email`, account status, verification flags, and profile coordinates are not in that select. Those three reads also select listing columns explicitly and omit listing `latitude` / `longitude`.
+
+Covered by:
+
+- `backend/src/listings/listings.service.spec.ts` — the seller query select does not include `passwordHash`
+- `backend/src/listings/listings.public-http.spec.ts` — the three GET routes return the public seller card. A fixture that still holds `passwordHash`, email, account status, verification flags, last name, bio, and coordinates is absent from those JSON bodies
 
 Favorites stays authenticated. The list and detail routes stay public. Create and update still persist coordinates for the seller; they are not part of these reads.
 
@@ -49,7 +54,7 @@ Favorites stays authenticated. The list and detail routes stay public. Create an
 | | |
 | --- | --- |
 | Severity | High (was) |
-| Status | Fixed |
+| Status | Fixed on `main` (`f9c9ff3`) |
 | Owner | Forge |
 | Channel | Socket.IO namespace `/realtime` (`MessagingGateway`) |
 
@@ -57,11 +62,12 @@ Favorites stays authenticated. The list and detail routes stay public. Create an
 
 The socket user id is JWT `sub`. A client-supplied user id on the handshake or on `conversation.join` is ignored. `conversation.join` (`{ conversationId }` or the id string) joins `conversation:{id}` only after `ConversationParticipant` matches that socket user. `publishMessage` is unchanged: HTTP `sendMessage` still checks the participant before it emits `message.created`.
 
-Covered by `backend/src/messaging/messaging.gateway.spec.ts`:
+Covered by `backend/src/messaging/messaging.gateway.spec.ts` and `backend/src/messaging/messaging.gateway.realtime.spec.ts`:
 
 - handshake and connection without a token are rejected
 - a valid access token is accepted and `userId` is `sub`
 - a non-participant does not join; a forged user id is not used
+- a Socket.IO handshake on namespace `/realtime` returns connect-error for a missing or invalid token, and a connect acknowledgement for a valid access token (`auth.token` or `Authorization: Bearer`)
 
 Manual check, if you want the live handshake:
 
