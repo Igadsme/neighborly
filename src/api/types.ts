@@ -86,8 +86,9 @@ export interface ApiListing {
   pickupAvailable?: boolean
   deliveryAvailable?: boolean
   shippingAvailable?: boolean
+  categoryId?: string
   images?: Array<{ url?: string | null; key?: string | null; objectKey?: string | null }>
-  category?: { name?: string | null; slug?: string | null } | null
+  category?: { id?: string; name?: string | null; slug?: string | null } | null
   seller?: {
     id: string
     profile?: {
