@@ -79,8 +79,33 @@ function listingRoutes(options: {
   favoriteResult?: unknown
   favoriteStatus?: number
   listFails?: boolean
+  messageStatus?: number
+  messageResult?: unknown
+  messageBody?: { current: unknown }
+  urls?: string[]
+  holdMessage?: Promise<void>
 }) {
-  route((url, init) => {
+  route(async (url, init) => {
+    options.urls?.push(url)
+    if (init?.method === "POST" && url.endsWith("/conversations")) {
+      if (options.holdMessage) await options.holdMessage
+      options.messageBody && (options.messageBody.current = init.body ? JSON.parse(String(init.body)) : null)
+      const sent = options.messageBody?.current as { body?: string } | null
+      return json(
+        options.messageResult ?? {
+          conversation: { id: "66666666-6666-4666-8666-666666666666" },
+          message: {
+            id: "77777777-7777-4777-8777-777777777777",
+            conversationId: "66666666-6666-4666-8666-666666666666",
+            senderId: "88888888-8888-4888-8888-888888888888",
+            body: sent?.body ?? "",
+            createdAt: "2026-09-23T18:00:00.000Z",
+          },
+          reused: false,
+        },
+        options.messageStatus ?? 201,
+      )
+    }
     if (init?.method === "POST" && url.includes("/favorite")) {
       return json(options.favoriteResult ?? { saved: true }, options.favoriteStatus ?? 200)
     }
@@ -95,6 +120,12 @@ function listingRoutes(options: {
     }
     return json({ message: "unexpected" }, 500)
   })
+}
+
+async function sendListingMessage() {
+  fireEvent.click(screen.getAllByRole("button", { name: "Message seller" })[0])
+  fireEvent.click(screen.getByRole("button", { name: "Is this still available?" }))
+  fireEvent.click(screen.getByRole("button", { name: /Send message/ }))
 }
 
 afterEach(() => {
@@ -146,9 +177,87 @@ describe("Listing detail", () => {
     expect(send.disabled).toBe(true)
     fireEvent.click(screen.getByRole("button", { name: "Is this still available?" }))
     expect((screen.getByRole("button", { name: /Send message/ }) as HTMLButtonElement).disabled).toBe(false)
-    fireEvent.click(screen.getByRole("button", { name: /Send message/ }))
-    expect(await screen.findByText("Starting a conversation from a listing isn't available yet.")).toBeTruthy()
+  })
+
+  it("persists a live listing message and only then shows the sent state", async () => {
+    const onNavigate = vi.fn()
+    const urls: string[] = []
+    const messageBody = { current: null as unknown }
+    let release: () => void = () => undefined
+    const holdMessage = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    listingRoutes({
+      urls,
+      messageBody,
+      holdMessage,
+      messageResult: {
+        conversation: { id: "66666666-6666-4666-8666-666666666666" },
+        message: {
+          id: "77777777-7777-4777-8777-777777777777",
+          conversationId: "66666666-6666-4666-8666-666666666666",
+          senderId: "88888888-8888-4888-8888-888888888888",
+          body: "Is this still available?",
+          createdAt: "2026-09-23T18:00:00.000Z",
+        },
+        reused: true,
+      },
+    })
+    render(<ListingDetail listingId={listingId} onNavigate={onNavigate} />)
+    expect(await screen.findByRole("button", { name: "Save" })).toBeTruthy()
+    await sendListingMessage()
+    expect(screen.queryByText("Message sent!")).toBeNull()
     expect(onNavigate.mock.calls.some((call) => call[0] === "messages")).toBe(false)
+    release()
+    expect(await screen.findByText("Message sent!")).toBeTruthy()
+    expect(await screen.findByText("Redirecting to messages...")).toBeTruthy()
+    expect(messageBody.current).toEqual({
+      participantId: sellerId,
+      listingId,
+      body: "Is this still available?",
+    })
+    expect(urls.some((url) => url.includes("/notifications"))).toBe(false)
+    expect(urls.some((url) => url.endsWith("/conversations"))).toBe(true)
+    await vi.waitFor(
+      () => {
+        expect(onNavigate).toHaveBeenCalledWith("messages")
+      },
+      { timeout: 2500 },
+    )
+  })
+
+  it("shows sign-in copy when creating a conversation returns 401", async () => {
+    const onNavigate = vi.fn()
+    const urls: string[] = []
+    listingRoutes({
+      urls,
+      messageStatus: 401,
+      messageResult: { message: "Unauthorized" },
+    })
+    render(<ListingDetail listingId={listingId} onNavigate={onNavigate} />)
+    expect(await screen.findByRole("button", { name: "Save" })).toBeTruthy()
+    await sendListingMessage()
+    expect(await screen.findByText("Sign in to continue.")).toBeTruthy()
+    expect(screen.queryByText("Message sent!")).toBeNull()
+    expect(onNavigate.mock.calls.some((call) => call[0] === "messages")).toBe(false)
+    expect(urls.some((url) => url.includes("/notifications"))).toBe(false)
+  })
+
+  it("keeps the modal on a failed create, including when the server would have reused a thread", async () => {
+    const onNavigate = vi.fn()
+    const urls: string[] = []
+    listingRoutes({
+      urls,
+      messageStatus: 500,
+      messageResult: { message: "Conversation create failed", reused: true },
+    })
+    render(<ListingDetail listingId={listingId} onNavigate={onNavigate} />)
+    expect(await screen.findByRole("button", { name: "Save" })).toBeTruthy()
+    await sendListingMessage()
+    expect(await screen.findByText("Conversation create failed")).toBeTruthy()
+    expect(screen.queryByText("Message sent!")).toBeNull()
+    expect(onNavigate.mock.calls.some((call) => call[0] === "messages")).toBe(false)
+    expect(urls.some((url) => url.includes("/notifications"))).toBe(false)
   })
 
   it("falls back to recent listings when the category has no other items", async () => {
@@ -209,6 +318,21 @@ describe("Listing detail", () => {
     render(<ListingDetail listingId="l1" onNavigate={() => undefined} />)
     expect(screen.getAllByText("West Elm Mid-Century Modern Sofa — Excellent Condition").length).toBeGreaterThan(0)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("keeps the local sent state for a fixture listing and does not call the API", async () => {
+    const onNavigate = vi.fn()
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    render(<ListingDetail listingId="l1" onNavigate={onNavigate} />)
+    fireEvent.click(screen.getAllByRole("button", { name: "Message seller" })[0])
+    fireEvent.change(screen.getByPlaceholderText("Ask about the item, availability, or suggest a meetup..."), {
+      target: { value: "Is this still available?" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: /Send message/ }))
+    expect(await screen.findByText("Message sent!")).toBeTruthy()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes("/notifications"))).toBe(false)
   })
 
   it("asks for a listing when no id is selected", () => {
