@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ListingCard, SectionHeader, Badge, Avatar, StarRating, Icon, Button } from '../components/ui'
-import { services, communityPosts, type Listing } from '../data'
-import { api, readError } from '../api/client'
+import { ListingCard, SectionHeader, Badge, Avatar, StarRating, Icon, Button, LoadState } from '../components/ui'
+import { type Listing } from '../data'
+import { api, readStatus } from '../api/client'
 import { listingFromApi, mediaSrc } from '../lib/view'
+import { communityEventCard, communityPostCard, serviceCard, type CommunityEventCard, type CommunityPostCard, type ServiceCard } from '../lib/verticals'
 
 type Page = 'home' | 'explore' | 'categories' | 'map' | 'listing' | 'create' | 'messages' | 'saved' | 'profile' | 'dashboard' | 'housing' | 'services' | 'jobs' | 'community'
 
@@ -19,33 +20,6 @@ const quickCategories = [
   { emoji: '🔧', label: 'Services', active: false },
   { emoji: '💼', label: 'Jobs', active: false },
   { emoji: '🌳', label: 'Community', active: false },
-]
-
-const events = [
-  {
-    title: 'Westside Neighborhood Cleanup',
-    date: 'Sat, Sep 20',
-    time: '9:00 AM',
-    neighborhood: 'Westside',
-    attending: 34,
-    image: 'photo-1566438480900-0609be27a4be'
-  },
-  {
-    title: 'Decatur Book Festival',
-    date: 'Sat–Sun, Sep 21–22',
-    time: '10:00 AM – 5:00 PM',
-    neighborhood: 'Decatur Square',
-    attending: 212,
-    image: 'photo-1481627834876-b7833e8f5570'
-  },
-  {
-    title: 'East ATL Farmer\'s Market',
-    date: 'Every Saturday',
-    time: '8:00 AM – 12:00 PM',
-    neighborhood: 'East Atlanta Village',
-    attending: 88,
-    image: 'photo-1488459716781-31db52582fe9'
-  }
 ]
 
 const suggestedPeople = [
@@ -72,6 +46,12 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
   const [newToday, setNewToday] = useState<Listing[]>([])
   const [listingsLoading, setListingsLoading] = useState(true)
   const [listingsError, setListingsError] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [services, setServices] = useState<ServiceCard[]>([])
+  const [events, setEvents] = useState<CommunityEventCard[]>([])
+  const [posts, setPosts] = useState<CommunityPostCard[]>([])
+  const [verticalsLoading, setVerticalsLoading] = useState(true)
+  const [verticalsError, setVerticalsError] = useState('')
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
@@ -92,10 +72,36 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
         setNewToday(cards.filter((card) => fresh.has(card.id)).slice(0, 4))
       })
       .catch((cause: unknown) => {
-        if (active) setListingsError(readError(cause, 'Listings could not be loaded.'))
+        if (active) setListingsError(readStatus(cause, 'Listings could not be loaded.'))
       })
       .finally(() => {
         if (active) setListingsLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    api.auth
+      .me()
+      .then((me) => {
+        if (active) setFirstName(me.profile?.firstName?.trim() || '')
+      })
+      .catch(() => undefined)
+    Promise.all([api.services.list({ limit: 3 }), api.community.events(), api.community.posts({ limit: 3 })])
+      .then(([serviceRows, eventRows, postRows]) => {
+        if (!active) return
+        setServices(serviceRows.map(serviceCard))
+        setEvents(eventRows.slice(0, 3).map(communityEventCard))
+        setPosts(postRows.map(communityPostCard))
+      })
+      .catch((cause: unknown) => {
+        if (active) setVerticalsError(readStatus(cause, 'Neighborhood picks could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setVerticalsLoading(false)
       })
     return () => {
       active = false
@@ -113,7 +119,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
           <div className="flex items-start justify-between mb-2">
             <div>
               <h1 className="font-display text-2xl md:text-3xl font-semibold text-[#1B2A4A]">
-                {greeting}, <em className="not-italic text-[#2D6A4F]">Gad</em> 👋
+                {greeting}, <em className="not-italic text-[#2D6A4F]">{firstName || 'there'}</em> 👋
               </h1>
               <button className="flex items-center gap-1 text-sm text-[#5C6E8A] mt-1 hover:text-[#2D6A4F] transition-colors">
                 <Icon name="mapPin" size={13} className="text-[#E8694A]" />
@@ -171,8 +177,16 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
         <div className="flex items-center gap-3 p-4 bg-[#D8F3DC] border border-[#74C69D] rounded-2xl mb-8 cursor-pointer hover:bg-[#B7E4C7] transition-colors">
           <span className="text-2xl">🎁</span>
           <div className="flex-1">
-            <p className="font-semibold text-[#1B4332] text-sm">3 new free items near you</p>
-            <p className="text-xs text-[#2D6A4F]">IKEA shelf, potted plants, and more — just posted in your neighborhood</p>
+            <p className="font-semibold text-[#1B4332] text-sm">
+              {listingsLoading
+                ? 'Checking free items near you'
+                : freeListings.length
+                  ? `${freeListings.length} free item${freeListings.length === 1 ? '' : 's'} near you`
+                  : 'No free items posted nearby yet'}
+            </p>
+            <p className="text-xs text-[#2D6A4F]">
+              {freeListings.length ? 'Just posted in your neighborhood' : 'Free listings will show up here when neighbors post them'}
+            </p>
           </div>
           <Icon name="chevronRight" size={16} className="text-[#2D6A4F] flex-shrink-0" />
         </div>
@@ -211,6 +225,11 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
           {/* Recommended for you */}
           <div>
             <SectionHeader title="Recommended for you" subtitle="Based on your interests" action={() => onNavigate('explore')} actionLabel="More" />
+            {listingsLoading ? (
+              <LoadState loading loadingLabel="Loading listings…" />
+            ) : listings.slice(2, 5).length === 0 ? (
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">No recommendations yet.</div>
+            ) : (
             <div className="space-y-3">
               {listings.slice(2, 5).map(listing => (
                 <div key={listing.id} onClick={() => onNavigate('listing', listing.id)} className="flex gap-3 bg-white rounded-2xl border border-[#E8E6DF] p-3 cursor-pointer hover:border-[#2D6A4F]/30 transition-all card-hover">
@@ -228,11 +247,17 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                 </div>
               ))}
             </div>
+            )}
           </div>
 
           {/* Free near you */}
           <div>
             <SectionHeader title="Free near you" subtitle="Give, get, reduce waste" action={() => onNavigate('explore')} actionLabel="More" />
+            {listingsLoading ? (
+              <LoadState loading loadingLabel="Loading listings…" />
+            ) : freeListings.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">No free listings nearby yet.</div>
+            ) : (
             <div className="space-y-3">
               {freeListings.map((listing) => (
                 <div key={listing.id} onClick={() => onNavigate('listing', listing.id)} className="flex gap-3 bg-white rounded-2xl border border-[#E8E6DF] p-3 cursor-pointer hover:border-[#74C69D]/50 transition-all card-hover">
@@ -245,39 +270,58 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                 </div>
               ))}
             </div>
+            )}
           </div>
         </div>
 
         {/* Local Services */}
         <section className="mb-10">
           <SectionHeader title="Local services" subtitle="Trusted providers in your area" action={() => onNavigate('services')} actionLabel="Browse all" />
+          {verticalsLoading ? (
+            <LoadState loading loadingLabel="Loading services…" />
+          ) : verticalsError ? (
+            <LoadState error={verticalsError} loadingLabel="Loading services…" />
+          ) : services.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">No local services yet.</div>
+          ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {services.slice(0, 3).map(svc => (
+            {services.slice(0, 3).map(svc => {
+              const photo = mediaSrc(svc.image, 'w=400&h=300&fit=crop&auto=format')
+              return (
               <div key={svc.id} onClick={() => onNavigate('services')} className="bg-white rounded-2xl border border-[#E8E6DF] overflow-hidden cursor-pointer card-hover">
                 <div className="h-28 overflow-hidden bg-[#F5F4EF]">
-                  <img src={`https://images.unsplash.com/${svc.image}?w=400&h=300&fit=crop&auto=format`} alt={svc.title} className="w-full h-full object-cover" />
+                  {photo && <img src={photo} alt={svc.title} className="w-full h-full object-cover" />}
                 </div>
                 <div className="p-3">
                   <p className="font-semibold text-sm text-[#1B2A4A]">{svc.title}</p>
-                  <p className="text-xs text-[#8A9AB5] mt-0.5">from ${svc.startingPrice}</p>
+                  <p className="text-xs text-[#8A9AB5] mt-0.5">from ${svc.startingPrice.toLocaleString()}</p>
                   <div className="flex items-center justify-between mt-2">
                     <StarRating rating={svc.rating} count={svc.reviews} size="xs" />
                     {svc.backgroundCheck && <Badge variant="green" size="sm">BG Check</Badge>}
                   </div>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
+          )}
         </section>
 
         {/* Community Events */}
         <section className="mb-10">
           <SectionHeader title="Community events" subtitle="What's happening this weekend" action={() => onNavigate('community')} actionLabel="See all" />
+          {verticalsLoading ? (
+            <LoadState loading loadingLabel="Loading events…" />
+          ) : verticalsError ? null : events.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">No community events yet.</div>
+          ) : (
           <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
-            {events.map(event => (
-              <div key={event.title} className="flex-shrink-0 w-64 bg-white rounded-2xl border border-[#E8E6DF] overflow-hidden card-hover cursor-pointer">
+            {events.map(event => {
+              const photo = mediaSrc(event.image, 'w=400&h=200&fit=crop&auto=format')
+              return (
+              <div key={event.id} onClick={() => onNavigate('community')} className="flex-shrink-0 w-64 bg-white rounded-2xl border border-[#E8E6DF] overflow-hidden card-hover cursor-pointer">
                 <div className="h-32 overflow-hidden bg-[#F5F4EF]">
-                  <img src={`https://images.unsplash.com/${event.image}?w=400&h=200&fit=crop&auto=format`} alt={event.title} className="w-full h-full object-cover" />
+                  {photo && <img src={photo} alt={event.title} className="w-full h-full object-cover" />}
                 </div>
                 <div className="p-4">
                   <p className="font-semibold text-sm text-[#1B2A4A] leading-tight">{event.title}</p>
@@ -289,16 +333,23 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                   </div>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
+          )}
         </section>
 
         {/* Community Posts */}
         <section className="mb-10">
           <SectionHeader title="Community discussions" subtitle="What neighbors are talking about" action={() => onNavigate('community')} actionLabel="Join the conversation" />
+          {verticalsLoading ? (
+            <LoadState loading loadingLabel="Loading discussions…" />
+          ) : verticalsError ? null : posts.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">No community discussions yet.</div>
+          ) : (
           <div className="space-y-3">
-            {communityPosts.slice(0, 3).map(post => (
-              <div key={post.id} className="bg-white rounded-2xl border border-[#E8E6DF] p-5 cursor-pointer hover:border-[#2D6A4F]/30 transition-all">
+            {posts.slice(0, 3).map(post => (
+              <div key={post.id} onClick={() => onNavigate('community')} className="bg-white rounded-2xl border border-[#E8E6DF] p-5 cursor-pointer hover:border-[#2D6A4F]/30 transition-all">
                 <div className="flex items-start gap-3">
                   <Avatar src={post.author.avatar} name={post.author.name} size="sm" verified={post.author.verified} />
                   <div className="flex-1">
@@ -319,7 +370,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                     </div>
                     <p className="text-sm text-[#5C6E8A] mt-1 line-clamp-2">{post.body}</p>
                     <div className="flex items-center gap-4 mt-3 text-xs text-[#8A9AB5]">
-                      <span>❤️ {post.reactions.love + post.reactions.like} reactions</span>
+                      <span>❤️ {post.reactions.love + post.reactions.like + post.reactions.wow} reactions</span>
                       <span>💬 {post.replies} replies</span>
                     </div>
                   </div>
@@ -327,6 +378,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
               </div>
             ))}
           </div>
+          )}
         </section>
 
         {/* People to follow */}
@@ -350,11 +402,17 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
         {/* New Today */}
         <section className="mb-10">
           <SectionHeader title="New today" subtitle="Just posted in the last 24 hours" action={() => onNavigate('explore')} actionLabel="See all" />
+          {listingsLoading ? (
+            <LoadState loading loadingLabel="Loading listings…" />
+          ) : newToday.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">Nothing new in the last 24 hours.</div>
+          ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {newToday.map(listing => (
               <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing', listing.id)} compact />
             ))}
           </div>
+          )}
         </section>
 
         {/* Map teaser */}

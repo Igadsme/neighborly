@@ -1,35 +1,28 @@
 import { useEffect, useState } from 'react'
-import { Card, StatCard, Badge, Button, Icon, SectionHeader, TabBar, EmptyState } from '../components/ui'
-import { listings } from '../data'
-import { api, readError } from '../api/client'
-import type { ApiTransaction } from '../api/types'
+import { Card, StatCard, Badge, Button, Icon, SectionHeader, TabBar, EmptyState, LoadState } from '../components/ui'
+import { api, readError, readStatus } from '../api/client'
+import type { ApiConversation, ApiTransaction } from '../api/types'
+import { activityItems, unreadConversations, type ActivityItem } from '../lib/activity'
 import {
   dollars,
   firstName,
   indexOffers,
+  listingFromApi,
   matchesOfferChip,
+  mediaSrc,
   offerBadge,
   offerRowsForUser,
   personName,
   relativeTime,
   type OfferRow,
 } from '../lib/view'
+import type { Listing } from '../data'
 
 type Page = 'create' | 'listing' | 'messages'
 
 interface DashboardProps {
   onNavigate: (p: Page, id?: string) => void
 }
-
-const activeListings = listings.slice(0, 3).map(l => ({
-  ...l,
-  stats: {
-    views: Math.floor(Math.random() * 300 + 50),
-    saves: Math.floor(Math.random() * 40 + 5),
-    messages: Math.floor(Math.random() * 12 + 1),
-    offers: Math.floor(Math.random() * 5),
-  }
-}))
 
 const alertClass = 'rounded-xl border border-[#E8694A]/30 bg-[#FFF5F2] px-4 py-3 text-sm text-[#A63D27]'
 
@@ -45,8 +38,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const [activeTab, setActiveTab] = useState('Overview')
   const [offerChip, setOfferChip] = useState('Received')
   const [userId, setUserId] = useState('')
+  const [profileLabel, setProfileLabel] = useState('Neighbor')
   const [offerRows, setOfferRows] = useState<OfferRow[]>([])
   const [transactions, setTransactions] = useState<ApiTransaction[]>([])
+  const [conversations, setConversations] = useState<ApiConversation[]>([])
+  const [myListings, setMyListings] = useState<Listing[]>([])
   const [offerIndex, setOfferIndex] = useState<ReturnType<typeof indexOffers>>(new Map())
   const [offersLoading, setOffersLoading] = useState(true)
   const [offersError, setOffersError] = useState('')
@@ -67,22 +63,33 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     setOffersError('')
     ;(async () => {
       const me = await api.auth.me()
-      const [summaries, txs] = await Promise.all([
+      const [summaries, txs, convos, listingRows] = await Promise.all([
         api.requests.list(),
         api.transactions.list(),
+        api.conversations.list(),
+        api.listings.list({ limit: 100 }),
       ])
       const details = await Promise.all(
         summaries.filter((request) => request.offers.length > 0).map((request) => api.requests.get(request.id)),
       )
       if (!active) return
+      const name = [me.profile?.firstName, me.profile?.lastName].filter(Boolean).join(' ')
+      const place = me.profile?.neighborhood
       setUserId(me.id)
+      setProfileLabel(place ? `${name || 'Neighbor'} · ${place}` : name || 'Neighbor')
       setTransactions(txs)
+      setConversations(convos)
+      setMyListings(
+        listingRows
+          .filter((row) => row.sellerId === me.id || row.seller?.id === me.id)
+          .map((row) => listingFromApi(row)),
+      )
       setOfferIndex(indexOffers(details))
       setOfferRows(offerRowsForUser(details, me.id))
     })()
       .catch((cause: unknown) => {
         if (!active) return
-        setOffersError(readError(cause, 'Offers could not be loaded.'))
+        setOffersError(readStatus(cause, 'Offers could not be loaded.'))
       })
       .finally(() => {
         if (active) setOffersLoading(false)
@@ -142,6 +149,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       }
     }),
   )
+
+  const activity: ActivityItem[] = activityItems({
+    offers: offerRows,
+    transactions,
+    conversations,
+    userId,
+    titles: new Map(offerRows.map((offer) => [offer.offerId, offer.requestTitle])),
+  })
 
   const setOfferError = (offerId: string, message: string) => {
     setCardErrors((prev) => ({ ...prev, [offerId]: message }))
@@ -225,7 +240,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="font-display text-3xl font-semibold text-[#1B2A4A]">My dashboard</h1>
-            <p className="text-[#8A9AB5] mt-1">Gad Miller · Inman Park</p>
+            <p className="text-[#8A9AB5] mt-1">{profileLabel}</p>
           </div>
           <Button variant="primary" size="sm" onClick={() => onNavigate('create')}>
             <Icon name="plus" size={13} />
@@ -266,10 +281,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              <StatCard label="Active Listings" value="3" sub="2 with offers" icon={<Icon name="tag" size={18} />} color="green" />
-              <StatCard label="Total Views" value="624" sub="This month" icon={<Icon name="eye" size={18} />} color="blue" />
-              <StatCard label="Messages" value="12" sub="4 unread" icon={<Icon name="message" size={18} />} color="coral" />
-              <StatCard label="Earned" value="$1,925" sub="Last 90 days" icon={<Icon name="dollar" size={18} />} color="amber" />
+              <StatCard label="Active Listings" value={offersLoading ? '…' : String(myListings.length)} sub="Published" icon={<Icon name="tag" size={18} />} color="green" />
+              <StatCard label="Total Views" value="—" sub="Not tracked yet" icon={<Icon name="eye" size={18} />} color="blue" />
+              <StatCard label="Messages" value={offersLoading ? '…' : String(conversations.length)} sub={offersLoading ? 'In your inbox' : `${unreadConversations(conversations, userId)} unread`} icon={<Icon name="message" size={18} />} color="coral" />
+              <StatCard label="Earned" value="—" sub="Payments are not connected" icon={<Icon name="dollar" size={18} />} color="amber" />
             </div>
 
             <SectionHeader title="Pending offers" subtitle="Respond within 24 hours to keep your response rate high" />
@@ -380,16 +395,30 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
         {activeTab === 'My Listings' && (
           <div className="space-y-4">
-            {activeListings.map(listing => (
+            {offersLoading ? (
+              <LoadState loading loadingLabel="Loading listings…" />
+            ) : offersError ? (
+              <LoadState error={offersError} loadingLabel="Loading listings…" />
+            ) : myListings.length === 0 ? (
+              <EmptyState
+                title="No listings yet"
+                description="Listings you publish will show up here."
+                action={() => onNavigate('create')}
+                actionLabel="Post a listing"
+                icon={<Icon name="tag" size={24} />}
+              />
+            ) : myListings.map(listing => {
+              const photo = mediaSrc(listing.images[0], 'w=160&h=160&fit=crop&auto=format')
+              return (
               <Card key={listing.id} padding="none">
                 <div className="flex gap-4 p-4">
                   <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 bg-[#F5F4EF] cursor-pointer" onClick={() => onNavigate('listing', listing.id)}>
-                    <img src={`https://images.unsplash.com/${listing.images[0]}?w=160&h=160&fit=crop&auto=format`} alt={listing.title} className="w-full h-full object-cover" />
+                    {photo && <img src={photo} alt={listing.title} className="w-full h-full object-cover" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-1 cursor-pointer hover:text-[#2D6A4F]" onClick={() => onNavigate('listing', listing.id)}>{listing.title}</p>
-                      <span className="font-bold text-[#1B2A4A] flex-shrink-0">${listing.price?.toLocaleString()}</span>
+                      <span className="font-bold text-[#1B2A4A] flex-shrink-0">{listing.isFree ? 'Free' : listing.price == null ? '—' : `$${listing.price.toLocaleString()}`}</span>
                     </div>
                     <div className="flex items-center gap-2 mt-1 mb-3">
                       <Badge variant="green" size="sm">Active</Badge>
@@ -397,10 +426,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     </div>
                     <div className="grid grid-cols-4 gap-2">
                       {[
-                        { label: 'Views', value: listing.stats.views, icon: 'eye', color: 'text-[#4A7FB5]' },
-                        { label: 'Saves', value: listing.stats.saves, icon: 'heart', color: 'text-[#E8694A]' },
-                        { label: 'Messages', value: listing.stats.messages, icon: 'message', color: 'text-[#2D6A4F]' },
-                        { label: 'Offers', value: listing.stats.offers, icon: 'dollar', color: 'text-[#D97706]' },
+                        { label: 'Views', value: '—', icon: 'eye', color: 'text-[#4A7FB5]' },
+                        { label: 'Saves', value: '—', icon: 'heart', color: 'text-[#E8694A]' },
+                        { label: 'Messages', value: '—', icon: 'message', color: 'text-[#2D6A4F]' },
+                        { label: 'Offers', value: '—', icon: 'dollar', color: 'text-[#D97706]' },
                       ].map(stat => (
                         <div key={stat.label} className="bg-[#F5F4EF] rounded-xl p-2 text-center">
                           <Icon name={stat.icon} size={12} className={`mx-auto mb-0.5 ${stat.color}`} />
@@ -411,12 +440,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     </div>
                   </div>
                 </div>
-                {listing.stats.views > 150 && (
-                  <div className="border-t border-[#F5F4EF] px-4 py-3 bg-[#FFFBEB] flex items-center justify-between">
-                    <p className="text-xs text-[#92400E]">💡 High interest! Consider lowering by 10% to close faster.</p>
-                    <button className="text-xs font-semibold text-[#D97706]">Adjust price</button>
-                  </div>
-                )}
                 <div className="border-t border-[#F5F4EF] px-4 py-3 flex gap-2">
                   <Button variant="outline" size="xs" onClick={() => onNavigate('listing', listing.id)}>Edit</Button>
                   <Button variant="ghost" size="xs">Pause</Button>
@@ -424,7 +447,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                   <button className="ml-auto text-xs text-[#C5CCDA] hover:text-[#E8694A] transition-colors">Mark sold</button>
                 </div>
               </Card>
-            ))}
+              )
+            })}
             <button onClick={() => onNavigate('create')} className="w-full py-4 border-2 border-dashed border-[#E8E6DF] rounded-2xl text-sm text-[#8A9AB5] hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-all flex items-center justify-center gap-2">
               <Icon name="plus" size={16} />
               Post a new listing
@@ -492,16 +516,20 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
         {activeTab === 'Activity' && (
           <div className="space-y-3">
-            {[
-              { icon: '💬', text: 'Marcus Johnson sent you a message about West Elm Sofa', time: '10 min ago', type: 'message' },
-              { icon: '💰', text: 'New offer: $650 for iPhone 14 Pro from David C.', time: '1h ago', type: 'offer' },
-              { icon: '👀', text: 'Your West Elm Sofa was viewed 23 times today', time: '2h ago', type: 'view' },
-              { icon: '❤️', text: 'Priya Patel saved your Standing Desk listing', time: '4h ago', type: 'save' },
-              { icon: '⭐', text: 'You received a 5-star review from James Rivera', time: '1d ago', type: 'review' },
-              { icon: '✅', text: 'Transaction completed: Trek Marlin 7 sold for $560', time: '2d ago', type: 'sold' },
-              { icon: '🚀', text: 'Your listing promotion has 3 days remaining', time: '3d ago', type: 'promo' },
-            ].map((item, i) => (
-              <div key={i} className="flex items-start gap-3 p-4 bg-white rounded-2xl border border-[#E8E6DF]">
+            {offersLoading ? (
+              <LoadState loading loadingLabel="Loading activity…" />
+            ) : offersError ? (
+              <LoadState error={offersError} loadingLabel="Loading activity…" />
+            ) : activity.length === 0 ? (
+              <EmptyState
+                title="No activity yet"
+                description="Messages, offers, and exchanges will show up here."
+                action={() => onNavigate('create')}
+                actionLabel="Post a request"
+                icon={<Icon name="trendingUp" size={24} />}
+              />
+            ) : activity.map((item) => (
+              <div key={item.id} className="flex items-start gap-3 p-4 bg-white rounded-2xl border border-[#E8E6DF]">
                 <span className="text-xl flex-shrink-0">{item.icon}</span>
                 <div className="flex-1">
                   <p className="text-sm text-[#1B2A4A]">{item.text}</p>

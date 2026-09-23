@@ -1,6 +1,6 @@
 # Project Status
 
-Neighborly status board. Sprint 2 vertical persistence was added on `main` after `fec3b1e`. Housing, jobs, services, and community now have PostgreSQL tables and Nest routes. The four Figma pages still render `src/data/index.ts`. Wiring them is a separate PR.
+Neighborly status board. Housing, jobs, services, and community pages now call the `/api/v1` routes added in `cfd0db3`. Dashboard and Home no longer render fixture arrays for listings, offers, messages, transactions, reviews, or those verticals. The app is not release-complete. Local `.env`, Compose, and browser e2e on a Mac are still a separate step.
 
 The June Sprint 1 notes below are the handoff from `d0dab1c`. Where they disagree with the "What is running today" list, the running list is the current contract.
 
@@ -9,7 +9,7 @@ The June Sprint 1 notes below are the handoff from `d0dab1c`. Where they disagre
 - **Visual source of truth:** the Figma-generated React screens under `src/pages` and `src/components`. Layout, color, type, and component structure stay as generated.
 - **App shell:** Vite + React 19 + Tailwind CSS v4. Page changes are client state in `src/App.tsx` (`page` ids), not a URL router. That shell stays.
 - **Backend:** NestJS modular monolith under `backend/`, Prisma/PostgreSQL, global prefix `/api/v1`, Swagger at `/docs`.
-- **June Sprint 1 write scope was** `docs/` only. Sprint 2 adds `backend/` persistence for housing, jobs, services, and community, plus the docs that describe those routes. It does not rewrite the Figma pages.
+- **June Sprint 1 write scope was** `docs/` only. Sprint 2 added `backend/` persistence for housing, jobs, services, and community. The wiring pass points the existing Figma pages at those routes. It does not add page ids or a new visual design.
 
 v1 product docs do not add OpenAI, embeddings, or semantic search. Copy already painted into the Figma screens (the Create Listing "AI Review" step, the landing "Scam Detection" line) stays on screen and is not a v1 capability.
 
@@ -40,11 +40,11 @@ Implemented and reachable in code:
 - Messaging: list conversations, list/send messages, mark read, for existing participants. Socket.IO namespace `/realtime` requires a JWT and emits `message.created` after a participant sends.
 - Transactions: list for a participant, status transition through `backend/src/transactions/transaction-state.ts`.
 - Reviews: `POST /reviews` for a participant when the transaction is `COMPLETED`.
-- Housing, jobs, services, community: list/get are public; create, update, and archive require the owner. Jobs apply and save, service quotes (street address hidden until the provider accepts), community reactions, comments, RSVPs, and giveaway claims are implemented. See `docs/API_SPEC.md`.
+- Housing, jobs, services, community: list/get are public; create, update, and archive require the owner. Jobs apply and save, service quotes (street address hidden until the provider accepts), community reactions, comments, RSVPs, and giveaway claims are implemented. See `docs/API_SPEC.md`. The Housing, Jobs, Services, and Community pages call the public lists and the mutations that already have a control (apply, save, quote, post, reaction, RSVP, claim).
 - Health: `GET /api/v1/health`, `GET /api/v1/ready` (Postgres `SELECT 1` only).
-- Local infra: `docker-compose.yml` runs PostGIS 16 and Redis 7. The schema stores latitude/longitude as decimals. There is no geometry column. `pnpm prisma:seed` loads categories plus fixture-shaped rows for the four verticals.
+- Local infra: `docker-compose.yml` runs PostGIS 16 and Redis 7. The schema stores latitude/longitude as decimals. There is no geometry column. `pnpm prisma:seed` loads categories plus fixture-shaped rows for the four verticals. Booting that stack from a local `.env` on a Mac is still a separate step.
 
-Frontend pages that call the API include `App` (session), `Landing` (login), `Onboarding`, `CreateListing`, `SavedItems`, `ListingCard`, and the request/message/review paths on Dashboard and Messages. **Housing, Jobs, Services, and Community still render `src/data/index.ts`.** Home, Explore, and other marketplace screens may still mix fixtures with live listing calls. Do not treat the new vertical APIs as wired UI.
+Frontend pages that call the API include `App` (session), `Landing` (login), `Onboarding`, `CreateListing`, `SavedItems`, `ListingCard`, Dashboard, Messages, Home (listings plus services, events, and posts), Housing, Jobs, Services, and Community. Explore still loads listings and then applies extra filters in the browser. Landing, Categories, Map, Listing Detail (non-UUID ids), and Profile still use `src/data/index.ts` for the surfaces that have no read endpoint. Do not treat this as a finished product.
 
 ## Request-first flow status
 
@@ -57,7 +57,7 @@ The product flow is: post a need, receive offers, compare and counter, message, 
 | Accept / decline | Dashboard and Messages buttons | `POST /api/v1/requests/:id/offers/:offerId/accept` and `.../reject`. Counter: `POST /api/v1/requests/offers/:id/counter`. | Accept opens one conversation and one `ACCEPTED` transaction. |
 | Thread | `messages` | Conversation read/send for an existing participant. Accept creates the thread. `/realtime` requires a JWT. | There is still no standalone create-conversation route. |
 | Complete exchange | Messages progress strip; Dashboard meetups | `GET` + `PATCH /api/v1/transactions/:id/status` | No appointment route. Accept inserts the transaction. |
-| Review | Dashboard "Reviews to complete" cards; Profile reviews tab is read-only fixture | `POST /api/v1/reviews` | Profile reviews list is still fixture text. |
+| Review | Dashboard "Reviews to complete" cards; Profile reviews tab is read-only fixture | `POST /api/v1/reviews` | Profile reviews list is still fixture text. There is no reviews list route. |
 
 State-by-state wiring instructions are in `docs/UX_REQUEST_FLOW_STATES.md`.
 
@@ -68,21 +68,22 @@ State-by-state wiring instructions are in `docs/UX_REQUEST_FLOW_STATES.md`.
 
 Signed-out visitors can open `landing` and `onboarding`. Any other id shows the existing "Sign in to continue" gate. `Navigation` is hidden on `landing` and `onboarding`. `unreadMessages={2}` is hardcoded. The landing page has a fixed "Preview" bar for prototype jumps.
 
-`listing` always renders `listings[0]` from fixtures. Cards navigate to that same screen. There is no selected-id argument.
+`listing` loads `GET /listings/:id` when the selected id is a UUID. Non-UUID navigation still falls back to fixture listings. There is no selected-id route in the URL bar; `App` holds `listingId` in state.
 
 ## Nova handoff
 
 1. Read `docs/DECISIONS.md` before changing behavior.
 2. Wire only the states in `docs/UX_REQUEST_FLOW_STATES.md`. Do not add page ids, routes, or layouts.
 3. Treat `docs/API_SPEC.md` and `docs/DATABASE_DESIGN.md` **IMPLEMENTED** sections as the contract that exists. **TARGET** sections are not permission to pretend the UI is persisted.
-4. Where a control has no endpoint (Accept, Decline, Save draft, review submit, conversation create), keep the control and surface the existing error treatment. Do not flip local fixture state and call it success.
+4. Where a control has no endpoint (Pause, Promote, Mark sold, Save draft, conversation create from a listing, profile follow), keep the control and surface the existing error treatment when a call is attempted. Do not flip local fixture state and call it success.
 5. Leave Figma sample copy and the AI Review step on the Create Listing wizard. Do not call a model.
 
 ## Explicitly not in this status
 
 - No `src/` or `backend/` diff in the June Sprint 1 docs PR.
 - No AI feature work.
-- Map and profile remain fixture screens. Housing, services, jobs, and community now have APIs (`0003_verticals`) and are still fixture screens until the wiring PR. They are mapped in `docs/FRONTEND_BACKEND_MAP.md`.
+- Map, categories, landing marketing cards, and profile remain fixture screens. Housing, services, jobs, and community pages read the APIs from `0003_verticals`. They are mapped in `docs/FRONTEND_BACKEND_MAP.md`.
+- Local `.env`, `docker compose`, and a full browser pass against Postgres on a Mac are not part of this wiring. CI runs frontend `tsc`, Vitest, and `vite build`, plus the existing backend Jest suite.
 
 ## Workspace (T7 Shield)
 
@@ -98,5 +99,5 @@ Signed-out visitors can open `landing` and `onboarding`. Any other id shows the 
 - Path on T7 Shield confirmed; Desktop copy left untouched.
 - Branch `main` after June docs merge; frontend `tsc` + `vite build` pass under Node 22; backend prisma generate, `tsc`, tests, nest build pass.
 - `prisma validate` needs `DATABASE_URL` (expected without local `.env`).
-- Next spine: offer accept/reject → conversation + transaction; then Nova wiring and Sentinel tests.
+- Next spine: offer accept/reject → conversation + transaction is in the API and on Dashboard/Messages. Vertical screens are wired to the same client. Release is not complete; Mac `.env` / Compose / e2e is still separate.
 

@@ -69,7 +69,10 @@ export function listingFromApi(listing: ApiListing, saved = false): Listing {
     city: listing.city ?? "",
     distance: "Nearby",
     postedAt: relativeTime(listing.createdAt),
-    images: listing.images?.map((image) => image.url ?? "").filter(Boolean) ?? [],
+    images:
+      listing.images
+        ?.map((image) => image.url || image.key || image.objectKey || "")
+        .filter(Boolean) ?? [],
     description: listing.description,
     seller: {
       id: listing.seller?.id ?? "unknown",

@@ -1,20 +1,36 @@
 import type {
   AcceptOfferResult,
+  ApiCommunityEvent,
+  ApiCommunityPost,
   ApiConversation,
   ApiFavorite,
+  ApiGiveaway,
+  ApiHousing,
+  ApiJob,
+  ApiJobApplication,
+  ApiJobSave,
   ApiListing,
+  ApiLostFound,
   ApiMessage,
   ApiRequestDetail,
   ApiRequestSummary,
   ApiSavedSearch,
+  ApiServiceListing,
+  ApiServiceQuote,
   ApiTransaction,
   AuthResponse,
+  CommunityPostInput,
+  CommunityPostQuery,
   CurrentUser,
+  HousingQuery,
+  JobQuery,
   ListingInput,
   ListingQuery,
   NeedRequestInput,
   OfferInput,
   ReviewInput,
+  ServiceQuery,
+  ServiceQuoteInput,
 } from "./types"
 
 const API_URL = (
@@ -65,6 +81,21 @@ function readMessage(message: string | string[] | undefined, status: number) {
 
 export function readError(cause: unknown, fallback: string) {
   return cause instanceof ApiError && cause.message ? cause.message : fallback
+}
+
+export function readStatus(cause: unknown, fallback: string) {
+  if (cause instanceof ApiError && cause.status === 401) return "Sign in to continue."
+  return readError(cause, fallback)
+}
+
+function queryString(query: object) {
+  const params = new URLSearchParams()
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === "") return
+    params.set(key, String(value))
+  })
+  const text = params.toString()
+  return text ? `?${text}` : ""
 }
 
 export const api = {
@@ -209,5 +240,57 @@ export const api = {
       request<unknown>(`/conversations/${conversationId}/read`, {
         method: "PATCH",
       }),
+  },
+  housing: {
+    list: (query: HousingQuery = {}) =>
+      request<ApiHousing[]>(`/housing${queryString(query)}`),
+  },
+  jobs: {
+    list: (query: JobQuery = {}) => request<ApiJob[]>(`/jobs${queryString(query)}`),
+    saved: () => request<ApiJobSave[]>("/jobs/saved"),
+    applications: () => request<ApiJobApplication[]>("/jobs/applications"),
+    apply: (id: string, message?: string) =>
+      request<unknown>(`/jobs/${id}/apply`, {
+        method: "POST",
+        body: JSON.stringify(message ? { message } : {}),
+      }),
+    toggleSave: (id: string) =>
+      request<{ saved: boolean }>(`/jobs/${id}/save`, { method: "POST" }),
+  },
+  services: {
+    list: (query: ServiceQuery = {}) =>
+      request<ApiServiceListing[]>(`/services${queryString(query)}`),
+    requestQuote: (id: string, input: ServiceQuoteInput) =>
+      request<ApiServiceQuote>(`/services/${id}/quotes`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+  },
+  community: {
+    posts: (query: CommunityPostQuery = {}) =>
+      request<ApiCommunityPost[]>(`/community/posts${queryString(query)}`),
+    createPost: (input: CommunityPostInput) =>
+      request<ApiCommunityPost>("/community/posts", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    react: (id: string, emoji: "👍" | "❤️" | "😮") =>
+      request<ApiCommunityPost>(`/community/posts/${id}/reactions`, {
+        method: "POST",
+        body: JSON.stringify({ emoji }),
+      }),
+    events: () => request<ApiCommunityEvent[]>("/community/events"),
+    rsvp: (id: string) =>
+      request<{ attending: boolean; attendingCount: number }>(
+        `/community/events/${id}/rsvp`,
+        { method: "POST" },
+      ),
+    lostFound: () => request<ApiLostFound[]>("/community/lost-found"),
+    giveaways: () => request<ApiGiveaway[]>("/community/giveaways"),
+    claim: (id: string) =>
+      request<{ claimed: boolean; giveaway: ApiGiveaway }>(
+        `/community/giveaways/${id}/claim`,
+        { method: "POST" },
+      ),
   },
 }

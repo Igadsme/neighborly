@@ -217,7 +217,7 @@ Guarded. `POST /reviews`
 
 ### Housing, jobs, services, and community
 
-These four modules persist the screens in `src/pages/Housing.tsx`, `Jobs.tsx`, `Services.tsx`, and `Community.tsx`. The pages still read `src/data/index.ts`. `src/api/client.ts` does not call these routes yet.
+These four modules persist the screens in `src/pages/Housing.tsx`, `Jobs.tsx`, `Services.tsx`, and `Community.tsx`. Those pages call the routes through `src/api/client.ts`.
 
 Public list and get responses use the same public card as listings (`id` plus profile `displayName`, `firstName`, `neighborhood`, `city`). They do not include `passwordHash`, `email`, `lastName`, profile coordinates, or the row's `latitude` / `longitude`. Coordinates are write-only: create and update accept them, and no read returns them.
 
