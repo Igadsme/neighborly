@@ -52,6 +52,10 @@
     "seed": "tsx prisma/seed.ts"
   },
   "pnpm": {
+    "overrides": {
+      "multer": "2.4.0",
+      "deepmerge-ts": "8.0.2"
+    },
     "onlyBuiltDependencies": [
       "@prisma/client",
       "@prisma/engines",
