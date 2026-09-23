@@ -29,6 +29,41 @@ export class RequestsService {
     })
   }
 
+  listOffers(userId: string, scope: 'received' | 'sent' | 'all' = 'received') {
+    const publishedRequest = { status: 'PUBLISHED' as const, deletedAt: null }
+    const where =
+      scope === 'sent'
+        ? { offererId: userId, request: publishedRequest }
+        : scope === 'all'
+          ? {
+              request: publishedRequest,
+              OR: [{ offererId: userId }, { request: { requesterId: userId } }]
+            }
+          : { request: { ...publishedRequest, requesterId: userId } }
+
+    return this.prisma.requestOffer.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        offerer: { select: publicUserSelect },
+        items: { include: { listing: { select: { id: true, title: true, priceCents: true, status: true } } } },
+        request: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            budgetCents: true,
+            status: true,
+            mode: true,
+            createdAt: true,
+            category: true,
+            requester: { select: publicUserSelect }
+          }
+        }
+      }
+    })
+  }
+
   list() {
     return this.prisma.needRequest.findMany({
       where: { status: 'PUBLISHED', deletedAt: null },

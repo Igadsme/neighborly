@@ -14,6 +14,7 @@ import type {
   ApiMessage,
   ApiRequestDetail,
   ApiRequestSummary,
+  ApiScopedOffer,
   ApiSavedSearch,
   ApiServiceListing,
   ApiServiceQuote,
@@ -157,6 +158,13 @@ export const api = {
         method: "POST",
         body: JSON.stringify(input),
       }),
+    saveDraft: (input: ListingInput) =>
+      request<ApiListing>("/listings/drafts", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    publish: (id: string) =>
+      request<ApiListing>(`/listings/${id}/publish`, { method: "POST" }),
     get: (id: string) => request<ApiListing>(`/listings/${id}`),
     update: (id: string, input: Partial<ListingInput>) =>
       request<unknown>(`/listings/${id}`, {
@@ -179,10 +187,14 @@ export const api = {
   },
   categories: {
     list: () =>
-      request<Array<{ id: string; name: string; slug: string }>>("/categories"),
+      request<
+        Array<{ id: string; name: string; slug: string; listingCount?: number }>
+      >("/categories"),
   },
   requests: {
     list: () => request<ApiRequestSummary[]>("/requests"),
+    offers: (scope: "received" | "sent" | "all" = "received") =>
+      request<ApiScopedOffer[]>(`/requests/offers?scope=${scope}`),
     get: (id: string) => request<ApiRequestDetail>(`/requests/${id}`),
     create: (input: NeedRequestInput) =>
       request<unknown>("/requests", {

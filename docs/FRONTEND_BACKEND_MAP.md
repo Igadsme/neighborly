@@ -17,11 +17,11 @@ v1 wiring does not add AI calls. The Create Listing AI Review step and landing s
 | Signed-out gate | Any page other than `landing` and `onboarding` shows the existing house empty state with two buttons, both navigating to `landing` | None |
 | `Landing` sign-in dialog | Email and password, inline error, disabled while submitting | `POST /auth/login` |
 | `Onboarding` | Multi-step account setup. Email path persists. | `POST /auth/register`, then `PATCH /users/me/onboarding` |
-| `CreateListing` | Loads categories. Publish persists a need. Step-5 alert and "Publishing..." already exist. | `GET /categories`, `POST /requests` |
+| `CreateListing` | Loads categories. Publish persists a marketplace listing. Save draft persists `DRAFT` and returns home. Step-5 alert, "Publishing...", and "Saving..." stay in the existing wizard. AI Review copy is still local. | `GET /categories`, `POST /listings`, `POST /listings/drafts` |
 | `SavedItems` | Saved Listings and Saved Searches tabs load, error, and empty for real. | `GET /listings/favorites`, `GET /listings/saved-searches`, `POST /listings/:id/favorite` |
 | `ListingCard` heart | Calls the API unless the parent passes `onSavedChange` | `POST /listings/:id/favorite` |
 | `HomeFeed` listings, services, events, discussions | Nearby, recommended, free, and new-today rails use listings. Service, event, and discussion strips use the vertical APIs. Loading, empty, and error cards match Dashboard. 401 copy is "Sign in to continue." | `GET /listings`, `GET /services`, `GET /community/events`, `GET /community/posts`, `GET /users/me` for the greeting name |
-| `Dashboard` offers, reviews, meetups, my listings, activity, message count | Offers, reviews, and meetups were already live. My Listings filters `GET /listings` to the signed-in seller. Activity is built from offers, conversations, and transactions. Header name comes from `GET /users/me`. | `GET /users/me`, `GET /requests`, `GET /requests/:id`, `GET /transactions`, `GET /conversations`, `GET /listings`, `POST /reviews`, offer accept/reject |
+| `Dashboard` offers, reviews, meetups, my listings, activity, message count | Offers, reviews, and meetups were already live. The Offers tab and Overview pending cards now load the caller's offers (`scope=all` so Received and Sent chips still work). My Listings filters `GET /listings` to the signed-in seller. Activity is built from offers, conversations, and transactions. Header name comes from `GET /users/me`. | `GET /users/me`, `GET /requests/offers?scope=all`, `GET /transactions`, `GET /conversations`, `GET /listings`, `POST /reviews`, offer accept/reject |
 | `Housing` | Rent/sale, type, beds, max price (dollars converted to `maxPriceCents`), pets, furnished, verified, utilities, and sort are query params. Cards format `priceCents / 100`. Owner name is the public card. Distance is the label "Nearby" because miles are not stored. | `GET /housing` |
 | `Jobs` | Type, level, workplace, and search hit `GET /jobs`. Salary stays the display string. Apply and bookmark call the job routes. Saved and applied ids come from the caller's lists. A 401 on those private reads leaves the public list up and shows "Sign in to continue." | `GET /jobs`, `GET /jobs/saved`, `GET /jobs/applications`, `POST /jobs/:id/apply`, `POST /jobs/:id/save` |
 | `Services` | Category pills and the search field call `GET /services`. "Request quote" posts notes, preferred date/time, and address. The requester's success panel is the existing "Request sent!" block. The provider still does not see the street address until accept, which this page does not perform. | `GET /services`, `POST /services/:id/quotes` |
@@ -31,9 +31,9 @@ v1 wiring does not add AI calls. The Create Listing AI Review step and landing s
 
 ### Create Listing payload that actually leaves the browser
 
-`categoryId`, `title` (AI-suggested title string if "Apply suggestion" was clicked, still just a string), `description`, `mode`, and `budgetCents` when the dollar field is filled (`Math.round(dollars * 100)`).
+`categoryId`, `title` (AI-suggested title string if "Apply suggestion" was clicked, still just a string), `description`, `condition`, `pickupAvailable`, `deliveryAvailable`, and `priceCents` when the dollar field is filled (`Math.round(dollars * 100)`). Publish calls `POST /listings`. Save draft calls `POST /listings/drafts` with the same body.
 
-Not sent: photos, tags, shipping, coordinates, condition, the AI panels. `api.listings.create` is on the client and is not called by this wizard.
+Not sent: photos, tags, shipping, coordinates, listing-type card, and the AI panels. Those panels stay on screen. `POST /requests` is not called by this wizard.
 
 ### Saved Items behaviors that are not the API
 
@@ -61,14 +61,14 @@ These controls and copy do not have an endpoint. They stay on screen and are not
 
 | Page id | File | What the screen shows today | Fixtures | Target module when wired | Notes for Nova |
 | --- | --- | --- | --- | --- | --- |
-| `landing` | `Landing.tsx` | Marketing, search field, sign-in dialog, Preview bar | Inline feature copy and `listings` slice | Auth is implemented | Search box is not hooked to `GET /listings`. Preview "Home feed" calls `signIn()` in React only. |
+| `landing` | `Landing.tsx` | Marketing, search field, sign-in dialog | Inline feature copy and `listings` slice | Auth is implemented | Search box is not hooked to `GET /listings`. Header Browse, Services, Housing, Jobs, and "Post a Listing" open the sign-in dialog. Get started and "Create an account" still open onboarding. There is no preview bar that enters the app without a session. |
 | `onboarding` | `Onboarding.tsx` | Method, profile, neighborhood, interests, notifications | Step copy | Implemented | Google and Apple tiles are not providers. |
 | `home` | `HomeFeed.tsx` | Category chips, listing rails, services, community strip | Suggested people only | Listings, services, events, and posts are implemented | Follow has no endpoint. Cards go to `listing` with the real id. |
 | `explore` | `Explore.tsx` | Query, filters, grid/list, suggestions | Suggestions are inline. Results come from `GET /listings`, then extra filters run in the browser | Target filters beyond `query` | "Save alert" toggles `alertSaved` locally. Map control navigates to `map`. |
-| `categories` | `Categories.tsx` | Category grid and a listing strip | `listings` plus inline category metadata | `GET /categories` then listings | Some tiles navigate to `housing`, `services`, `jobs`, `community`. |
+| `categories` | `Categories.tsx` | Category grid and a listing strip | Featured strip still uses `listings`. Housing, Jobs, Services, and Vehicles counts come from the API. Other tile counts stay the original labels. | `GET /categories` (`listingCount`) | Loading, empty, and error lines sit under the existing header. Some tiles navigate to `housing`, `services`, `jobs`, `community`. |
 | `map` | `MapDiscovery.tsx` | Map-style discovery | `mapListings` and `listings` | Target geo query | No Mapbox call. `MAPBOX_TOKEN` may be empty. |
 | `listing` | `ListingDetail.tsx` | API listing when the id is a UUID, otherwise a fixture match | `listings` for non-UUID ids and related cards | `GET /listings/:id` is called for UUID ids | Save uses the favorite route for UUID ids. Message "send" sets local success and routes to `messages`. |
-| `create` | `CreateListing.tsx` | Six-step wizard | Sample desk copy is the initial state | Publishes a need with `POST /requests`. `api.listings.create` is not called by this wizard. | Composer states: [UX_REQUEST_FLOW_STATES.md](./UX_REQUEST_FLOW_STATES.md). |
+| `create` | `CreateListing.tsx` | Six-step wizard | Sample desk copy is the initial state | Publishes with `POST /listings`. Save draft uses `POST /listings/drafts`. | AI Review stays decorative. Composer states: [UX_REQUEST_FLOW_STATES.md](./UX_REQUEST_FLOW_STATES.md). |
 | `messages` | `Messages.tsx` | Two panes, filters, thread, offer card, safety banner | None for the thread list | Conversations API | Accept, decline, counter, and send are wired when a thread exists. |
 | `saved` | `SavedItems.tsx` | Three tabs | API for the first two tabs | Price history and alert delivery are target | Keep the empty/error cards when extending. |
 | `profile` | `Profile.tsx` | Always `sellers[0]` (Marcus) | `sellers`, `listings`, inline `reviews` | `GET /users/:id/profile`, reviews list | Follow and report are local. Reviews tab is read-only. |
@@ -84,7 +84,7 @@ These controls and copy do not have an endpoint. They stay on screen and are not
 
 - `landing` + `onboarding` → `User`, `Profile`, `UserPreference`, `NotificationPreference`. Verification and device-session tables are target and have no screen of their own.
 - `explore`, `home`, `categories`, `listing` → `Listing` and `Category`. Favorites → `Favorite`. Explore's save-alert control → `SavedSearch` (endpoint exists; Explore does not call it).
-- `create` → `NeedRequest` (`POST /requests` only). Listing create exists on the client and is unused by this wizard.
+- `create` → `Listing` (`POST /listings` and `POST /listings/drafts`). Need requests stay on `POST /requests` for other callers. The wizard does not post a need.
 - Offer cards on `dashboard` and `messages` → `RequestOffer`, `CounterOffer`, `OfferItem`.
 - `messages` bubbles → `Conversation`, `Message`.
 - Dashboard meetups and the Messages progress strip → `Transaction`, `TransactionMilestone`, `Appointment`.
@@ -103,6 +103,6 @@ These controls and copy do not have an endpoint. They stay on screen and are not
 
 ### Request flow already on these screens
 
-Dashboard and Messages already call request list/get, counter, accept, reject, conversations, transactions, and review create. Do not put fixture people back on those tabs. The remaining gaps are the TARGET controls above. The Create Listing wizard publishes a need with `POST /requests`. `api.listings.create` remains on the client and is not called by that wizard.
+Dashboard loads caller-scoped offers with `GET /requests/offers?scope=all`, then accept, reject, conversations, transactions, and review create. Messages still uses request list/get, counter, accept, and reject. Do not put fixture people back on those tabs. The remaining gaps are the TARGET controls above. The Create Listing wizard publishes a listing, not a need. This map is not a release-complete claim.
 
 Client methods to reuse, not rewrite: `api.requests.create`, `api.requests.list`, `api.requests.counterOffer`, `api.conversations.*`, `api.transactions.list`, `api.transactions.transition`, `api.housing.list`, `api.jobs.*`, `api.services.list`, `api.services.requestQuote`, `api.community.*`.

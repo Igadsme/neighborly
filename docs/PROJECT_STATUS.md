@@ -34,9 +34,9 @@ Implemented and reachable in code:
 
 - Auth: `POST /api/v1/auth/register`, `POST /api/v1/auth/login` (Argon2, JWT access token only).
 - Session read: `GET /api/v1/users/me`. Onboarding write: `PATCH /api/v1/users/me/onboarding`.
-- Categories: `GET /api/v1/categories` (seed list in `backend/prisma/seed.ts`).
-- Listings: list, get, create (always `PUBLISHED`), owner update, owner archive, favorite toggle, favorites list, saved searches.
-- Requests: public list and get, authenticated create (always `PUBLISHED`), create offer, counter, accept, and reject. Accept creates one conversation and one `ACCEPTED` transaction.
+- Categories: `GET /api/v1/categories` (seed list in `backend/prisma/seed.ts`), plus `listingCount` for published listings.
+- Listings: list, get (drafts hidden), create (`PUBLISHED`), `POST /listings/drafts`, `POST /listings/:id/publish`, owner update, owner archive, favorite toggle, favorites list, saved searches. `ListingStatus.DRAFT` was already in `0001_init`; this pass did not add a migration.
+- Requests: public list and get, authenticated create (always `PUBLISHED`), `GET /requests/offers` (`scope` `received` by default, plus `sent` and `all`), create offer, counter, accept, and reject. Accept creates one conversation and one `ACCEPTED` transaction.
 - Messaging: list conversations, list/send messages, mark read, for existing participants. Socket.IO namespace `/realtime` requires a JWT and emits `message.created` after a participant sends.
 - Transactions: list for a participant, status transition through `backend/src/transactions/transaction-state.ts`.
 - Reviews: `POST /reviews` for a participant when the transaction is `COMPLETED`.
@@ -44,7 +44,7 @@ Implemented and reachable in code:
 - Health: `GET /api/v1/health`, `GET /api/v1/ready` (Postgres `SELECT 1` only).
 - Local infra: `docker-compose.yml` runs PostGIS 16 and Redis 7. The schema stores latitude/longitude as decimals. There is no geometry column. `pnpm prisma:seed` loads categories plus fixture-shaped rows for the four verticals. Booting that stack from a local `.env` on a Mac is still a separate step.
 
-Frontend pages that call the API include `App` (session), `Landing` (login), `Onboarding`, `CreateListing`, `SavedItems`, `ListingCard`, Dashboard, Messages, Home (listings plus services, events, and posts), Housing, Jobs, Services, and Community. Explore still loads listings and then applies extra filters in the browser. Landing, Categories, Map, Listing Detail (non-UUID ids), and Profile still use `src/data/index.ts` for the surfaces that have no read endpoint. Do not treat this as a finished product.
+Frontend pages that call the API include `App` (session), `Landing` (login), `Onboarding`, `CreateListing` (`POST /listings` and draft save), `Categories` (`GET /categories`), `SavedItems`, `ListingCard`, Dashboard (`GET /requests/offers?scope=all`), Messages, Home (listings plus services, events, and posts), Housing, Jobs, Services, and Community. Explore still loads listings and then applies extra filters in the browser. Categories still uses fixture cards for the featured strip and the tiles that have no matching category name. Map, Listing Detail (non-UUID ids), and Profile still use `src/data/index.ts` for the surfaces that have no read endpoint. Do not treat this as a finished product.
 
 ## Request-first flow status
 
@@ -52,8 +52,8 @@ The product flow is: post a need, receive offers, compare and counter, message, 
 
 | Step | UI that already exists | API that already exists | Gap Nova must not invent a screen for |
 | --- | --- | --- | --- |
-| Compose and publish a request | `create` → `src/pages/CreateListing.tsx` wizard | `POST /api/v1/requests` (the page calls `api.requests.create`) | No draft route. |
-| See offers | `dashboard` Offers tab and Overview pending cards; `messages` offer card | `GET /api/v1/requests` and `GET /api/v1/requests/:id` (offers include amount, message, and the offerer public card) | List is still every published request, not requester-scoped. |
+| Compose and publish a listing | `create` → `src/pages/CreateListing.tsx` wizard | `POST /api/v1/listings` and `POST /api/v1/listings/drafts` | The wizard does not post a need. AI Review is still copy only. |
+| See offers | `dashboard` Offers tab and Overview pending cards; `messages` offer card | Dashboard: `GET /api/v1/requests/offers?scope=all`. Messages still uses `GET /api/v1/requests` and `GET /api/v1/requests/:id`. | Public request list is still every published request. |
 | Accept / decline | Dashboard and Messages buttons | `POST /api/v1/requests/:id/offers/:offerId/accept` and `.../reject`. Counter: `POST /api/v1/requests/offers/:id/counter`. | Accept opens one conversation and one `ACCEPTED` transaction. |
 | Thread | `messages` | Conversation read/send for an existing participant. Accept creates the thread. `/realtime` requires a JWT. | There is still no standalone create-conversation route. |
 | Complete exchange | Messages progress strip; Dashboard meetups | `GET` + `PATCH /api/v1/transactions/:id/status` | No appointment route. Accept inserts the transaction. |
@@ -66,7 +66,7 @@ State-by-state wiring instructions are in `docs/UX_REQUEST_FLOW_STATES.md`.
 
 `src/App.tsx` page ids, in order: `landing`, `onboarding`, `home`, `explore`, `categories`, `map`, `listing`, `create`, `messages`, `saved`, `profile`, `dashboard`, `housing`, `services`, `jobs`, `community`.
 
-Signed-out visitors can open `landing` and `onboarding`. Any other id shows the existing "Sign in to continue" gate. `Navigation` is hidden on `landing` and `onboarding`. `unreadMessages={2}` is hardcoded. The landing page has a fixed "Preview" bar for prototype jumps.
+Signed-out visitors can open `landing` and `onboarding`. Any other id shows the existing "Sign in to continue" gate. `Navigation` is hidden on `landing` and `onboarding`. `unreadMessages={2}` is hardcoded. Landing header Browse, Services, Housing, Jobs, and "Post a Listing" open the sign-in dialog. They do not jump into signed-in pages. Get started still opens onboarding. Login still calls `POST /auth/login`.
 
 `listing` loads `GET /listings/:id` when the selected id is a UUID. Non-UUID navigation still falls back to fixture listings. There is no selected-id route in the URL bar; `App` holds `listingId` in state.
 
@@ -82,7 +82,8 @@ Signed-out visitors can open `landing` and `onboarding`. Any other id shows the 
 
 - No `src/` or `backend/` diff in the June Sprint 1 docs PR.
 - No AI feature work.
-- Map, categories, landing marketing cards, and profile remain fixture screens. Housing, services, jobs, and community pages read the APIs from `0003_verticals`. They are mapped in `docs/FRONTEND_BACKEND_MAP.md`.
+- Map, landing marketing cards, the categories featured strip, and profile remain fixture screens. The categories grid reads `GET /categories` for counts on Housing, Jobs, Services, and Vehicles. Housing, services, jobs, and community pages read the APIs from `0003_verticals`. They are mapped in `docs/FRONTEND_BACKEND_MAP.md`.
+- This board is not a release-complete claim. Docker Compose, migrate, seed, and signed-in browser e2e were not run for this pass.
 - Local `.env`, `docker compose`, and a full browser pass against Postgres on a Mac are not part of this wiring. CI runs frontend `tsc`, Vitest, and `vite build`, plus the existing backend Jest suite.
 
 ## Workspace (T7 Shield)
