@@ -1,0 +1,6 @@
+Desktop 4.92.0
+Client 29.8.0 Server 29.8.0
+Docker Compose version v5.5.1
+v22.23.2
+10.34.3
+arm64

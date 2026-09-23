@@ -1,0 +1,2 @@
+{"file":".env","jwtLen":58,"jwtOk":true,"databaseUrlMatch":true,"corsOrigin":"http://localhost:8443","viteApiUrl":"http://localhost:3000/api/v1","nodeEnv":"development","port":"3000"}
+{"file":"backend/.env","jwtLen":58,"jwtOk":true,"databaseUrlMatch":true,"corsOrigin":"http://localhost:8443","viteApiUrl":"http://localhost:3000/api/v1","nodeEnv":"development","port":"3000"}

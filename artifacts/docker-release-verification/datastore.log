@@ -1,0 +1,6 @@
+=== pg_isready ===
+/var/run/postgresql:5432 - accepting connections
+pg_isready_exit:0
+=== redis ping ===
+PONG
+redis_exit:0

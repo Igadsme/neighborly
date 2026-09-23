@@ -1,0 +1,438 @@
+{
+  "apiBase": "http://127.0.0.1:3001/api/v1",
+  "finishedAt": "2026-09-23T19:10:18.418Z",
+  "failed": false,
+  "steps": [
+    {
+      "step": "health",
+      "method": "GET",
+      "path": "/health",
+      "status": 200,
+      "ok": true,
+      "expectStatus": [
+        200,
+        201
+      ],
+      "started": "2026-09-23T19:10:18.053Z",
+      "body": {
+        "status": "ok",
+        "service": "neighborly-api",
+        "timestamp": "2026-09-23T19:10:18.081Z"
+      }
+    },
+    {
+      "step": "ready",
+      "method": "GET",
+      "path": "/ready",
+      "status": 200,
+      "ok": true,
+      "expectStatus": [
+        200,
+        201
+      ],
+      "started": "2026-09-23T19:10:18.086Z",
+      "body": {
+        "status": "ready",
+        "dependencies": {
+          "postgres": "up"
+        }
+      }
+    },
+    {
+      "step": "login-requester",
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 201,
+      "ok": true,
+      "expectStatus": [
+        200,
+        201
+      ],
+      "started": "2026-09-23T19:10:18.090Z",
+      "body": {
+        "user": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "email": "seed.marcus@example.com"
+        },
+        "accessToken": "[redacted]"
+      }
+    },
+    {
+      "step": "login-offerer",
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 201,
+      "ok": true,
+      "expectStatus": [
+        200,
+        201
+      ],
+      "started": "2026-09-23T19:10:18.226Z",
+      "body": {
+        "user": {
+          "id": "10000000-0000-4000-8000-000000000002",
+          "email": "seed.priya@example.com"
+        },
+        "accessToken": "[redacted]"
+      }
+    },
+    {
+      "step": "actors",
+      "ok": true,
+      "requester": {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "email": "seed.marcus@example.com",
+        "how": "login"
+      },
+      "offerer": {
+        "id": "10000000-0000-4000-8000-000000000002",
+        "email": "seed.priya@example.com",
+        "how": "login"
+      }
+    },
+    {
+      "step": "list-categories",
+      "method": "GET",
+      "path": "/categories",
+      "status": 200,
+      "ok": true,
+      "expectStatus": [
+        200,
+        201
+      ],
+      "started": "2026-09-23T19:10:18.275Z",
+      "body": [
+        {
+          "id": "09c564d6-0521-471a-b090-eed16a1a5c3b",
+          "name": "Art & Collectibles",
+          "slug": "art-collectibles",
+          "listingCount": 0
+        },
+        {
+          "id": "757aaad1-efc8-49cc-8a93-766303b89802",
+          "name": "Books & Media",
+          "slug": "books-media",
+          "listingCount": 0
+        },
+        {
+          "id": "72e280e7-6e0e-46bf-81d5-3b80b4993656",
+          "name": "Clothing & Accessories",
+          "slug": "clothing-accessories",
+          "listingCount": 0
+        },
+        {
+          "id": "18a5b53d-5bb9-46bb-b1d9-d3f32ed6b7fd",
+          "name": "Electronics",
+          "slug": "electronics",
+          "listingCount": 0
+        },
+        {
+          "id": "4d101bae-c2bf-4f1b-8026-936e3c565757",
+          "name": "Furniture",
+          "slug": "furniture",
+          "listingCount": 0
+        },
+        {
+          "id": "59179644-c211-40e3-866a-d55e9e9715ed",
+          "name": "Home & Garden",
+          "slug": "home-garden",
+          "listingCount": 0
+        },
+        {
+          "id": "2838a775-16bc-4f09-909f-979a354eb9c5",
+          "name": "Housing",
+          "slug": "housing",
+          "listingCount": 0
+        },
+        {
+          "id": "e5fb7249-b479-4e19-a3db-91f9edc5b261",
+          "name": "Jobs",
+          "slug": "jobs",
+          "listingCount": 0
+        },
+        {
+          "id": "86500a58-0dc8-4be5-ac88-78d96809da90",
+          "name": "Musical Instruments",
+          "slug": "musical-instruments",
+          "listingCount": 0
+        },
+        {
+          "id": "536c0ca7-29e5-4430-91c0-a629c9e5f353",
+          "name": "Other",
+          "slug": "other",
+          "listingCount": 0
+        },
+        {
+          "id": "f20a2008-9aab-4b73-8a98-705d93ace976",
+          "name": "Services",
+          "slug": "services",
+          "listingCount": 0
+        },
+        {
+          "id": "d716f7fe-6c15-4f57-80ce-7edc0d7f180f",
+          "name": "Sports & Outdoors",
+          "slug": "sports-outdoors",
+          "listingCount": 0
+        },
+        {
+          "id": "0a2f1883-6ac5-459f-9d8e-a7433cf8ad9f",
+          "name": "Tools & Equipment",
+          "slug": "tools-equipment",
+          "listingCount": 0
+        },
+        {
+          "id": "f06de81f-2e9f-4576-82d9-d1b2cb86b2a5",
+          "name": "Toys & Games",
+          "slug": "toys-games",
+          "listingCount": 0
+        },
+        {
+          "id": "09020fba-3c0b-4b8e-a78b-5238d7f1a478",
+          "name": "Vehicles",
+          "slug": "vehicles",
+          "listingCount": 0
+        }
+      ]
+    },
+    {
+      "step": "pick-category",
+      "ok": true,
+      "categoryId": "09c564d6-0521-471a-b090-eed16a1a5c3b",
+      "categoryName": "Art & Collectibles"
+    },
+    {
+      "step": "publish-request",
+      "method": "POST",
+      "path": "/requests",
+      "status": 201,
+      "ok": true,
+      "expectStatus": [
+        201,
+        200
+      ],
+      "started": "2026-09-23T19:10:18.313Z",
+      "body": {
+        "id": "1c5d533b-df92-4ac9-91d3-c553407c8fc6",
+        "requesterId": "10000000-0000-4000-8000-000000000001",
+        "categoryId": "09c564d6-0521-471a-b090-eed16a1a5c3b",
+        "title": "Docker gate need 1790190618090",
+        "description": "Local Docker verification request. Not a production listing.",
+        "budgetCents": 2500,
+        "latitude": null,
+        "longitude": null,
+        "radiusMiles": 10,
+        "deadline": null,
+        "urgency": null,
+        "mode": "BUY",
+        "status": "PUBLISHED",
+        "createdAt": "2026-09-23T19:10:18.316Z",
+        "updatedAt": "2026-09-23T19:10:18.316Z",
+        "deletedAt": null
+      }
+    },
+    {
+      "step": "create-offer",
+      "method": "POST",
+      "path": "/requests/1c5d533b-df92-4ac9-91d3-c553407c8fc6/offers",
+      "status": 201,
+      "ok": true,
+      "expectStatus": [
+        201,
+        200
+      ],
+      "started": "2026-09-23T19:10:18.331Z",
+      "body": {
+        "id": "7f62e41a-0c76-4800-8028-d5d3c3e0427c",
+        "requestId": "1c5d533b-df92-4ac9-91d3-c553407c8fc6",
+        "offererId": "10000000-0000-4000-8000-000000000002",
+        "amountCents": 2000,
+        "message": "I can take this on this week.",
+        "status": "PENDING",
+        "createdAt": "2026-09-23T19:10:18.337Z",
+        "updatedAt": "2026-09-23T19:10:18.337Z",
+        "items": []
+      }
+    },
+    {
+      "step": "accept-offer",
+      "method": "POST",
+      "path": "/requests/1c5d533b-df92-4ac9-91d3-c553407c8fc6/offers/7f62e41a-0c76-4800-8028-d5d3c3e0427c/accept",
+      "status": 201,
+      "ok": true,
+      "expectStatus": [
+        200,
+        201
+      ],
+      "started": "2026-09-23T19:10:18.345Z",
+      "body": {
+        "conversation": {
+          "id": "a5323028-98de-4cb2-8307-b3175edb7715",
+          "createdAt": "2026-09-23T19:10:18.367Z",
+          "updatedAt": "2026-09-23T19:10:18.367Z"
+        },
+        "transaction": {
+          "id": "84a5f430-62bf-4573-a91b-18792416290d",
+          "conversationId": "a5323028-98de-4cb2-8307-b3175edb7715",
+          "offerId": "7f62e41a-0c76-4800-8028-d5d3c3e0427c",
+          "status": "ACCEPTED",
+          "createdAt": "2026-09-23T19:10:18.370Z",
+          "updatedAt": "2026-09-23T19:10:18.370Z"
+        }
+      }
+    },
+    {
+      "step": "accept-ids",
+      "ok": true,
+      "requestId": "1c5d533b-df92-4ac9-91d3-c553407c8fc6",
+      "offerId": "7f62e41a-0c76-4800-8028-d5d3c3e0427c",
+      "conversationId": "a5323028-98de-4cb2-8307-b3175edb7715",
+      "transactionId": "84a5f430-62bf-4573-a91b-18792416290d",
+      "transactionStatus": "ACCEPTED"
+    },
+    {
+      "step": "message-requester",
+      "method": "POST",
+      "path": "/conversations/a5323028-98de-4cb2-8307-b3175edb7715/messages",
+      "status": 201,
+      "ok": true,
+      "expectStatus": [
+        200,
+        201
+      ],
+      "started": "2026-09-23T19:10:18.375Z",
+      "body": {
+        "id": "dd74b283-98d7-429c-9198-fca7c236fc22",
+        "conversationId": "a5323028-98de-4cb2-8307-b3175edb7715",
+        "senderId": "10000000-0000-4000-8000-000000000001",
+        "body": "Thanks, I accept. When can you start?",
+        "createdAt": "2026-09-23T19:10:18.381Z"
+      }
+    },
+    {
+      "step": "message-offerer",
+      "method": "POST",
+      "path": "/conversations/a5323028-98de-4cb2-8307-b3175edb7715/messages",
+      "status": 201,
+      "ok": true,
+      "expectStatus": [
+        200,
+        201
+      ],
+      "started": "2026-09-23T19:10:18.385Z",
+      "body": {
+        "id": "60a74876-30c5-4821-a8c4-7ee6a865c46f",
+        "conversationId": "a5323028-98de-4cb2-8307-b3175edb7715",
+        "senderId": "10000000-0000-4000-8000-000000000002",
+        "body": "I can start tomorrow morning.",
+        "createdAt": "2026-09-23T19:10:18.389Z"
+      }
+    },
+    {
+      "step": "reject-direct-completed",
+      "method": "PATCH",
+      "path": "/transactions/84a5f430-62bf-4573-a91b-18792416290d/status",
+      "status": 400,
+      "ok": true,
+      "expectStatus": [
+        400
+      ],
+      "started": "2026-09-23T19:10:18.391Z",
+      "body": {
+        "message": "Invalid transaction transition: ACCEPTED -> COMPLETED",
+        "error": "Bad Request",
+        "statusCode": 400
+      }
+    },
+    {
+      "step": "status-scheduled",
+      "method": "PATCH",
+      "path": "/transactions/84a5f430-62bf-4573-a91b-18792416290d/status",
+      "status": 200,
+      "ok": true,
+      "expectStatus": [
+        200
+      ],
+      "started": "2026-09-23T19:10:18.394Z",
+      "body": {
+        "id": "84a5f430-62bf-4573-a91b-18792416290d",
+        "conversationId": "a5323028-98de-4cb2-8307-b3175edb7715",
+        "offerId": "7f62e41a-0c76-4800-8028-d5d3c3e0427c",
+        "status": "SCHEDULED",
+        "createdAt": "2026-09-23T19:10:18.370Z",
+        "updatedAt": "2026-09-23T19:10:18.398Z"
+      }
+    },
+    {
+      "step": "status-in_progress",
+      "method": "PATCH",
+      "path": "/transactions/84a5f430-62bf-4573-a91b-18792416290d/status",
+      "status": 200,
+      "ok": true,
+      "expectStatus": [
+        200
+      ],
+      "started": "2026-09-23T19:10:18.400Z",
+      "body": {
+        "id": "84a5f430-62bf-4573-a91b-18792416290d",
+        "conversationId": "a5323028-98de-4cb2-8307-b3175edb7715",
+        "offerId": "7f62e41a-0c76-4800-8028-d5d3c3e0427c",
+        "status": "IN_PROGRESS",
+        "createdAt": "2026-09-23T19:10:18.370Z",
+        "updatedAt": "2026-09-23T19:10:18.405Z"
+      }
+    },
+    {
+      "step": "status-completed",
+      "method": "PATCH",
+      "path": "/transactions/84a5f430-62bf-4573-a91b-18792416290d/status",
+      "status": 200,
+      "ok": true,
+      "expectStatus": [
+        200
+      ],
+      "started": "2026-09-23T19:10:18.407Z",
+      "body": {
+        "id": "84a5f430-62bf-4573-a91b-18792416290d",
+        "conversationId": "a5323028-98de-4cb2-8307-b3175edb7715",
+        "offerId": "7f62e41a-0c76-4800-8028-d5d3c3e0427c",
+        "status": "COMPLETED",
+        "createdAt": "2026-09-23T19:10:18.370Z",
+        "updatedAt": "2026-09-23T19:10:18.411Z"
+      }
+    },
+    {
+      "step": "submit-review",
+      "method": "POST",
+      "path": "/reviews",
+      "status": 201,
+      "ok": true,
+      "expectStatus": [
+        200,
+        201
+      ],
+      "started": "2026-09-23T19:10:18.413Z",
+      "body": {
+        "id": "77d856fa-9a97-4d18-bf2b-56ee072c35f8",
+        "transactionId": "84a5f430-62bf-4573-a91b-18792416290d",
+        "authorId": "10000000-0000-4000-8000-000000000001",
+        "subjectId": "10000000-0000-4000-8000-000000000002",
+        "rating": 5,
+        "body": "Docker gate review. Local fixture only.",
+        "createdAt": "2026-09-23T19:10:18.416Z"
+      }
+    },
+    {
+      "step": "loop-complete",
+      "ok": true,
+      "requestId": "1c5d533b-df92-4ac9-91d3-c553407c8fc6",
+      "offerId": "7f62e41a-0c76-4800-8028-d5d3c3e0427c",
+      "conversationId": "a5323028-98de-4cb2-8307-b3175edb7715",
+      "transactionId": "84a5f430-62bf-4573-a91b-18792416290d",
+      "reviewId": "77d856fa-9a97-4d18-bf2b-56ee072c35f8",
+      "messageIds": [
+        "dd74b283-98d7-429c-9198-fca7c236fc22",
+        "60a74876-30c5-4821-a8c4-7ee6a865c46f"
+      ]
+    }
+  ]
+}
