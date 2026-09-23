@@ -1,0 +1,5 @@
+
+> neighborly-api@1.0.0 prisma:seed /Volumes/T7 Shield/Projects/neighborly/backend
+> tsx prisma/seed.ts
+
+seed_exit:0

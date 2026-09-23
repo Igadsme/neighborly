@@ -12,6 +12,8 @@ vite.config.*.timestamp-*
 *-debug.log*
 logs/
 *.log
+# Keep the Docker gate command output in the repo. Secrets stay out of these files.
+!artifacts/docker-release-verification/*.log
 .claude-replay.*
 .tmp-*
 /.figma/design-context/
