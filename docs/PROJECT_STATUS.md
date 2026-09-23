@@ -1,5 +1,7 @@
 # Project Status
 
+**23 Sep 2026 — Phase 7 prep.** Production is not launched and not deployed. The preparation package is `docs/PHASE_7_PROD_PREP.md`. Product Owner approval is still required before any deploy or announcement. Staging QA (P0/P1 = 0) is `docs/PHASE_6_STAGING_QA.md`.
+
 Neighborly status board. Housing, jobs, services, and community pages call the `/api/v1` routes added in `cfd0db3`. `1f38563` points those pages, plus Home and Dashboard, at the APIs with loading, empty, error, and 401 states. Dashboard and Home no longer render fixture arrays for listings, offers, messages, transactions, reviews, or those verticals. The app is not release-complete. `docs/RELEASE_CHECKLIST.md` Section B records the offer, message, and review wiring that is in this tree. Section E (local `.env`, Compose, migrate, seed, Node 22 on the Mac, signed-in e2e) stays unchecked: Docker Desktop is not installed on the Mac, and that e2e was not run.
 
 The June Sprint 1 notes below are the handoff from `d0dab1c`. Where they disagree with the "What is running today" list, the running list is the current contract.
