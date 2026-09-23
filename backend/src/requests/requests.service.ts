@@ -1,19 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
-import { OfferStatus, Prisma, TransactionStatus } from '@prisma/client'
+import { OfferStatus, TransactionStatus } from '@prisma/client'
+import { publicUserSelect } from '../common/public-user.select'
 import { PrismaService } from '../prisma/prisma.service'
 import { CounterOfferDto, CreateOfferDto, CreateRequestDto } from './dto'
-
-const publicUserSelect = {
-  id: true,
-  profile: {
-    select: {
-      displayName: true,
-      firstName: true,
-      neighborhood: true,
-      city: true
-    }
-  }
-} satisfies Prisma.UserSelect
 
 const negotiableOfferStatuses: readonly OfferStatus[] = [OfferStatus.PENDING, OfferStatus.COUNTERED]
 
