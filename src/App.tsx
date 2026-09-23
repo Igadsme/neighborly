@@ -206,7 +206,9 @@ export default function App() {
 
         {page === "jobs" && isSignedIn && <Jobs />}
 
-        {page === "community" && isSignedIn && <Community />}
+        {page === "community" && isSignedIn && (
+          <Community onNavigate={navigate as any} />
+        )}
 
         {/* Redirect to sign in if accessing signed-in pages without auth */}
         {!isSignedIn && page !== "landing" && page !== "onboarding" && (

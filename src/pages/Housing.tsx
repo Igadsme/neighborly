@@ -7,7 +7,7 @@ import { housingCard, type HousingCard } from '../lib/verticals'
 type Page = 'map' | 'messages'
 
 interface HousingProps {
-  onNavigate: (p: Page) => void
+  onNavigate: (p: Page, id?: string) => void
 }
 
 export default function Housing({ onNavigate }: HousingProps) {
@@ -25,6 +25,8 @@ export default function Housing({ onNavigate }: HousingProps) {
   const [rows, setRows] = useState<HousingCard[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [actionNote, setActionNote] = useState('')
+  const [messagingId, setMessagingId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -57,6 +59,26 @@ export default function Housing({ onNavigate }: HousingProps) {
       active = false
     }
   }, [listingType, type, minBeds, maxPrice, pets, furnished, verifiedOnly, utilitiesIncluded, sort, searchNonce])
+
+  const messageOwner = async (property: HousingCard) => {
+    if (!property.ownerId) {
+      setActionNote('This listing has no contact yet.')
+      return
+    }
+    setMessagingId(property.id)
+    setActionNote('')
+    try {
+      const result = await api.conversations.create({
+        participantId: property.ownerId,
+        body: `Hi, I'm interested in "${property.title}".`,
+      })
+      onNavigate('messages', result.conversation.id)
+    } catch (cause: unknown) {
+      setActionNote(readStatus(cause, 'Unable to message this neighbor.'))
+    } finally {
+      setMessagingId(null)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-24 md:pb-0">
@@ -184,7 +206,7 @@ export default function Housing({ onNavigate }: HousingProps) {
           </select>
         </div>
 
-        <InlineAlert message={error} />
+        <InlineAlert message={error || actionNote} />
 
         {loading ? (
           <LoadState loading loadingLabel="Loading homes…" />
@@ -215,7 +237,11 @@ export default function Housing({ onNavigate }: HousingProps) {
                       {property.verified && <Badge variant="green">✓ Verified</Badge>}
                     </div>
                     {/* Save */}
-                    <button className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-sm">
+                    <button
+                      onClick={(event) => { event.stopPropagation(); setActionNote("Saving homes isn't available yet.") }}
+                      className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-sm"
+                      aria-label="Save home"
+                    >
                       <Icon name="heart" size={14} className="stroke-[#5C6E8A]" />
                     </button>
                     {/* Available */}
@@ -283,8 +309,8 @@ export default function Housing({ onNavigate }: HousingProps) {
                         </div>
                       </div>
                       <div className="flex gap-1.5">
-                        <button onClick={e => { e.stopPropagation(); onNavigate('messages') }} className="text-xs font-semibold text-[#2D6A4F] bg-[#F0FBF3] px-3 py-1.5 rounded-lg hover:bg-[#D8F3DC] transition-colors">Message</button>
-                        <button className="text-xs font-semibold text-[#4A7FB5] bg-[#DDEEFF] px-3 py-1.5 rounded-lg hover:bg-[#90BEE5]/30 transition-colors">Tour</button>
+                        <button disabled={messagingId === property.id} onClick={e => { e.stopPropagation(); void messageOwner(property) }} className="text-xs font-semibold text-[#2D6A4F] bg-[#F0FBF3] px-3 py-1.5 rounded-lg hover:bg-[#D8F3DC] transition-colors disabled:opacity-40">{messagingId === property.id ? 'Sending...' : 'Message'}</button>
+                        <button onClick={e => { e.stopPropagation(); setActionNote("Tour requests aren't available yet.") }} className="text-xs font-semibold text-[#4A7FB5] bg-[#DDEEFF] px-3 py-1.5 rounded-lg hover:bg-[#90BEE5]/30 transition-colors">Tour</button>
                       </div>
                     </div>
                   </div>
@@ -310,7 +336,7 @@ export default function Housing({ onNavigate }: HousingProps) {
               <p className="font-semibold text-[#1B2A4A]">Commute time filter</p>
               <p className="text-sm text-[#5C6E8A]">Filter homes by commute time to your workplace. Set your destination to see which neighborhoods work best.</p>
             </div>
-            <Button variant="soft" size="sm">Set up commute</Button>
+            <Button variant="soft" size="sm" onClick={() => setActionNote("Commute filtering isn't available yet.")}>Set up commute</Button>
           </div>
         </div>
       </div>

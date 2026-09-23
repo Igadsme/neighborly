@@ -5,20 +5,20 @@ import { mediaSrc } from '../lib/view'
 import { serviceCard, type ServiceCard } from '../lib/verticals'
 
 interface ServicesProps {
-  onNavigate: (p: 'messages') => void
+  onNavigate: (p: 'messages', id?: string) => void
 }
 
 const serviceCategories = [
-  { emoji: '🧹', label: 'Cleaning', count: 24 },
-  { emoji: '📦', label: 'Moving', count: 12 },
-  { emoji: '📚', label: 'Tutoring', count: 18 },
-  { emoji: '🔧', label: 'Repair', count: 31 },
-  { emoji: '📷', label: 'Photography', count: 9 },
-  { emoji: '🌱', label: 'Lawn Care', count: 15 },
-  { emoji: '💻', label: 'Tech Help', count: 11 },
-  { emoji: '🏋️', label: 'Fitness', count: 8 },
-  { emoji: '🎨', label: 'Design', count: 14 },
-  { emoji: '🍳', label: 'Cooking', count: 6 },
+  { emoji: '🧹', label: 'Cleaning' },
+  { emoji: '📦', label: 'Moving' },
+  { emoji: '📚', label: 'Tutoring' },
+  { emoji: '🔧', label: 'Repair' },
+  { emoji: '📷', label: 'Photography' },
+  { emoji: '🌱', label: 'Lawn Care' },
+  { emoji: '💻', label: 'Tech Help' },
+  { emoji: '🏋️', label: 'Fitness' },
+  { emoji: '🎨', label: 'Design' },
+  { emoji: '🍳', label: 'Cooking' },
 ]
 
 export default function Services({ onNavigate }: ServicesProps) {
@@ -35,8 +35,23 @@ export default function Services({ onNavigate }: ServicesProps) {
   const [bookingError, setBookingError] = useState('')
   const [sending, setSending] = useState(false)
   const [rows, setRows] = useState<ServiceCard[]>([])
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [actionNote, setActionNote] = useState('')
+  const [messagingId, setMessagingId] = useState<string | null>(null)
+  const [providerOpen, setProviderOpen] = useState(false)
+  const [providerTitle, setProviderTitle] = useState('')
+  const [providerBusiness, setProviderBusiness] = useState('')
+  const [providerDescription, setProviderDescription] = useState('')
+  const [providerCategory, setProviderCategory] = useState('Cleaning')
+  const [providerPrice, setProviderPrice] = useState('')
+  const [providerLocation, setProviderLocation] = useState('')
+  const [providerAvailability, setProviderAvailability] = useState('')
+  const [providerError, setProviderError] = useState('')
+  const [providerSending, setProviderSending] = useState(false)
+  const [providerSent, setProviderSent] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -49,7 +64,13 @@ export default function Services({ onNavigate }: ServicesProps) {
         limit: 100,
       })
       .then((list) => {
-        if (active) setRows(list.map(serviceCard))
+        if (!active) return
+        setRows(list.map(serviceCard))
+        if (!activeCategory && !query.trim()) {
+          const next: Record<string, number> = {}
+          for (const row of list) next[row.category] = (next[row.category] ?? 0) + 1
+          setCategoryCounts(next)
+        }
       })
       .catch((cause: unknown) => {
         if (active) setError(readStatus(cause, 'Services could not be loaded.'))
@@ -60,7 +81,23 @@ export default function Services({ onNavigate }: ServicesProps) {
     return () => {
       active = false
     }
-  }, [activeCategory, query])
+  }, [activeCategory, query, reloadKey])
+
+  const messageProvider = async (svc: ServiceCard) => {
+    setMessagingId(svc.id)
+    setActionNote('')
+    try {
+      const result = await api.conversations.create({
+        participantId: svc.ownerId,
+        body: `Hi, I'm interested in "${svc.title}".`,
+      })
+      onNavigate('messages', result.conversation.id)
+    } catch (cause: unknown) {
+      setActionNote(readStatus(cause, 'Unable to message this provider.'))
+    } finally {
+      setMessagingId(null)
+    }
+  }
 
   const openBooking = (svc: ServiceCard) => {
     setBookingService(svc)
@@ -97,6 +134,45 @@ export default function Services({ onNavigate }: ServicesProps) {
     } catch (cause: unknown) {
       setBookingError(readStatus(cause, 'Unable to send this quote request.'))
       setSending(false)
+    }
+  }
+
+  const publishService = async () => {
+    const dollars = Number(providerPrice)
+    if (providerTitle.trim().length < 3 || providerBusiness.trim().length < 2 || providerDescription.trim().length < 10) {
+      setProviderError('Add a title, business name, and a description of at least 10 characters.')
+      return
+    }
+    if (!Number.isFinite(dollars) || dollars < 0) {
+      setProviderError('Enter a starting price.')
+      return
+    }
+    if (providerLocation.trim().length < 2 || providerAvailability.trim().length < 2) {
+      setProviderError('Add a location and availability.')
+      return
+    }
+    setProviderSending(true)
+    setProviderError('')
+    try {
+      await api.services.create({
+        title: providerTitle.trim(),
+        businessName: providerBusiness.trim(),
+        description: providerDescription.trim(),
+        category: providerCategory,
+        startingPriceCents: Math.round(dollars * 100),
+        location: providerLocation.trim(),
+        availability: providerAvailability.trim(),
+      })
+      setProviderSent(true)
+      window.setTimeout(() => {
+        setProviderOpen(false)
+        setProviderSent(false)
+        setProviderSending(false)
+        setReloadKey((key) => key + 1)
+      }, 1200)
+    } catch (cause: unknown) {
+      setProviderError(readStatus(cause, 'Unable to publish this service.'))
+      setProviderSending(false)
     }
   }
 
@@ -143,7 +219,7 @@ export default function Services({ onNavigate }: ServicesProps) {
               className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all ${activeCategory === cat.label ? 'bg-[#2D6A4F] text-white border-[#2D6A4F]' : 'bg-white text-[#5C6E8A] border-[#E8E6DF] hover:border-[#2D6A4F]/30'}`}
             >
               {cat.emoji} {cat.label}
-              <span className={`text-xs ${activeCategory === cat.label ? 'text-white/70' : 'text-[#C5CCDA]'}`}>({cat.count})</span>
+              <span className={`text-xs ${activeCategory === cat.label ? 'text-white/70' : 'text-[#C5CCDA]'}`}>({categoryCounts[cat.label] ?? 0})</span>
             </button>
           ))}
         </div>
@@ -182,7 +258,11 @@ export default function Services({ onNavigate }: ServicesProps) {
                       </div>
                     )}
                     <div className="absolute top-3 right-3">
-                      <button className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm">
+                      <button
+                        onClick={() => setActionNote("Saving services isn't available yet.")}
+                        className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm"
+                        aria-label="Save service"
+                      >
                         <Icon name="heart" size={14} className="stroke-[#5C6E8A]" />
                       </button>
                     </div>
@@ -222,10 +302,11 @@ export default function Services({ onNavigate }: ServicesProps) {
                       </div>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => onNavigate('messages')}
-                          className="text-xs font-semibold text-[#5C6E8A] bg-[#F5F4EF] px-3 py-2 rounded-xl hover:bg-[#EEF0F5] transition-colors"
+                          disabled={messagingId === svc.id}
+                          onClick={() => void messageProvider(svc)}
+                          className="text-xs font-semibold text-[#5C6E8A] bg-[#F5F4EF] px-3 py-2 rounded-xl hover:bg-[#EEF0F5] transition-colors disabled:opacity-40"
                         >
-                          Message
+                          {messagingId === svc.id ? 'Sending...' : 'Message'}
                         </button>
                         <Button variant="primary" size="sm" onClick={() => openBooking(svc)}>
                           Request quote
@@ -243,8 +324,9 @@ export default function Services({ onNavigate }: ServicesProps) {
         <div className="mt-10 bg-gradient-to-r from-[#FDE8E0] to-[#FFF5F2] border border-[#E8694A]/20 rounded-3xl p-8 text-center">
           <div className="text-4xl mb-3">🔧</div>
           <h2 className="font-display text-2xl font-semibold text-[#1B2A4A] mb-2">Offer your services on Neighborly</h2>
-          <p className="text-[#5C6E8A] mb-5 max-w-md mx-auto">Join hundreds of local providers earning from their skills. Set your own rates, choose your schedule, work with neighbors you trust.</p>
-          <Button variant="secondary" size="lg">Become a provider →</Button>
+          <p className="text-[#5C6E8A] mb-5 max-w-md mx-auto">List a service neighbors can request. Set your own rate, location, and availability.</p>
+          <InlineAlert message={actionNote} />
+          <Button variant="secondary" size="lg" onClick={() => { setProviderError(''); setProviderSent(false); setProviderOpen(true) }}>Become a provider →</Button>
         </div>
       </div>
 
@@ -320,6 +402,42 @@ export default function Services({ onNavigate }: ServicesProps) {
                 <InlineAlert message={bookingError} />
                 <Button variant="primary" size="lg" fullWidth disabled={sending} onClick={() => void sendRequest()}>
                   {sending ? 'Sending...' : 'Send request →'}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {providerOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 animate-fade-in-up">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display text-xl font-semibold text-[#1B2A4A]">Become a provider</h3>
+              <button onClick={() => setProviderOpen(false)} className="w-8 h-8 rounded-full bg-[#F5F4EF] flex items-center justify-center">
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+            {providerSent ? (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-3">🎉</div>
+                <p className="font-semibold text-[#1B2A4A]">Service published</p>
+                <p className="text-sm text-[#8A9AB5]">Neighbors can request a quote.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <input value={providerTitle} onChange={(event) => setProviderTitle(event.target.value)} placeholder="Service title" className="w-full h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm" />
+                <input value={providerBusiness} onChange={(event) => setProviderBusiness(event.target.value)} placeholder="Business name" className="w-full h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm" />
+                <select value={providerCategory} onChange={(event) => setProviderCategory(event.target.value)} className="w-full h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm">
+                  {serviceCategories.map((cat) => <option key={cat.label}>{cat.label}</option>)}
+                </select>
+                <textarea value={providerDescription} onChange={(event) => setProviderDescription(event.target.value)} rows={3} placeholder="What do you offer?" className="w-full p-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm resize-none" />
+                <input value={providerPrice} onChange={(event) => setProviderPrice(event.target.value)} placeholder="Starting price in dollars" className="w-full h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm" />
+                <input value={providerLocation} onChange={(event) => setProviderLocation(event.target.value)} placeholder="Location" className="w-full h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm" />
+                <input value={providerAvailability} onChange={(event) => setProviderAvailability(event.target.value)} placeholder="Availability" className="w-full h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm" />
+                <InlineAlert message={providerError} />
+                <Button variant="primary" size="lg" fullWidth disabled={providerSending} onClick={() => void publishService()}>
+                  {providerSending ? 'Publishing...' : 'Publish service'}
                 </Button>
               </div>
             )}

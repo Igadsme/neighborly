@@ -286,7 +286,6 @@ export default function Categories({ onNavigate }: CategoriesProps) {
         {/* Popular by neighborhood */}
         <section>
           <SectionHeader title="Popular in your neighborhoods" subtitle="What Inman Park and nearby areas are buying and selling" />
-          {hoodError && <p className="text-sm text-[#A63D27] mb-3" role="alert">{hoodError}</p>}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {['Inman Park', 'Decatur', 'Midtown', 'Grant Park', 'Little Five Points', 'Buckhead', 'East Atlanta', 'Westside'].map((hood, i) => (
               <button
