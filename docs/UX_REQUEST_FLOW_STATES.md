@@ -295,7 +295,7 @@ Empty inbox (`GET /conversations` returns `[]`): hide the thread pane the way th
 | `action` | navigate `dashboard` |
 | `icon` | `<Icon name="message" size={24} />` |
 
-Do not create a conversation from the header plus button. That plus button stays without a handler until `POST /conversations` exists.
+Do not create a conversation from the header plus button. `POST /conversations` is for Listing Detail message send. That plus button stays without a handler.
 
 Send, for a real conversation id: `api.conversations.send`. On success, append the returned message into the existing bubble list (`msg-bubble-sent` / `msg-bubble-recv` stay). On failure, leave the draft text and show the safety-banner slot with the alert colors from 1.3 instead of the yellow scam banner.
 

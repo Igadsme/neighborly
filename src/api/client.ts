@@ -22,6 +22,8 @@ import type {
   AuthResponse,
   CommunityPostInput,
   CommunityPostQuery,
+  CreateConversationInput,
+  CreateConversationResult,
   CurrentUser,
   HousingQuery,
   JobQuery,
@@ -246,6 +248,11 @@ export const api = {
       }),
   },
   conversations: {
+    create: (input: CreateConversationInput) =>
+      request<CreateConversationResult>("/conversations", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
     list: () => request<ApiConversation[]>("/conversations"),
     messages: (conversationId: string) =>
       request<ApiMessage[]>(`/conversations/${conversationId}/messages`),

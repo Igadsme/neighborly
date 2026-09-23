@@ -181,13 +181,54 @@ All guarded. Caller must already be a `ConversationParticipant` or the service t
 | Method | Path | Behavior |
 | --- | --- | --- |
 | `GET` | `/conversations` | Caller's conversations, `updatedAt` desc. Includes participants with profile and the latest message. |
+| `POST` | `/conversations` | Create or reuse a pairwise thread and write the first message. See the body and rules below. |
 | `GET` | `/conversations/:id/messages` | Messages ascending by `createdAt`. |
 | `POST` | `/conversations/:id/messages` | Body `{ "body": "min length 1" }`. Persists the message, then `publishMessage` emits `message.created` on `/realtime` room `conversation:{id}`. A non-participant is 403 and nothing is published. |
 | `PATCH` | `/conversations/:id/read` | Sets that participant's `lastReadAt`. |
 
-`MessagingGateway` listens on namespace `/realtime`. `publishMessage` emits `message.created` to `conversation:{id}` after a participant sends a message. The gateway does not authenticate handshakes or join those rooms.
+`POST /conversations` body:
 
-Not implemented: create conversation, typing, attachments, read receipts per message. Listing detail does not add `POST /conversations`. Sending a message from a live listing stays in the painted modal and does not persist a thread or open Messages as if the send succeeded.
+```json
+{
+  "participantId": "22222222-2222-4222-8222-222222222222",
+  "body": "Is this still available?",
+  "listingId": "33333333-3333-4333-8333-333333333333"
+}
+```
+
+`participantId` is the other user (UUID). `body` is a string, trimmed, minimum length 1. `listingId` is optional and is not stored. There is no `listingId` column on `Conversation`.
+
+Rules:
+
+- Same `AuthGuard` as the other conversation routes. Missing or invalid JWT is 401.
+- `participantId` equal to the caller is 400 `"You cannot message yourself"`.
+- Unknown user, `deletedAt` set, or `UserStatus.DELETED` is 404 `"User not found"`. Any other non-`ACTIVE` status is 400 `"This person cannot receive messages"`.
+- When `listingId` is present: missing, `deletedAt` set, or `ListingStatus.DELETED` is 404 `"Listing not found"`. `DRAFT` is 400 `"This listing is not available"`. `PUBLISHED`, `SOLD`, and `ARCHIVED` (when not deleted) are allowed. If `participantId` is not that listing's `sellerId`, the response is 403 `"You can only message the seller of this listing"`.
+- Dedupe: load the newest conversation (`updatedAt` desc) whose participants are exactly the caller and `participantId`. A thread that also includes anyone else is left alone. If that pairwise thread exists, reuse it and do not insert another `Conversation`. Offer-accept threads with those two people are reused. Then the first message is written with the same path as `POST /conversations/:id/messages` (trimmed body, `Message` row, `Conversation.updatedAt`, `publishMessage`).
+- If none exists, insert `Conversation` plus two `ConversationParticipant` rows (caller and the other user, same shape as offer accept) and then send that first message.
+- Two requests that both pass the lookup before either insert can still create two pairwise threads. There is no unique constraint and no migration in this route. The next send reuses the newest of those threads.
+
+Response `201`:
+
+```json
+{
+  "conversation": { "id": "44444444-4444-4444-8444-444444444444" },
+  "message": {
+    "id": "55555555-5555-4555-8555-555555555555",
+    "conversationId": "44444444-4444-4444-8444-444444444444",
+    "senderId": "11111111-1111-4111-8111-111111111111",
+    "body": "Is this still available?",
+    "createdAt": "2026-09-23T18:00:00.000Z"
+  },
+  "reused": false
+}
+```
+
+`reused` is `true` when an existing pairwise thread received the message. Listing Detail treats both values as success and keeps the painted “Message sent!” state. It does not call `GET /notifications`.
+
+`MessagingGateway` listens on namespace `/realtime`. `publishMessage` emits `message.created` to `conversation:{id}` after a participant sends a message, including the first message from `POST /conversations`. The handshake requires a JWT, and `conversation.join` puts a participant in `conversation:{id}`. No screen opens that socket.
+
+Not implemented: typing, attachments, read receipts per message, and a Messages header control that starts a thread with no listing. Fixture listing ids (not UUIDs) still use the local modal and do not call this route. This route is not a release-complete claim. Docker Compose, migrate, seed, and signed-in browser e2e were not run.
 
 The signed-in nav badge does not call a notification route. It counts rows from this `GET /conversations` response: the latest message (`messages[0]`, the list takes one) was sent by someone else, and the caller's `lastReadAt` is missing or earlier than that message's `createdAt`. Zero, signed-out, and 401 paint no badge. `GET /notifications` is not implemented.
 
@@ -395,8 +436,7 @@ These routes are the remainder of the v1 contract. They are not implemented. Pat
 
 ### Messaging
 
-- `POST /conversations` — participants, optional request or listing reference. Required before Messages can leave fixtures.
-- Join `conversation:{id}` with the same JWT before a client can receive `message.created`. Send already persists, then emits.
+- A browser client that joins `conversation:{id}` and receives `message.created`. The gateway handler exists. Send already persists, then emits. No page opens the socket. `POST /conversations` does not change that.
 - Typing and attachments stay target. The composer camera button stays visual until attachments exist.
 
 ### Transactions, reviews, safety

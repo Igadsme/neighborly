@@ -228,6 +228,18 @@ export interface ApiMessage {
   createdAt: string
 }
 
+export interface CreateConversationInput {
+  participantId: string
+  body: string
+  listingId?: string
+}
+
+export interface CreateConversationResult {
+  conversation: { id: string }
+  message: ApiMessage
+  reused: boolean
+}
+
 export interface AcceptOfferResult {
   conversation: { id: string }
   transaction: {
