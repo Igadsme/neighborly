@@ -12,6 +12,11 @@ vite.config.*.timestamp-*
 *-debug.log*
 logs/
 *.log
+# Keep the Docker gate command output in the repo. Secrets stay out of these files.
+# The exception is narrower than `._*`, so AppleDouble forks stay ignored.
+!artifacts/docker-release-verification/*.log
+artifacts/docker-release-verification/._*
+artifacts/docker-release-verification/browser-smoke/.chrome-profile/
 .claude-replay.*
 .tmp-*
 /.figma/design-context/
