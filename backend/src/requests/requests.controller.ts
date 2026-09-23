@@ -13,10 +13,27 @@ export class RequestsController {
   @Get()
   list() { return this.requests.list() }
 
+  @Get(':id')
+  get(@Param('id') id: string) { return this.requests.get(id) }
+
   @Post()
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
   create(@Req() req: AuthenticatedRequest, @Body() input: CreateRequestDto) { return this.requests.create(req.user.id, input) }
+
+  @Post(':id/offers/:offerId/accept')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
+  accept(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Param('offerId') offerId: string) {
+    return this.requests.acceptOffer(req.user.id, offerId, id)
+  }
+
+  @Post(':id/offers/:offerId/reject')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
+  reject(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Param('offerId') offerId: string) {
+    return this.requests.rejectOffer(req.user.id, offerId, id)
+  }
 
   @Post('/offers/:id/counter')
   @ApiBearerAuth()

@@ -1,6 +1,21 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { OfferStatus, Prisma, TransactionStatus } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { CounterOfferDto, CreateOfferDto, CreateRequestDto } from './dto'
+
+const publicUserSelect = {
+  id: true,
+  profile: {
+    select: {
+      displayName: true,
+      firstName: true,
+      neighborhood: true,
+      city: true
+    }
+  }
+} satisfies Prisma.UserSelect
+
+const negotiableOfferStatuses: readonly OfferStatus[] = [OfferStatus.PENDING, OfferStatus.COUNTERED]
 
 @Injectable()
 export class RequestsService {
@@ -28,9 +43,32 @@ export class RequestsService {
   list() {
     return this.prisma.needRequest.findMany({
       where: { status: 'PUBLISHED', deletedAt: null },
-      include: { category: true, requester: { include: { profile: true } }, offers: { select: { id: true, status: true } } },
+      include: {
+        category: true,
+        requester: { select: publicUserSelect },
+        offers: { select: { id: true, status: true } }
+      },
       orderBy: { createdAt: 'desc' }
     })
+  }
+
+  async get(id: string) {
+    const request = await this.prisma.needRequest.findFirst({
+      where: { id, status: 'PUBLISHED', deletedAt: null },
+      include: {
+        category: true,
+        requester: { select: publicUserSelect },
+        offers: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            items: { include: { listing: { select: { id: true, title: true, priceCents: true, status: true } } } },
+            offerer: { select: publicUserSelect }
+          }
+        }
+      }
+    })
+    if (!request) throw new NotFoundException('Request not found')
+    return request
   }
 
   async createOffer(offererId: string, requestId: string, input: CreateOfferDto) {
@@ -57,10 +95,56 @@ export class RequestsService {
     const offer = await this.prisma.requestOffer.findUnique({ where: { id: offerId }, include: { request: true } })
     if (!offer) throw new NotFoundException('Offer not found')
     if (offer.request.requesterId !== userId && offer.offererId !== userId) throw new ForbiddenException()
-    if (!['PENDING', 'COUNTERED'].includes(offer.status)) throw new BadRequestException('Offer is no longer negotiable')
+    if (!negotiableOfferStatuses.includes(offer.status)) throw new BadRequestException('Offer is no longer negotiable')
     return this.prisma.$transaction([
       this.prisma.requestOffer.update({ where: { id: offerId }, data: { status: 'COUNTERED' } }),
       this.prisma.counterOffer.create({ data: { offerId, fromUserId: userId, amountCents: input.amountCents, message: input.message.trim() } })
     ])
+  }
+
+  async acceptOffer(requesterId: string, offerId: string, requestId?: string) {
+    const offer = await this.loadRequesterOffer(requesterId, offerId, requestId)
+    if (!negotiableOfferStatuses.includes(offer.status)) throw new BadRequestException('Offer is no longer acceptable')
+
+    return this.prisma.$transaction(async tx => {
+      await tx.requestOffer.update({ where: { id: offerId }, data: { status: OfferStatus.ACCEPTED } })
+      const conversation = await tx.conversation.create({
+        data: {
+          participants: {
+            create: [{ userId: offer.request.requesterId }, { userId: offer.offererId }]
+          }
+        }
+      })
+      const transaction = await tx.transaction.create({
+        data: {
+          offerId,
+          conversationId: conversation.id,
+          status: TransactionStatus.ACCEPTED,
+          participants: {
+            create: [
+              { userId: offer.request.requesterId, role: 'REQUESTER' },
+              { userId: offer.offererId, role: 'OFFERER' }
+            ]
+          }
+        }
+      })
+      await tx.transactionMilestone.create({
+        data: { transactionId: transaction.id, toStatus: TransactionStatus.ACCEPTED }
+      })
+      return { conversation, transaction }
+    })
+  }
+
+  async rejectOffer(requesterId: string, offerId: string, requestId?: string) {
+    const offer = await this.loadRequesterOffer(requesterId, offerId, requestId)
+    if (!negotiableOfferStatuses.includes(offer.status)) throw new BadRequestException('Offer is no longer rejectable')
+    return this.prisma.requestOffer.update({ where: { id: offerId }, data: { status: OfferStatus.REJECTED } })
+  }
+
+  private async loadRequesterOffer(requesterId: string, offerId: string, requestId?: string) {
+    const offer = await this.prisma.requestOffer.findUnique({ where: { id: offerId }, include: { request: true } })
+    if (!offer || (requestId !== undefined && offer.requestId !== requestId)) throw new NotFoundException('Offer not found')
+    if (offer.request.requesterId !== requesterId) throw new ForbiddenException()
+    return offer
   }
 }
