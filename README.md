@@ -2,6 +2,8 @@
 
 Request-first local marketplace. The frontend is a Vite + React app. The API is a NestJS modular monolith using Prisma and PostgreSQL.
 
+**Launch is pending Product Owner approval.** Phase 7 prepared a production package and did not deploy it. The product is not launched and not released. See `docs/PHASE_7_PROD_PREP.md` and the unpublished draft in `docs/RELEASE_NOTES_DRAFT.md`. Staging remains the local Compose stack in `docs/PHASE_5_STAGING.md`.
+
 ## Prerequisites
 
 - Node.js 22 and pnpm 10.34.3 (pinned in `.mise.toml`)
