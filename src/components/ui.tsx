@@ -1,5 +1,6 @@
 import { useState, type ReactNode, type ButtonHTMLAttributes } from "react"
 import { api, ApiError } from "../api/client"
+import { mediaSrc } from "../lib/view"
 
 // ─── Button ────────────────────────────────────────────────────────────────────
 
@@ -464,13 +465,9 @@ export function ListingCard({
           compact ? "h-36" : "h-48"
         }`}
       >
-        {!imgErr ? (
+        {!imgErr && mediaSrc(listing.images[0], "w=500&h=400&fit=crop&auto=format") ? (
           <img
-            src={`${
-              listing.images[0].startsWith("http")
-                ? listing.images[0]
-                : `https://images.unsplash.com/${listing.images[0]}`
-            }?w=500&h=400&fit=crop&auto=format`}
+            src={mediaSrc(listing.images[0], "w=500&h=400&fit=crop&auto=format")!}
             alt={listing.title}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             onError={() => setImgErr(true)}
@@ -602,11 +599,13 @@ export function ListingCard({
                 <p className="text-xs font-medium text-[#1B2A4A]">
                   {listing.seller.name}
                 </p>
-                <StarRating
-                  rating={listing.seller.rating}
-                  count={listing.seller.reviews}
-                  size="xs"
-                />
+                {listing.seller.rating > 0 && (
+                  <StarRating
+                    rating={listing.seller.rating}
+                    count={listing.seller.reviews}
+                    size="xs"
+                  />
+                )}
               </div>
             </div>
             {listing.seller.idVerified && (

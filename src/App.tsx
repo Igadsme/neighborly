@@ -22,10 +22,14 @@ type Page = "landing" | "onboarding" | "home" | "explore" | "categories" | "map"
 
 export default function App() {
   const [page, setPage] = useState<Page>("landing")
+  const [listingId, setListingId] = useState<string | null>(null)
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const [isSignedIn, setIsSignedIn] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
 
-  const navigate = (p: string) => {
+  const navigate = (p: string, id?: string) => {
+    if (p === "listing") setListingId(id ?? null)
+    if (p === "messages") setConversationId(id ?? null)
     setPage(p as Page)
     window.scrollTo({ top: 0, behavior: "instant" })
   }
@@ -102,14 +106,19 @@ export default function App() {
         )}
 
         {page === "listing" && isSignedIn && (
-          <ListingDetail onNavigate={navigate as any} />
+          <ListingDetail listingId={listingId} onNavigate={navigate as any} />
         )}
 
         {page === "create" && isSignedIn && (
           <CreateListing onNavigate={navigate as any} />
         )}
 
-        {page === "messages" && isSignedIn && <Messages />}
+        {page === "messages" && isSignedIn && (
+          <Messages
+            conversationId={conversationId}
+            onNavigate={navigate as any}
+          />
+        )}
 
         {page === "saved" && isSignedIn && (
           <SavedItems onNavigate={navigate as any} />
@@ -165,40 +174,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Demo navigation bar — floats on landing page for easy prototype navigation */}
-      {page === "landing" && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
-          <div className="bg-[#1B2A4A]/95 backdrop-blur-sm text-white rounded-2xl px-4 py-2.5 flex items-center gap-2 shadow-xl border border-white/10 text-xs font-medium flex-wrap justify-center max-w-sm">
-            <span className="text-white/50">🔭 Preview:</span>
-            {[
-              { label: "Sign up", action: () => navigate("onboarding") },
-              { label: "Home feed", action: signIn },
-              {
-                label: "Explore",
-                action: () => {
-                  signIn()
-                  setTimeout(() => navigate("explore"), 10)
-                },
-              },
-              {
-                label: "Map",
-                action: () => {
-                  signIn()
-                  setTimeout(() => navigate("map"), 10)
-                },
-              },
-            ].map(({ label, action }) => (
-              <button
-                key={label}
-                onClick={action}
-                className="bg-white/10 hover:bg-white/20 transition-colors px-2.5 py-1 rounded-lg border border-white/10"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
