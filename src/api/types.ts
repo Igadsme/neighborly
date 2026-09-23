@@ -106,3 +106,102 @@ export interface OfferInput {
   message: string
   listingIds?: string[]
 }
+
+export interface PublicUserCard {
+  id: string
+  profile?: {
+    displayName?: string | null
+    firstName?: string | null
+    lastName?: string | null
+    neighborhood?: string | null
+    city?: string | null
+  } | null
+}
+
+export interface ApiRequestSummary {
+  id: string
+  title: string
+  description: string
+  budgetCents?: number | null
+  status: string
+  mode: ExchangeMode | string
+  createdAt: string
+  requester: PublicUserCard
+  category?: { id: string; name: string; slug: string } | null
+  offers: Array<{ id: string; status: string }>
+}
+
+export interface ApiOfferDetail {
+  id: string
+  requestId?: string
+  amountCents?: number | null
+  message: string
+  status: string
+  createdAt: string
+  offerer: PublicUserCard
+  items?: Array<{
+    listing?: {
+      id: string
+      title: string
+      priceCents?: number | null
+      status?: string
+    } | null
+  }>
+}
+
+export interface ApiRequestDetail extends Omit<ApiRequestSummary, "offers"> {
+  offers: ApiOfferDetail[]
+}
+
+export interface ApiTransaction {
+  id: string
+  conversationId?: string | null
+  offerId?: string | null
+  status: string
+  createdAt: string
+  updatedAt: string
+  participants: Array<{ userId: string; role: string }>
+  milestones?: Array<{ toStatus: string; fromStatus?: string | null }>
+  appointments?: Array<{
+    id: string
+    startsAt: string
+    locationNote?: string | null
+  }>
+}
+
+export interface ApiConversation {
+  id: string
+  createdAt: string
+  updatedAt: string
+  participants: Array<{
+    userId: string
+    lastReadAt?: string | null
+    user?: PublicUserCard | null
+  }>
+  messages: ApiMessage[]
+}
+
+export interface ApiMessage {
+  id: string
+  conversationId: string
+  senderId: string
+  body: string
+  createdAt: string
+}
+
+export interface AcceptOfferResult {
+  conversation: { id: string }
+  transaction: {
+    id: string
+    status: string
+    offerId?: string | null
+    conversationId?: string | null
+  }
+}
+
+export interface ReviewInput {
+  transactionId: string
+  subjectId: string
+  rating: number
+  body: string
+}

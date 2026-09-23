@@ -10,61 +10,16 @@ import {
 } from "../components/ui"
 import type { Listing } from "../data"
 import { api, ApiError } from "../api/client"
-import type { ApiFavorite, ApiSavedSearch } from "../api/types"
+import type { ApiSavedSearch } from "../api/types"
+import { listingFromApi } from "../lib/view"
 
 type Page = "explore" | "listing"
 
 interface SavedItemsProps {
-  onNavigate: (p: Page) => void
+  onNavigate: (p: Page, id?: string) => void
 }
 
 const collections = [{ id: "all", label: "All saved" }]
-
-function toListing(favorite: ApiFavorite): Listing {
-  const listing = favorite.listing
-  const firstName = listing.seller?.profile?.firstName ?? "Neighbor"
-  const lastName = listing.seller?.profile?.lastName ?? ""
-  return {
-    id: listing.id,
-    title: listing.title,
-    price: listing.priceCents == null ? null : listing.priceCents / 100,
-    isFree: listing.priceCents === 0,
-    condition: listing.condition ?? "Good",
-    category: listing.category?.name ?? "Marketplace",
-    neighborhood: listing.neighborhood ?? "Nearby",
-    city: listing.city ?? "",
-    distance: "Nearby",
-    postedAt: listing.createdAt
-      ? new Date(listing.createdAt).toLocaleDateString()
-      : "Recently",
-    images:
-      listing.images?.map((image) => image.url ?? "").filter(Boolean) ?? [],
-    description: listing.description,
-    seller: {
-      id: listing.seller?.id ?? "unknown",
-      name: `${firstName} ${lastName}`.trim(),
-      avatar: "",
-      rating: 0,
-      reviews: 0,
-      verified: false,
-      idVerified: false,
-      responseTime: "Unknown",
-      transactions: 0,
-      memberSince: "Recently",
-      neighborhood:
-        listing.seller?.profile?.neighborhood ??
-        listing.neighborhood ??
-        "Nearby",
-    },
-    saved: true,
-    tags: [],
-    views: 0,
-    saves: 0,
-    pickupAvailable: listing.pickupAvailable ?? false,
-    deliveryAvailable: listing.deliveryAvailable ?? false,
-    shippingAvailable: listing.shippingAvailable ?? false,
-  }
-}
 
 export default function SavedItems({ onNavigate }: SavedItemsProps) {
   const [activeCollection, setActiveCollection] = useState("all")
@@ -81,7 +36,7 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
     Promise.all([api.listings.favorites(), api.listings.savedSearches()])
       .then(([favorites, searches]) => {
         if (!active) return
-        setSavedListings(favorites.map(toListing))
+        setSavedListings(favorites.map((favorite) => listingFromApi(favorite.listing, true)))
         setSavedSearches(searches)
       })
       .catch((cause: unknown) => {
@@ -216,7 +171,7 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
                   <div key={listing.id} className="relative">
                     <ListingCard
                       listing={listing}
-                      onClick={() => onNavigate("listing")}
+                      onClick={() => onNavigate("listing", listing.id)}
                       onSavedChange={(saved) => {
                         api.listings
                           .toggleFavorite(listing.id)
@@ -360,7 +315,7 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
                 priceDropListings.map((listing) => (
                   <div
                     key={listing.id}
-                    onClick={() => onNavigate("listing")}
+                    onClick={() => onNavigate("listing", listing.id)}
                     className="flex gap-4 bg-white rounded-2xl border border-[#E8E6DF] p-4 cursor-pointer card-hover"
                   >
                     <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF]">
