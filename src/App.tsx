@@ -39,9 +39,10 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "instant" })
   }
 
-  const signIn = () => {
+  const signIn = (next?: string, id?: string) => {
     setIsSignedIn(true)
-    navigate("home")
+    const destination = next && next !== "landing" && next !== "onboarding" ? next : "home"
+    navigate(destination, id)
   }
 
   const signOut = () => {

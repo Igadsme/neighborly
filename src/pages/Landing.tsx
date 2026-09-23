@@ -1,24 +1,25 @@
-import { useState } from "react"
-import { Button, Badge, StarRating, Avatar, Icon } from "../components/ui"
-import { listings } from "../data"
+import { useEffect, useState } from "react"
+import { Button, Badge, Avatar, Icon } from "../components/ui"
+import type { Listing } from "../data"
 import { api, ApiError } from "../api/client"
+import { listingFromApi, mediaSrc } from "../lib/view"
 
 type Page = "landing" | "onboarding" | "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community"
 
 interface LandingProps {
   onNavigate: (p: Page) => void
-  onSignIn: () => void
+  onSignIn: (page?: string, id?: string) => void
 }
 
 const categories = [
-  { icon: "🛋️", label: "For Sale", color: "#D8F3DC", count: "2,847" },
-  { icon: "🏠", label: "Housing", color: "#DDEEFF", count: "634" },
-  { icon: "💼", label: "Jobs", color: "#FEF3C7", count: "412" },
-  { icon: "🔧", label: "Services", color: "#FDE8E0", count: "891" },
-  { icon: "🚗", label: "Vehicles", color: "#EEF0F5", count: "523" },
-  { icon: "🎁", label: "Free Items", color: "#D8F3DC", count: "203" },
-  { icon: "🐾", label: "Pets", color: "#FDE8E0", count: "89" },
-  { icon: "🎭", label: "Events", color: "#DDEEFF", count: "156" },
+  { icon: "🛋️", label: "For Sale", color: "#D8F3DC", page: "explore" },
+  { icon: "🏠", label: "Housing", color: "#DDEEFF", page: "housing" },
+  { icon: "💼", label: "Jobs", color: "#FEF3C7", page: "jobs" },
+  { icon: "🔧", label: "Services", color: "#FDE8E0", page: "services" },
+  { icon: "🚗", label: "Vehicles", color: "#EEF0F5", page: "explore" },
+  { icon: "🎁", label: "Free Items", color: "#D8F3DC", page: "explore" },
+  { icon: "🐾", label: "Pets", color: "#FDE8E0", page: "explore" },
+  { icon: "🎭", label: "Events", color: "#DDEEFF", page: "community" },
 ]
 
 const testimonials = [
@@ -109,10 +110,60 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
   const [password, setPassword] = useState("")
   const [signInError, setSignInError] = useState("")
   const [signingIn, setSigningIn] = useState(false)
+  const [pending, setPending] = useState<{ page: string; id?: string }>({ page: "home" })
+  const [preview, setPreview] = useState<Listing[]>([])
+  const [previewState, setPreviewState] = useState<"loading" | "ready" | "empty" | "error">("loading")
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number> | null>(null)
 
-  const handleSignIn = () => {
+  useEffect(() => {
+    let active = true
+    api.listings
+      .list({ status: "PUBLISHED", limit: 4 })
+      .then((rows) => {
+        if (!active) return
+        if (!Array.isArray(rows) || rows.length === 0) {
+          setPreview([])
+          setPreviewState("empty")
+          return
+        }
+        setPreview(rows.slice(0, 4).map((row) => listingFromApi(row)))
+        setPreviewState("ready")
+      })
+      .catch(() => {
+        if (active) setPreviewState("error")
+      })
+    api.categories
+      .list()
+      .then((items) => {
+        if (!active || !Array.isArray(items)) return
+        const next: Record<string, number> = {}
+        for (const item of items) next[item.name] = item.listingCount ?? 0
+        setCategoryCounts(next)
+      })
+      .catch(() => {
+        if (active) setCategoryCounts({})
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const openSignIn = (page = "home", id?: string) => {
+    setPending({ page, id })
     setSignInError("")
     setSignInOpen(true)
+  }
+
+  const tileCount = (label: string) => {
+    if (!categoryCounts) return "…"
+    if (label === "For Sale") {
+      const sum = Object.values(categoryCounts).reduce((total, count) => total + count, 0)
+      return `${sum.toLocaleString()} nearby`
+    }
+    if (label === "Housing" || label === "Jobs" || label === "Services" || label === "Vehicles") {
+      return `${(categoryCounts[label] ?? 0).toLocaleString()} nearby`
+    }
+    return "— nearby"
   }
 
   const submitSignIn = async () => {
@@ -120,7 +171,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
     setSignInError("")
     try {
       await api.auth.login({ email, password })
-      onSignIn()
+      onSignIn(pending.page, pending.id)
     } catch (cause) {
       setSignInError(
         cause instanceof ApiError
@@ -160,31 +211,31 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           </div>
           <nav className="hidden md:flex items-center gap-6">
             <button
-              onClick={handleSignIn}
+              onClick={() => openSignIn("explore")}
               className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Browse
             </button>
             <button
-              onClick={handleSignIn}
+              onClick={() => openSignIn("services")}
               className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Services
             </button>
             <button
-              onClick={handleSignIn}
+              onClick={() => openSignIn("housing")}
               className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Housing
             </button>
             <button
-              onClick={handleSignIn}
+              onClick={() => openSignIn("jobs")}
               className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Jobs
             </button>
             <button
-              onClick={handleSignIn}
+              onClick={() => openSignIn("home")}
               className="text-sm font-semibold text-[#1B2A4A] hover:text-[#2D6A4F]"
             >
               Sign in
@@ -265,14 +316,14 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
               <Button
                 variant="primary"
                 size="lg"
-                onClick={handleSignIn}
+                onClick={() => openSignIn("explore")}
                 className="shadow-lg"
               >
                 Explore Neighborly
               </Button>
               <Button
                 size="lg"
-                onClick={handleSignIn}
+                onClick={() => openSignIn("create")}
                 className="bg-white/15 text-white border border-white/30 hover:bg-white/25 rounded-full px-7 py-3 h-12 text-base font-semibold transition-colors"
               >
                 Post a Listing
@@ -299,55 +350,61 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           {/* Listing preview card */}
           <div className="hidden lg:block w-80 flex-shrink-0">
             <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
-              <img
-                src="https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=600&h=400&fit=crop&auto=format"
-                alt="Sofa listing"
-                className="w-full h-44 object-cover"
-              />
+              {preview[0] && mediaSrc(preview[0].images[0], "w=600&h=400&fit=crop&auto=format") ? (
+                <img
+                  src={mediaSrc(preview[0].images[0], "w=600&h=400&fit=crop&auto=format")!}
+                  alt={preview[0].title}
+                  className="w-full h-44 object-cover"
+                />
+              ) : (
+                <div className="w-full h-44 bg-[#F5F4EF]" />
+              )}
               <div className="p-4">
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <p className="font-semibold text-[#1B2A4A] text-sm leading-tight">
-                      West Elm Mid-Century Sofa
+                      {previewState === "loading" ? "Loading listings…" : preview[0]?.title ?? "No published listings yet"}
                     </p>
                     <p className="text-xs text-[#8A9AB5] mt-0.5">
-                      Decatur · 1.2 mi away
+                      {preview[0] ? `${preview[0].neighborhood} · Nearby` : previewState === "error" ? "Listings could not be loaded." : "Published listings will show up here"}
                     </p>
                   </div>
-                  <span className="text-lg font-bold text-[#1B2A4A]">$650</span>
+                  <span className="text-lg font-bold text-[#1B2A4A]">
+                    {preview[0] ? (preview[0].isFree ? "Free" : preview[0].price == null ? "—" : `$${preview[0].price.toLocaleString()}`) : "—"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="blue" size="sm">
-                    Like New
-                  </Badge>
+                  {preview[0]?.condition && (
+                    <Badge variant="blue" size="sm">
+                      {preview[0].condition}
+                    </Badge>
+                  )}
                   <Badge variant="green" size="sm">
-                    ID Verified
+                    Published
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2 pt-3 border-t border-[#F5F4EF]">
                   <Avatar
-                    src="photo-1472099645785-5658abf4ff4e"
-                    name="Marcus Johnson"
+                    src={preview[0]?.seller.avatar || ""}
+                    name={preview[0]?.seller.name || "Neighbor"}
                     size="sm"
-                    verified
                   />
                   <div>
                     <p className="text-xs font-semibold text-[#1B2A4A]">
-                      Marcus Johnson
+                      {preview[0]?.seller.name || "Neighbor"}
                     </p>
-                    <StarRating rating={4.9} count={47} size="xs" />
+                    <p className="text-[11px] text-[#8A9AB5]">No rating yet</p>
                   </div>
                   <button
-                    onClick={handleSignIn}
+                    onClick={() => openSignIn(preview[0] ? "listing" : "explore", preview[0]?.id)}
                     className="ml-auto bg-[#2D6A4F] text-white text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-[#1B4332] transition-colors"
                   >
                     Message
                   </button>
                 </div>
               </div>
-              {/* Floating elements */}
               <div className="absolute -top-3 -right-3 bg-[#FDE8E0] rounded-2xl px-3 py-2 text-xs font-semibold text-[#C4512D] shadow-md">
-                🔥 22 people saved this
+                Published listing
               </div>
             </div>
           </div>
@@ -369,7 +426,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           {categories.map((cat) => (
             <button
               key={cat.label}
-              onClick={handleSignIn}
+              onClick={() => openSignIn(cat.page)}
               className="group p-5 rounded-2xl border border-[#E8E6DF] bg-white hover:border-[#2D6A4F] hover:shadow-md transition-all text-left card-hover"
               style={{ backgroundColor: cat.color + "30" }}
             >
@@ -378,7 +435,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 {cat.label}
               </p>
               <p className="text-xs text-[#8A9AB5] mt-0.5">
-                {cat.count} nearby
+                {tileCount(cat.label)}
               </p>
             </button>
           ))}
@@ -473,26 +530,33 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
               Popular near Atlanta
             </h2>
             <p className="text-[#8A9AB5] mt-1">
-              Listings neighbors are looking at right now
+              Recently published listings
             </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleSignIn}>
+          <Button variant="ghost" size="sm" onClick={() => openSignIn("explore")}>
             See all →
           </Button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-          {listings.slice(0, 4).map((listing) => (
+          {previewState === "loading" && <p className="text-sm text-[#8A9AB5] col-span-full">Loading listings…</p>}
+          {previewState === "error" && <p className="text-sm text-[#A63D27] col-span-full" role="alert">Listings could not be loaded.</p>}
+          {previewState === "empty" && <p className="text-sm text-[#8A9AB5] col-span-full">No published listings yet.</p>}
+          {preview.map((listing) => {
+            const photo = mediaSrc(listing.images[0], "w=400&h=300&fit=crop&auto=format")
+            return (
             <div
               key={listing.id}
-              onClick={handleSignIn}
+              onClick={() => openSignIn("listing", listing.id)}
               className="group cursor-pointer bg-white rounded-2xl border border-[#E8E6DF] overflow-hidden card-hover"
             >
               <div className="h-40 overflow-hidden bg-[#F5F4EF]">
-                <img
-                  src={`https://images.unsplash.com/${listing.images[0]}?w=400&h=300&fit=crop&auto=format`}
-                  alt={listing.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
+                {photo && (
+                  <img
+                    src={photo}
+                    alt={listing.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                )}
               </div>
               <div className="p-3">
                 <p className="text-sm font-semibold text-[#1B2A4A] line-clamp-1">
@@ -502,8 +566,10 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   <span className="text-sm font-bold text-[#1B2A4A]">
                     {listing.isFree ? (
                       <span className="text-[#2D6A4F]">Free</span>
+                    ) : listing.price == null ? (
+                      "—"
                     ) : (
-                      `$${listing.price?.toLocaleString()}`
+                      `$${listing.price.toLocaleString()}`
                     )}
                   </span>
                   <span className="text-xs text-[#8A9AB5]">
@@ -512,7 +578,8 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 </div>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       </section>
 
@@ -568,7 +635,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             are already here.
           </h2>
           <p className="text-[#5C6E8A] text-xl mb-10">
-            Join 47,000+ Atlantans buying, selling, and connecting locally every
+            Join neighbors buying, selling, and connecting locally every
             day.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -580,7 +647,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             >
               Join for free →
             </Button>
-            <Button variant="outline" size="lg" onClick={handleSignIn}>
+            <Button variant="outline" size="lg" onClick={() => openSignIn("explore")}>
               Browse listings
             </Button>
           </div>
@@ -656,11 +723,9 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
               © 2026 Neighborly, Inc. Atlanta, GA. All rights reserved.
             </p>
             <div className="flex items-center gap-4 text-xs text-[#C5CCDA]">
-              <span>🌎 Available in 12 US cities</span>
+              <span>🌎 Atlanta</span>
               <span>·</span>
-              <span>47,000+ neighbors</span>
-              <span>·</span>
-              <span>3,200+ active listings</span>
+              <span>{categoryCounts ? `${Object.values(categoryCounts).reduce((total, count) => total + count, 0).toLocaleString()} published listings` : "Listing counts loading"}</span>
             </div>
           </div>
         </div>

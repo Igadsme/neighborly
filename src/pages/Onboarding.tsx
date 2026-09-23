@@ -163,7 +163,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             your community.
           </h2>
           <p className="text-white/70 leading-relaxed">
-            Join 47,000+ neighbors buying, selling, and connecting across
+            Join neighbors buying, selling, and connecting across
             Atlanta.
           </p>
           <div className="flex items-center gap-4 mt-6">

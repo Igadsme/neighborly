@@ -106,6 +106,8 @@ export default function Categories({ onNavigate }: CategoriesProps) {
   const [featured, setFeatured] = useState<Listing[]>([])
   const [featuredLoading, setFeaturedLoading] = useState(true)
   const [featuredError, setFeaturedError] = useState('')
+  const [hoodCounts, setHoodCounts] = useState<Record<string, number> | null>(null)
+  const [hoodError, setHoodError] = useState('')
 
   useEffect(() => {
     let active = true
@@ -127,6 +129,30 @@ export default function Categories({ onNavigate }: CategoriesProps) {
       })
       .finally(() => {
         if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    api.listings
+      .neighborhoods()
+      .then((rows) => {
+        if (!active) return
+        const next: Record<string, number> = {}
+        if (Array.isArray(rows)) {
+          for (const row of rows) {
+            if (row && typeof row.neighborhood === 'string' && typeof row.count === 'number') {
+              next[row.neighborhood] = row.count
+            }
+          }
+        }
+        setHoodCounts(next)
+      })
+      .catch((cause: unknown) => {
+        if (active) setHoodError(readStatus(cause, 'Neighborhood counts could not be loaded.'))
       })
     return () => {
       active = false
@@ -260,6 +286,7 @@ export default function Categories({ onNavigate }: CategoriesProps) {
         {/* Popular by neighborhood */}
         <section>
           <SectionHeader title="Popular in your neighborhoods" subtitle="What Inman Park and nearby areas are buying and selling" />
+          {hoodError && <p className="text-sm text-[#A63D27] mb-3" role="alert">{hoodError}</p>}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {['Inman Park', 'Decatur', 'Midtown', 'Grant Park', 'Little Five Points', 'Buckhead', 'East Atlanta', 'Westside'].map((hood, i) => (
               <button
@@ -271,7 +298,9 @@ export default function Categories({ onNavigate }: CategoriesProps) {
                   {['🏡', '🌳', '🏙️', '🌺', '🎨', '✨', '🌆', '🛤️'][i]}
                 </div>
                 <p className="font-semibold text-sm text-[#1B2A4A]">{hood}</p>
-                <p className="text-xs text-[#8A9AB5] mt-0.5">{Math.floor(Math.random() * 200 + 50)} listings</p>
+                <p className="text-xs text-[#8A9AB5] mt-0.5">
+                  {hoodError ? 'Counts unavailable' : hoodCounts == null ? '…' : `${hoodCounts[hood] ?? 0} listings`}
+                </p>
                 <div className="flex items-center gap-1 mt-2 text-[#2D6A4F] text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
                   Browse <Icon name="chevronRight" size={10} />
                 </div>
