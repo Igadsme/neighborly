@@ -74,9 +74,15 @@ export interface ListingInput {
   shippingAvailable?: boolean
 }
 
+export interface NeighborhoodCount {
+  neighborhood: string
+  count: number
+}
+
 export interface ApiListing {
   id: string
   sellerId?: string
+  status?: "DRAFT" | "PUBLISHED" | "SOLD" | "ARCHIVED" | string
   title: string
   description: string
   priceCents?: number | null
@@ -404,6 +410,43 @@ export interface CommunityPostInput {
   body: string
   neighborhood: string
   city?: string
+}
+
+export interface CommunitySummary {
+  neighbors: number
+  posts: number
+  events: number
+}
+
+export interface ApiCommunityComment {
+  id: string
+  postId: string
+  body: string
+  createdAt: string
+  author: PublicUserCard
+}
+
+export interface LostFoundInput {
+  type: "lost" | "found"
+  item: string
+  neighborhood: string
+  city?: string
+}
+
+export interface GiveawayInput {
+  item: string
+  neighborhood: string
+  city?: string
+}
+
+export interface ServiceCreateInput {
+  title: string
+  businessName: string
+  description: string
+  category: string
+  startingPriceCents: number
+  location: string
+  availability: string
 }
 
 export interface ApiCommunityEvent {

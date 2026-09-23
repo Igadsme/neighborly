@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Avatar, Badge, Button, Icon, SectionHeader, InlineAlert, LoadState } from '../components/ui'
 import { api, readStatus } from '../api/client'
-import { mediaSrc } from '../lib/view'
+import type { ApiCommunityComment } from '../api/types'
+import { mediaSrc, personName } from '../lib/view'
 import {
   communityEventCard,
   communityPostCard,
@@ -24,7 +25,7 @@ const typeConfig: Record<string, { label: string; badge: 'gray' | 'blue' | 'ambe
 
 const reactionEmojis = ['👍', '❤️', '😮'] as const
 
-export default function Community() {
+export default function Community({ onNavigate }: { onNavigate?: (page: 'messages', id?: string) => void }) {
   const [activeTab, setActiveTab] = useState<'feed' | 'events' | 'lost_found' | 'giveaways'>('feed')
   const [filterType, setFilterType] = useState<string | null>(null)
   const [postOpen, setPostOpen] = useState(false)
@@ -45,6 +46,19 @@ export default function Community() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
+  const [neighbors, setNeighbors] = useState<number | null>(null)
+  const [replyFor, setReplyFor] = useState<string | null>(null)
+  const [comments, setComments] = useState<Record<string, ApiCommunityComment[]>>({})
+  const [replyDraft, setReplyDraft] = useState('')
+  const [replySending, setReplySending] = useState(false)
+  const [composer, setComposer] = useState<null | 'lost' | 'giveaway'>(null)
+  const [composerType, setComposerType] = useState<'lost' | 'found'>('lost')
+  const [composerItem, setComposerItem] = useState('')
+  const [composerNeighborhood, setComposerNeighborhood] = useState('Inman Park')
+  const [composerError, setComposerError] = useState('')
+  const [composerSending, setComposerSending] = useState(false)
+  const [composerSent, setComposerSent] = useState(false)
+  const [contactingId, setContactingId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -56,9 +70,11 @@ export default function Community() {
       api.community.lostFound(),
       api.community.giveaways(),
       api.auth.me().catch(() => null),
+      api.community.summary().catch(() => null),
     ])
-      .then(([postRows, eventRows, lostRows, giveawayRows, me]) => {
+      .then(([postRows, eventRows, lostRows, giveawayRows, me, summary]) => {
         if (!active) return
+        if (summary && typeof summary.neighbors === 'number') setNeighbors(summary.neighbors)
         setPosts(postRows.map(communityPostCard))
         setEvents(eventRows.map(communityEventCard))
         setLostFound(lostRows.map(lostFoundCard))
@@ -114,6 +130,103 @@ export default function Community() {
       setGiveaways(prev => prev.map(item => item.id === id ? { ...card, claimed: result.claimed } : item))
     } catch (cause: unknown) {
       setActionError(readStatus(cause, 'Unable to claim this giveaway.'))
+    }
+  }
+
+  const openReplies = async (postId: string) => {
+    setActionError('')
+    setReplyFor(replyFor === postId ? null : postId)
+    setReplyDraft('')
+    if (comments[postId]) return
+    try {
+      const rows = await api.community.comments(postId)
+      setComments((prev) => ({ ...prev, [postId]: rows }))
+    } catch (cause: unknown) {
+      setActionError(readStatus(cause, 'Replies could not be loaded.'))
+    }
+  }
+
+  const submitReply = async (postId: string) => {
+    if (replyDraft.trim().length < 1) {
+      setActionError('Write a reply before sending it.')
+      return
+    }
+    setReplySending(true)
+    setActionError('')
+    try {
+      const created = await api.community.comment(postId, replyDraft.trim())
+      setComments((prev) => ({ ...prev, [postId]: [...(prev[postId] ?? []), created] }))
+      setPosts((prev) => prev.map((post) => post.id === postId ? { ...post, replies: post.replies + 1 } : post))
+      setReplyDraft('')
+    } catch (cause: unknown) {
+      setActionError(readStatus(cause, 'Unable to post this reply.'))
+    } finally {
+      setReplySending(false)
+    }
+  }
+
+  const openComposer = (kind: 'lost' | 'giveaway') => {
+    setComposer(kind)
+    setComposerType('lost')
+    setComposerItem('')
+    setComposerNeighborhood('Inman Park')
+    setComposerError('')
+    setComposerSent(false)
+  }
+
+  const submitComposer = async () => {
+    if (composerItem.trim().length < 3) {
+      setComposerError('Describe the item in at least 3 characters.')
+      return
+    }
+    if (composerNeighborhood.trim().length < 2) {
+      setComposerError('Add a neighborhood.')
+      return
+    }
+    setComposerSending(true)
+    setComposerError('')
+    try {
+      if (composer === 'lost') {
+        await api.community.createLostFound({
+          type: composerType,
+          item: composerItem.trim(),
+          neighborhood: composerNeighborhood.trim(),
+          city: 'Atlanta',
+        })
+      } else {
+        await api.community.createGiveaway({
+          item: composerItem.trim(),
+          neighborhood: composerNeighborhood.trim(),
+          city: 'Atlanta',
+        })
+      }
+      setComposerSent(true)
+      window.setTimeout(() => {
+        setComposer(null)
+        setComposerSent(false)
+        setComposerSending(false)
+        setReloadKey((key) => key + 1)
+      }, 1200)
+    } catch (cause: unknown) {
+      setComposerError(readStatus(cause, 'Unable to publish this.'))
+      setComposerSending(false)
+    }
+  }
+
+  const contactAuthor = async (id: string, authorId: string, item: string) => {
+    setContactingId(id)
+    setActionError('')
+    try {
+      const result = await api.conversations.create({
+        participantId: authorId,
+        body: `Hi, I'm reaching out about "${item}".`,
+      })
+      if (onNavigate) onNavigate('messages', result.conversation.id)
+      else setActionError('Message sent. Open Messages to continue.')
+    } catch (cause: unknown) {
+      setActionError(readStatus(cause, 'Unable to start this conversation.'))
+    } finally {
+      setContactingId(null)
     }
   }
 
@@ -173,7 +286,7 @@ export default function Community() {
         {/* Stats bar */}
         <div className="grid grid-cols-3 gap-3 mb-6">
           <div className="bg-white rounded-2xl border border-[#E8E6DF] p-3 text-center">
-            <p className="font-bold font-display text-[#1B2A4A] text-xl">2,847</p>
+            <p className="font-bold font-display text-[#1B2A4A] text-xl">{loading ? '…' : neighbors == null ? '—' : neighbors.toLocaleString()}</p>
             <p className="text-xs text-[#8A9AB5]">Neighbors active</p>
           </div>
           <div className="bg-white rounded-2xl border border-[#E8E6DF] p-3 text-center">
@@ -296,16 +409,40 @@ export default function Community() {
                               <span className="text-xs text-[#8A9AB5] ml-1">{post.reactions.like + post.reactions.love + post.reactions.wow}</span>
                             </div>
 
-                            <button className="flex items-center gap-1.5 text-xs text-[#8A9AB5] hover:text-[#1B2A4A] transition-colors ml-2">
+                            <button onClick={() => void openReplies(post.id)} className="flex items-center gap-1.5 text-xs text-[#8A9AB5] hover:text-[#1B2A4A] transition-colors ml-2">
                               <Icon name="message" size={13} />
                               {post.replies} replies
                             </button>
 
-                            <button className="flex items-center gap-1.5 text-xs text-[#8A9AB5] hover:text-[#1B2A4A] transition-colors ml-auto">
+                            <button
+                              onClick={() => setActionError("Sharing a link isn't available in this version.")}
+                              className="flex items-center gap-1.5 text-xs text-[#8A9AB5] hover:text-[#1B2A4A] transition-colors ml-auto"
+                            >
                               <Icon name="share" size={13} />
                               Share
                             </button>
                           </div>
+                          {replyFor === post.id && (
+                            <div className="mt-3 pt-3 border-t border-[#F5F4EF] space-y-2">
+                              {(comments[post.id] ?? []).length === 0 && <p className="text-xs text-[#8A9AB5]">No replies yet.</p>}
+                              {(comments[post.id] ?? []).map((comment) => (
+                                <p key={comment.id} className="text-sm text-[#5C6E8A]">
+                                  <span className="font-semibold text-[#1B2A4A]">{personName(comment.author)}</span> {comment.body}
+                                </p>
+                              ))}
+                              <div className="flex gap-2">
+                                <input
+                                  value={replyDraft}
+                                  onChange={(event) => setReplyDraft(event.target.value)}
+                                  placeholder="Write a reply..."
+                                  className="flex-1 h-10 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F]"
+                                />
+                                <Button variant="primary" size="sm" disabled={replySending || !replyDraft.trim()} onClick={() => void submitReply(post.id)}>
+                                  {replySending ? 'Sending...' : 'Reply'}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -374,7 +511,7 @@ export default function Community() {
               <div>
                 <div className="flex items-center justify-between mb-5">
                   <SectionHeader title="Lost & Found" subtitle="Help reunite people with their lost items" />
-                  <Button variant="secondary" size="sm">+ Post lost/found</Button>
+                  <Button variant="secondary" size="sm" onClick={() => openComposer('lost')}>+ Post lost/found</Button>
                 </div>
 
                 {lostFound.length === 0 ? (
@@ -403,7 +540,9 @@ export default function Community() {
                             <p className="text-xs text-[#8A9AB5] mb-3">
                               <Icon name="mapPin" size={10} className="inline text-[#E8694A]" /> {item.neighborhood} · Posted by {item.contact}
                             </p>
-                            <Button variant="outline" size="xs">Contact {item.contact}</Button>
+                            <Button variant="outline" size="xs" disabled={contactingId === item.id} onClick={() => void contactAuthor(item.id, item.authorId, item.item)}>
+                              {contactingId === item.id ? 'Contacting...' : `Contact ${item.contact}`}
+                            </Button>
                           </div>
                         </div>
                       )
@@ -418,7 +557,7 @@ export default function Community() {
               <div>
                 <div className="flex items-center justify-between mb-5">
                   <SectionHeader title="Neighborhood giveaways" subtitle="Free items — first come first served" />
-                  <Button variant="primary" size="sm">+ Give something</Button>
+                  <Button variant="primary" size="sm" onClick={() => openComposer('giveaway')}>+ Give something</Button>
                 </div>
 
                 {giveaways.length === 0 ? (
@@ -526,6 +665,62 @@ export default function Community() {
                   </div>
                   <Button variant="primary" size="sm" onClick={() => void submitPost()} disabled={!newPost.trim() || posting}>
                     {posting ? 'Posting...' : 'Post to neighborhood'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {composer && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg p-6 animate-fade-in-up">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display text-xl font-semibold text-[#1B2A4A]">
+                {composer === 'lost' ? 'Post lost or found' : 'Give something away'}
+              </h3>
+              <button onClick={() => setComposer(null)} className="w-8 h-8 rounded-full bg-[#F5F4EF] flex items-center justify-center">
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+            {composerSent ? (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-3">🎉</div>
+                <p className="font-semibold text-[#1B2A4A]">Published</p>
+                <p className="text-sm text-[#8A9AB5]">Neighbors can see it now.</p>
+              </div>
+            ) : (
+              <>
+                {composer === 'lost' && (
+                  <div className="flex gap-2 mb-3">
+                    {(['lost', 'found'] as const).map((kind) => (
+                      <button
+                        key={kind}
+                        onClick={() => setComposerType(kind)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border ${composerType === kind ? 'bg-[#2D6A4F] text-white border-[#2D6A4F]' : 'bg-white text-[#5C6E8A] border-[#E8E6DF]'}`}
+                      >
+                        {kind === 'lost' ? 'Lost' : 'Found'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <input
+                  value={composerItem}
+                  onChange={(event) => setComposerItem(event.target.value)}
+                  placeholder={composer === 'lost' ? 'What was lost or found?' : 'What are you giving away?'}
+                  className="w-full h-11 px-4 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F] mb-3"
+                />
+                <input
+                  value={composerNeighborhood}
+                  onChange={(event) => setComposerNeighborhood(event.target.value)}
+                  placeholder="Neighborhood"
+                  className="w-full h-11 px-4 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F] mb-3"
+                />
+                <InlineAlert message={composerError} />
+                <div className="flex justify-end mt-3">
+                  <Button variant="primary" size="sm" disabled={composerSending} onClick={() => void submitComposer()}>
+                    {composerSending ? 'Publishing...' : 'Publish'}
                   </Button>
                 </div>
               </>

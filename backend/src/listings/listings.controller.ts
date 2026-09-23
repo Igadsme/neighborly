@@ -29,6 +29,18 @@ export class ListingsController {
     return this.listings.listSavedSearches(request.user.id)
   }
 
+  @Get('neighborhoods')
+  neighborhoods() {
+    return this.listings.neighborhoodCounts()
+  }
+
+  @Get('mine')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
+  mine(@Req() request: AuthenticatedRequest) {
+    return this.listings.listMine(request.user.id)
+  }
+
   @Get(':id')
   get(@Param('id') id: string) {
     return this.listings.get(id)
@@ -53,6 +65,20 @@ export class ListingsController {
   @UseGuards(AuthGuard)
   publish(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
     return this.listings.publish(request.user.id, id)
+  }
+
+  @Post(':id/pause')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
+  pause(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    return this.listings.pause(request.user.id, id)
+  }
+
+  @Post(':id/sold')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
+  markSold(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    return this.listings.markSold(request.user.id, id)
   }
 
   @Patch(':id')

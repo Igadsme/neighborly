@@ -1,3 +1,4 @@
+import { ConflictException, ForbiddenException } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { PrismaService } from '../prisma/prisma.service'
 import { ListingsService } from './listings.service'
@@ -94,5 +95,69 @@ describe('ListingsService public reads', () => {
     await service.list({ sellerId, status: 'SOLD', limit: 24, offset: 0 })
     expect(findMany.mock.calls[1][0].where).toMatchObject({ status: 'SOLD', deletedAt: null, sellerId })
     expect(findMany.mock.calls[1][0].select.longitude).toBeUndefined()
+  })
+})
+
+describe('ListingsService owner actions', () => {
+  const listing = {
+    id: 'listing-1',
+    sellerId: 'user-1',
+    status: 'PUBLISHED' as 'PUBLISHED' | 'ARCHIVED' | 'SOLD' | 'DRAFT',
+    deletedAt: null,
+    title: 'Oak chair',
+    description: 'Solid oak dining chair'
+  }
+
+  function serviceWith(listingRow: typeof listing | null, update = jest.fn(async ({ data }: { data: object }) => ({ ...listingRow, ...data }))) {
+    const findUnique = jest.fn().mockResolvedValue(listingRow)
+    const prisma = { listing: { findUnique, update, findMany: jest.fn(), groupBy: jest.fn() } }
+    return Test.createTestingModule({
+      providers: [ListingsService, { provide: PrismaService, useValue: prisma }]
+    })
+      .compile()
+      .then((moduleRef) => ({ service: moduleRef.get(ListingsService), update, prisma }))
+  }
+
+  it('pauses a published listing without deleting it', async () => {
+    const { service, update } = await serviceWith(listing)
+    await service.pause('user-1', 'listing-1')
+    expect(update).toHaveBeenCalledWith({ where: { id: 'listing-1' }, data: { status: 'ARCHIVED' } })
+  })
+
+  it('refuses to pause a listing the caller does not own', async () => {
+    const { service } = await serviceWith(listing)
+    await expect(service.pause('someone-else', 'listing-1')).rejects.toBeInstanceOf(ForbiddenException)
+  })
+
+  it('marks a published listing sold', async () => {
+    const { service, update } = await serviceWith(listing)
+    await service.markSold('user-1', 'listing-1')
+    expect(update).toHaveBeenCalledWith({ where: { id: 'listing-1' }, data: { status: 'SOLD' } })
+  })
+
+  it('republishes a paused listing and still rejects a sold one', async () => {
+    const paused = { ...listing, status: 'ARCHIVED' as const }
+    const { service, update } = await serviceWith(paused)
+    await service.publish('user-1', 'listing-1')
+    expect(update).toHaveBeenCalledWith({ where: { id: 'listing-1' }, data: { status: 'PUBLISHED' } })
+
+    const sold = await serviceWith({ ...listing, status: 'SOLD' })
+    await expect(sold.service.publish('user-1', 'listing-1')).rejects.toBeInstanceOf(ConflictException)
+    await expect(sold.service.markSold('user-1', 'listing-1')).resolves.toMatchObject({ status: 'SOLD' })
+  })
+
+  it('counts published listings by neighborhood', async () => {
+    const groupBy = jest.fn().mockResolvedValue([
+      { neighborhood: 'Decatur', _count: { _all: 2 } },
+      { neighborhood: null, _count: { _all: 1 } },
+      { neighborhood: 'Inman Park', _count: { _all: 4 } }
+    ])
+    const moduleRef = await Test.createTestingModule({
+      providers: [ListingsService, { provide: PrismaService, useValue: { listing: { groupBy } } }]
+    }).compile()
+    await expect(moduleRef.get(ListingsService).neighborhoodCounts()).resolves.toEqual([
+      { neighborhood: 'Inman Park', count: 4 },
+      { neighborhood: 'Decatur', count: 2 }
+    ])
   })
 })

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Card, StatCard, Badge, Button, Icon, SectionHeader, TabBar, EmptyState, LoadState } from '../components/ui'
 import { api, readError, readStatus } from '../api/client'
-import type { ApiConversation, ApiTransaction } from '../api/types'
+import type { ApiConversation, ApiTransaction, PublicProfile } from '../api/types'
 import { activityItems, unreadConversations, type ActivityItem } from '../lib/activity'
 import {
   dollars,
@@ -57,6 +57,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const [reviewError, setReviewError] = useState('')
   const [reviewSubmitted, setReviewSubmitted] = useState(false)
   const [submittingReview, setSubmittingReview] = useState(false)
+  const [trust, setTrust] = useState<PublicProfile | null>(null)
+  const [listingStatus, setListingStatus] = useState<Record<string, string>>({})
+  const [listingNotes, setListingNotes] = useState<Record<string, string>>({})
+  const [actingListingId, setActingListingId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -64,11 +68,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     setOffersError('')
     ;(async () => {
       const me = await api.auth.me()
-      const [offerFeed, txs, convos, listingRows] = await Promise.all([
+      const [offerFeed, txs, convos, listingRows, profile] = await Promise.all([
         api.requests.offers("all"),
         api.transactions.list(),
         api.conversations.list(),
-        api.listings.list({ limit: 100 }),
+        api.listings.mine(),
+        api.users.profile(me.id).catch(() => null),
       ])
       const details = requestDetailsFromOffers(offerFeed)
       if (!active) return
@@ -78,11 +83,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       setProfileLabel(place ? `${name || 'Neighbor'} · ${place}` : name || 'Neighbor')
       setTransactions(txs)
       setConversations(convos)
-      setMyListings(
-        listingRows
-          .filter((row) => row.sellerId === me.id || row.seller?.id === me.id)
-          .map((row) => listingFromApi(row)),
-      )
+      setTrust(profile && typeof profile.reviewCount === 'number' ? profile : null)
+      setListingStatus(Object.fromEntries(listingRows.map((row) => [row.id, row.status ?? 'PUBLISHED'])))
+      setMyListings(listingRows.map((row) => listingFromApi(row)))
       setOfferIndex(indexOffers(details))
       setOfferRows(offerRowsForUser(details, me.id))
     })()
@@ -221,6 +224,33 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     }
   }
 
+  const noteListing = (id: string, message: string) => {
+    setListingNotes((prev) => ({ ...prev, [id]: message }))
+  }
+
+  const runListingAction = async (id: string, action: 'pause' | 'resume' | 'sold') => {
+    setActingListingId(id)
+    noteListing(id, '')
+    try {
+      if (action === 'pause') await api.listings.pause(id)
+      else if (action === 'resume') await api.listings.publish(id)
+      else await api.listings.markSold(id)
+      setReloadKey((key) => key + 1)
+    } catch (cause: unknown) {
+      const fallback = action === 'sold' ? 'Unable to mark this listing sold.' : action === 'resume' ? 'Unable to resume this listing.' : 'Unable to pause this listing.'
+      noteListing(id, readStatus(cause, fallback))
+    } finally {
+      setActingListingId(null)
+    }
+  }
+
+  const completedExchanges = transactions.filter(
+    (tx) => tx.status === 'COMPLETED' && tx.participants.some((p) => p.userId === userId),
+  ).length
+  const ratingLabel = trust?.ratingAverage == null ? 'No reviews yet' : `${trust.ratingAverage} from ${trust.reviewCount} review${trust.reviewCount === 1 ? '' : 's'}`
+  const emailLabel = trust ? (trust.emailVerified ? 'Email confirmed' : 'Email not confirmed') : offersLoading ? '…' : 'Email status unavailable'
+  const soldLabel = trust ? `${trust.soldCount} sold` : offersLoading ? '…' : '—'
+
   const offerThumb = (offer: OfferRow) => (
     <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF]">
       {offer.imageUrl && <img src={offer.imageUrl} alt="" className="w-full h-full object-cover" />}
@@ -261,21 +291,20 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-white/70 mb-1 uppercase tracking-wide font-semibold">Account trust level</p>
-                  <h2 className="font-display text-3xl font-semibold mb-2">Verified Neighbor 🏆</h2>
-                  <p className="text-white/70 text-sm">ID verified · Email confirmed · 52 transactions · 4.9 rating</p>
+                  <h2 className="font-display text-3xl font-semibold mb-2">Your record</h2>
+                  <p className="text-white/70 text-sm">{emailLabel} · {completedExchanges} completed {completedExchanges === 1 ? 'exchange' : 'exchanges'} · {ratingLabel}</p>
                 </div>
                 <div className="text-right hidden md:block">
                   <div className="w-20 h-20 rounded-full border-4 border-white/30 flex items-center justify-center bg-white/10 text-2xl font-bold">
-                    98%
+                    {trust?.ratingAverage == null ? '—' : trust.ratingAverage}
                   </div>
-                  <p className="text-xs text-white/60 mt-1">Trust score</p>
+                  <p className="text-xs text-white/60 mt-1">Avg rating</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 mt-4">
-                <Badge variant="green">✓ ID Verified</Badge>
-                <Badge variant="green">✓ Email confirmed</Badge>
-                <Badge variant="blue">⭐ 4.9 star rating</Badge>
-                <Badge variant="amber">🏅 52 transactions</Badge>
+                <Badge variant={trust?.emailVerified ? 'green' : 'gray'}>{trust == null ? 'Email status unavailable' : trust.emailVerified ? '✓ Email confirmed' : 'Email not confirmed'}</Badge>
+                <Badge variant="blue">{trust?.ratingAverage == null ? 'No reviews yet' : `⭐ ${trust.ratingAverage} star rating`}</Badge>
+                <Badge variant="amber">🏅 {soldLabel}</Badge>
               </div>
             </div>
 
@@ -420,7 +449,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       <span className="font-bold text-[#1B2A4A] flex-shrink-0">{listing.isFree ? 'Free' : listing.price == null ? '—' : `$${listing.price.toLocaleString()}`}</span>
                     </div>
                     <div className="flex items-center gap-2 mt-1 mb-3">
-                      <Badge variant="green" size="sm">Active</Badge>
+                      <Badge variant={listingStatus[listing.id] === 'SOLD' ? 'gray' : listingStatus[listing.id] === 'ARCHIVED' ? 'amber' : listingStatus[listing.id] === 'DRAFT' ? 'blue' : 'green'} size="sm">
+                        {listingStatus[listing.id] === 'ARCHIVED' ? 'Paused' : listingStatus[listing.id] === 'SOLD' ? 'Sold' : listingStatus[listing.id] === 'DRAFT' ? 'Draft' : 'Active'}
+                      </Badge>
                       <span className="text-xs text-[#8A9AB5]">Posted {listing.postedAt}</span>
                     </div>
                     <div className="grid grid-cols-4 gap-2">
@@ -430,7 +461,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         { label: 'Messages', value: '—', icon: 'message', color: 'text-[#2D6A4F]' },
                         { label: 'Offers', value: '—', icon: 'dollar', color: 'text-[#D97706]' },
                       ].map(stat => (
-                        <div key={stat.label} className="bg-[#F5F4EF] rounded-xl p-2 text-center">
+                        <div key={stat.label} title="Not tracked yet" className="bg-[#F5F4EF] rounded-xl p-2 text-center">
                           <Icon name={stat.icon} size={12} className={`mx-auto mb-0.5 ${stat.color}`} />
                           <p className="font-bold text-sm text-[#1B2A4A]">{stat.value}</p>
                           <p className="text-[9px] text-[#8A9AB5]">{stat.label}</p>
@@ -439,11 +470,27 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     </div>
                   </div>
                 </div>
-                <div className="border-t border-[#F5F4EF] px-4 py-3 flex gap-2">
-                  <Button variant="outline" size="xs" onClick={() => onNavigate('listing', listing.id)}>Edit</Button>
-                  <Button variant="ghost" size="xs">Pause</Button>
-                  <Button variant="secondary" size="xs">🚀 Promote</Button>
-                  <button className="ml-auto text-xs text-[#C5CCDA] hover:text-[#E8694A] transition-colors">Mark sold</button>
+                <div className="border-t border-[#F5F4EF] px-4 py-3">
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="xs" onClick={() => onNavigate('listing', listing.id)}>View</Button>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      disabled={actingListingId === listing.id || listingStatus[listing.id] === 'SOLD' || listingStatus[listing.id] === 'DRAFT'}
+                      onClick={() => void runListingAction(listing.id, listingStatus[listing.id] === 'ARCHIVED' ? 'resume' : 'pause')}
+                    >
+                      {listingStatus[listing.id] === 'ARCHIVED' ? 'Resume' : 'Pause'}
+                    </Button>
+                    <Button variant="secondary" size="xs" onClick={() => noteListing(listing.id, "Promotion isn't available yet. Payments are not connected.")}>🚀 Promote</Button>
+                    <button
+                      disabled={actingListingId === listing.id || listingStatus[listing.id] === 'SOLD' || listingStatus[listing.id] === 'DRAFT'}
+                      onClick={() => void runListingAction(listing.id, 'sold')}
+                      className="ml-auto text-xs text-[#C5CCDA] hover:text-[#E8694A] transition-colors disabled:opacity-40"
+                    >
+                      {listingStatus[listing.id] === 'SOLD' ? 'Sold' : 'Mark sold'}
+                    </button>
+                  </div>
+                  {listingNotes[listing.id] && <p className="text-xs text-[#A63D27] mt-2" role="alert">{listingNotes[listing.id]}</p>}
                 </div>
               </Card>
               )

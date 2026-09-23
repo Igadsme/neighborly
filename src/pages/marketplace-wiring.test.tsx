@@ -132,7 +132,7 @@ describe("Categories", () => {
     render(<Categories onNavigate={() => undefined} />)
     expect(screen.getByText("Loading categories…")).toBeTruthy()
     expect(await screen.findByText("4 listings")).toBeTruthy()
-    expect(screen.getByText("0 listings")).toBeTruthy()
+    expect(screen.getAllByText("0 listings").length).toBeGreaterThan(1)
     expect(screen.getByText("Browse by category")).toBeTruthy()
   })
 
@@ -181,7 +181,7 @@ describe("Categories", () => {
     expect(screen.getByText("4 listings")).toBeTruthy()
     fireEvent.click(screen.getByText("Oak dining table"))
     expect(navigate).toHaveBeenCalledWith("listing", featuredId)
-    const listCall = calls.find((call) => call.url.includes("/listings"))
+    const listCall = calls.find((call) => call.url.includes("status=PUBLISHED"))
     expect(listCall?.url).toContain("status=PUBLISHED")
     expect(listCall?.url).toContain("limit=6")
     expect(listCall?.auth).toBe("Bearer test-token")

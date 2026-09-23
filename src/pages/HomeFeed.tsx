@@ -383,17 +383,18 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
 
         {/* People to follow */}
         <section className="mb-10">
-          <SectionHeader title="Neighbors to follow" subtitle="Active sellers in your area" />
+          <SectionHeader title="Neighbors to follow" subtitle="Preview · Examples. Not live ratings." />
           <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
             {suggestedPeople.map(person => (
               <div key={person.name} className="flex-shrink-0 w-48 bg-white rounded-2xl border border-[#E8E6DF] p-4 text-center">
                 <Avatar src={person.avatar} name={person.name} size="lg" verified className="mx-auto mb-3" />
                 <p className="font-semibold text-sm text-[#1B2A4A]">{person.name}</p>
                 <p className="text-xs text-[#8A9AB5] mt-0.5">{person.neighborhood}</p>
-                <div className="flex justify-center mt-2 mb-3">
+                <div className="flex justify-center mt-2 mb-3" title="Preview example, not a live rating">
                   <StarRating rating={person.rating} count={person.transactions} size="xs" />
                 </div>
-                <Button variant="soft" size="xs" fullWidth>Follow</Button>
+                <Button variant="soft" size="xs" fullWidth disabled>Follow</Button>
+                <p className="text-[10px] text-[#8A9AB5] mt-2">Following isn't available yet.</p>
               </div>
             ))}
           </div>

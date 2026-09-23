@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ListingCard, Chip, Badge, Button, Icon, Toggle, TabBar } from '../components/ui'
 import type { Listing } from '../data'
-import { api, readError } from '../api/client'
+import { api, readError, readStatus } from '../api/client'
 import { listingFromApi, mediaSrc } from '../lib/view'
 
 type Page = 'listing' | 'map'
@@ -40,6 +40,8 @@ export default function Explore({ onNavigate }: ExploreProps) {
   const [searched, setSearched] = useState(true)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [alertSaved, setAlertSaved] = useState(false)
+  const [alertError, setAlertError] = useState('')
+  const [savingAlert, setSavingAlert] = useState(false)
   const [results, setResults] = useState<Listing[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -67,6 +69,37 @@ export default function Explore({ onNavigate }: ExploreProps) {
       active = false
     }
   }, [searchNonce])
+
+  const saveAlert = async () => {
+    if (alertSaved) {
+      setAlertError('This search is already saved.')
+      return
+    }
+    const text = query.trim()
+    if (!text) {
+      setAlertError('Enter a search before saving it.')
+      return
+    }
+    setSavingAlert(true)
+    setAlertError('')
+    try {
+      await api.listings.saveSearch(text, {
+        category,
+        condition,
+        minPrice,
+        maxPrice,
+        distance,
+        verifiedOnly,
+        freeOnly,
+        deliveryOnly,
+      })
+      setAlertSaved(true)
+    } catch (cause: unknown) {
+      setAlertError(readStatus(cause, 'Unable to save this search.'))
+    } finally {
+      setSavingAlert(false)
+    }
+  }
 
   const activeFilters: string[] = []
   if (category !== 'All') activeFilters.push(category)
@@ -264,12 +297,14 @@ export default function Explore({ onNavigate }: ExploreProps) {
               <div className="flex items-center gap-2">
                 {/* Save search */}
                 <button
-                  onClick={() => setAlertSaved(!alertSaved)}
+                  disabled={savingAlert}
+                  onClick={() => void saveAlert()}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${alertSaved ? 'bg-[#D8F3DC] text-[#1B4332] border-[#74C69D]' : 'bg-white text-[#5C6E8A] border-[#E8E6DF] hover:border-[#2D6A4F]'}`}
                 >
                   <Icon name="bell" size={12} />
-                  {alertSaved ? 'Alert saved!' : 'Save search'}
+                  {savingAlert ? 'Saving...' : alertSaved ? 'Alert saved!' : 'Save search'}
                 </button>
+                {alertError && <p className="text-xs text-[#A63D27]" role="alert">{alertError}</p>}
 
                 {/* View toggle */}
                 <div className="flex items-center bg-white border border-[#E8E6DF] rounded-xl p-1">

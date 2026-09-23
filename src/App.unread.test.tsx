@@ -155,7 +155,9 @@ describe("navigation unread badge", () => {
     ).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Post Listing" })).toBeNull()
     expect(messageBadges()).toEqual([])
-    expect(signedOut).not.toHaveBeenCalled()
+    const signedOutPaths = requestedPaths(signedOut)
+    expect(signedOutPaths.some((path) => path.includes("/conversations"))).toBe(false)
+    expect(signedOutPaths.every((path) => path.includes("/listings") || path.includes("/categories"))).toBe(true)
 
     cleanup()
     render(<Navigation currentPage="home" onNavigate={() => undefined} />)
