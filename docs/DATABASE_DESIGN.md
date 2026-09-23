@@ -1,6 +1,6 @@
 # Database Design
 
-PostgreSQL via Prisma (`backend/prisma/schema.prisma`). Migrations: `backend/prisma/migrations/0001_init`, `backend/prisma/migrations/0002_onboarding`, and `backend/prisma/migrations/0003_verticals`. Client provider: `prisma-client-js`.
+PostgreSQL via Prisma (`backend/prisma/schema.prisma`). Migrations: `backend/prisma/migrations/0001_init`, `backend/prisma/migrations/0002_onboarding`, `backend/prisma/migrations/0003_verticals`, and `backend/prisma/migrations/0004_trust_safety`. Client provider: `prisma-client-js`.
 
 **IMPLEMENTED** is every model, enum, and index in that schema. **TARGET** is the rest of the older entity list that has no table. A model with no service writer is called out; it is still implemented schema, not a target table.
 
@@ -20,6 +20,11 @@ v1 does not add an embeddings table, a vector column, or a semantic-index job.
 | `ExchangeMode` | `BUY`, `BORROW`, `RENT`, `HIRE`, `TRADE`, `SKILL_SWAP`, `FREE` |
 | `PublishStatus` | `PUBLISHED`, `ARCHIVED` |
 | `QuoteStatus` | `PENDING`, `ACCEPTED` |
+| `StaffRole` | `MODERATOR`, `ADMIN` |
+| `ReportTargetType` | `LISTING`, `USER`, `MESSAGE`, `COMMUNITY_POST` |
+| `ReportReason` | `SPAM`, `SCAM`, `HARASSMENT`, `INAPPROPRIATE`, `OTHER` |
+| `ReportStatus` | `OPEN`, `REVIEWING`, `RESOLVED`, `DISMISSED` |
+| `ModerationActionKind` | `DISMISS`, `RESOLVE`, `HIDE`, `SUSPEND_USER`, `RESTORE_USER` |
 
 Marketplace create handlers set listing and request status to `PUBLISHED`. Housing, jobs, services, community posts, events, lost-and-found, and giveaways do the same with `PublishStatus`. Owner delete sets `ARCHIVED` and `deletedAt`. Offer create leaves `PENDING`. Counter sets `COUNTERED`. Accept sets `ACCEPTED` and inserts the conversation and transaction. Transaction statuses after that change through `PATCH /transactions/:id/status`. Service quotes start `PENDING`; provider accept sets `ACCEPTED`.
 
@@ -29,6 +34,11 @@ Marketplace create handlers set listing and request status to `PUBLISHED`. Housi
 - `Profile` — 1:1 user. `firstName`, `lastName`, optional `displayName`, `bio`, `neighborhood`, `city`, `state`, decimal `latitude` / `longitude`, `phoneVerified`, `emailVerified` (both default false). No route sets the verified flags.
 - `UserPreference` — JSON `interests`, JSON `capabilities`, `completedAt`. Written by onboarding.
 - `NotificationPreference` — booleans `newListings`, `priceDrops`, `messages` (default true), `events`, `community` (default false). Written by onboarding. No notification rows exist.
+- `StaffRoleAssignment` — `userId` + `StaffRole` (`MODERATOR` or `ADMIN`), unique together. No self-serve writer. Insert a row to grant the moderation queue.
+- `BlockedUser` — `blockerId`, `blockedId`, unique together. Either direction blocks messaging and the other interactions listed in `docs/PHASE_3_TRUST_SAFETY.md`.
+- `Report` — reporter, `targetType`, `targetId`, `reason`, optional `details`, `status`. Unique per reporter and target.
+- `ModerationAction` — staff `actorId`, `kind`, optional `note`, linked to one report.
+- `Message.hiddenAt` — set when staff hides a reported message. Participant reads replace the body with “This message was removed.”
 
 ### Catalog and listings
 
@@ -140,7 +150,7 @@ Tables and constraints the earlier design named that are **not** in `schema.pris
 
 ### Identity and safety
 
-`Verification`, `UserRole`, `DeviceSession`, `BlockedUser`.
+`Verification`, `DeviceSession`. `StaffRoleAssignment` and `BlockedUser` are implemented (see above).
 
 ### Marketplace extras
 
@@ -160,7 +170,7 @@ Tables and constraints the earlier design named that are **not** in `schema.pris
 
 ### Trust extras
 
-`ReviewResponse`, `TrustPassport`, `TrustEvent`, `ReputationMetric`, `Report`, `ModerationAction`, `SafetyIncident`. Profile stars and "Verified Neighbor" on Dashboard and Profile are fixture copy, not these tables.
+`ReviewResponse`, `TrustPassport`, `TrustEvent`, `ReputationMetric`, `SafetyIncident`. `Report` and `ModerationAction` are implemented. Profile stars and "Verified Neighbor" on Dashboard and Profile are fixture copy, not these tables.
 
 ### Community and verticals
 
