@@ -231,6 +231,7 @@ model Listing {
   priceHistory       PriceHistory[]
 
   @@index([status, categoryId, createdAt])
+  @@index([status, createdAt])
   @@index([sellerId, status])
   @@index([city, neighborhood])
 }
@@ -242,6 +243,8 @@ model ListingImage {
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, sortOrder])
 }
 
 model Favorite {
@@ -263,6 +266,8 @@ model SavedSearch {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
 }
 
 model NeedRequest {
@@ -289,6 +294,7 @@ model NeedRequest {
 
   @@index([requesterId, status, createdAt])
   @@index([categoryId, status])
+  @@index([status, createdAt])
 }
 
 model RequestOffer {
@@ -327,6 +333,8 @@ model CounterOffer {
   message     String
   createdAt   DateTime     @default(now())
   offer       RequestOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@index([offerId, createdAt])
 }
 
 model RequestMatch {
@@ -348,6 +356,8 @@ model Conversation {
   participants ConversationParticipant[]
   messages     Message[]
   transactions Transaction[]
+
+  @@index([updatedAt])
 }
 
 model ConversationParticipant {
@@ -359,6 +369,7 @@ model ConversationParticipant {
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([conversationId, userId])
+  @@index([userId])
 }
 
 model Message {
@@ -386,6 +397,8 @@ model Transaction {
   milestones     TransactionMilestone[]
   appointments   Appointment[]
   reviews        Review[]
+
+  @@index([updatedAt])
 }
 
 model TransactionParticipant {
@@ -396,6 +409,7 @@ model TransactionParticipant {
   user          User        @relation(fields: [userId], references: [id])
 
   @@id([transactionId, userId])
+  @@index([userId])
 }
 
 model TransactionMilestone {
@@ -405,6 +419,8 @@ model TransactionMilestone {
   toStatus      TransactionStatus
   createdAt     DateTime    @default(now())
   transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId, createdAt])
 }
 
 model Appointment {
@@ -427,6 +443,9 @@ model Review {
   transaction   Transaction @relation(fields: [transactionId], references: [id])
   author        User        @relation("ReviewAuthor", fields: [authorId], references: [id])
   subject       User        @relation("ReviewSubject", fields: [subjectId], references: [id])
+
+  @@index([subjectId, createdAt])
+  @@index([transactionId])
 }
 
 model PriceHistory {
@@ -734,6 +753,7 @@ model Report {
   @@unique([reporterId, targetType, targetId])
   @@index([status, createdAt])
   @@index([targetType, targetId])
+  @@index([reporterId, createdAt])
 }
 
 model ModerationAction {

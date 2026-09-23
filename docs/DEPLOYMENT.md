@@ -8,6 +8,30 @@ The repository pins the intended local toolchain in `.mise.toml` (`node = "22"`,
 
 ## 2. Required environment variables
 
+Boot validation is `backend/src/common/config/env.validation.ts`. The committed template is `env.example`. Copy it to `backend/.env` and, for `VITE_API_URL`, to `.env` at the repo root. Do not commit those copies.
+
+Required in every environment:
+
+| Variable | Rule |
+| --- | --- |
+| `DATABASE_URL` | `postgresql://` or `postgres://` |
+| `JWT_SECRET` | At least 32 characters |
+| `CORS_ORIGIN` | Comma-separated absolute `http` or `https` origins. `*` is rejected |
+
+Also required when `NODE_ENV=production`:
+
+| Variable | Rule |
+| --- | --- |
+| `REDIS_URL` | `redis://` or `rediss://`. Shared rate-limit counters. |
+| `TRUST_PROXY` | `1` or `0`. Use `1` only when the proxy overwrites `X-Forwarded-For`. |
+| `JWT_SECRET` | Must not be a placeholder (`change-me`, `replace-with`, …) and must not be low-diversity. |
+
+Optional variables and their defaults are listed in `env.example`. A partial S3 set (some of endpoint, bucket, access key, secret key) fails boot. `SENTRY_DSN`, when set, must be `https`. Payments, maps, refresh tokens, and object storage are not called by this release.
+
+Production does not serve Swagger. The process does not set cookies. Access tokens travel in `Authorization: Bearer` only.
+
+The block below is the older target inventory for services that are not wired yet. It is not the boot contract. Do not copy placeholder secrets into a production environment.
+
 The application should include an environment file based on the following contract:
 
 ```env
@@ -126,15 +150,39 @@ services:
 
 ## 5. Production readiness checklist
 
-- Postgres backups scheduled and tested
-- Redis persistence and failover configured
-- Object storage lifecycle rules set for uploaded images and documents
-- Sentry DSN configured and error alerts enabled
-- Stripe webhook ingress validated and secret-rotated
-- Email provider integrated with transactional templates
-- Mapbox token scoped to production domains only
-- CORS, CSP, and security headers enabled
-- Rate limiting active and tuned from observed traffic patterns
+This checklist is not satisfied by Phase 4. Do not treat a green CI run as a production launch.
+
+- Postgres backups scheduled and tested. Local Compose procedure: `scripts/backup-postgres.sh` and `scripts/restore-postgres.sh` (see below).
+- Redis persistence and failover configured. Compose Redis runs with AOF so local counters survive a restart. Redis is not the source of truth. A lost Redis only resets rate-limit counters.
+- Object storage lifecycle rules set for uploaded images and documents. No upload route is mounted yet.
+- Sentry DSN configured and error alerts enabled. `captureException` logs today and is the forwarding hook. The SDK is not bundled.
+- Stripe webhook ingress validated and secret-rotated. Payments are not wired.
+- Email provider integrated with transactional templates. Email is not wired.
+- Mapbox token scoped to production domains only. Maps are not wired.
+- CORS, CSP, and security headers enabled. Helmet and an explicit CORS list are on. CSP and HSTS apply when `NODE_ENV=production`.
+- Rate limiting active and tuned from observed traffic patterns. Defaults are in `backend/src/common/rate-limit.ts`. Production must set `REDIS_URL`.
+
+### Postgres backup and restore (Compose)
+
+Stop the API before a restore. Backup can run while the API is up.
+
+```sh
+scripts/backup-postgres.sh
+scripts/restore-postgres.sh artifacts/backups/<dump-file>
+```
+
+The dump is PostgreSQL custom format (`pg_dump -Fc`). Files under `artifacts/backups/` are gitignored. A restore uses `pg_restore --clean --if-exists` into the existing `neighborly` database. Take a fresh dump before a restore you might want to undo. There is no point-in-time recovery in Compose. A hosted Postgres needs the provider's backup schedule and a tested restore; these scripts do not cover that.
+
+### Health
+
+- `GET /api/v1/health` is liveness. It does not check dependencies.
+- `GET /api/v1/ready` runs `SELECT 1`. When `REDIS_URL` is set it also pings Redis. Postgres down or that ping failing returns 503. An empty `REDIS_URL` reports `redis: skipped` and can still be ready. Production boot does not allow an empty `REDIS_URL`.
+
+### Logs and abuse signals
+
+Logs are single-line JSON. `http.request` includes `requestId`, method, path, status, and duration. Query strings are not logged. `auth.login.failure` includes the email address; treat the drain as sensitive. `rate_limit.redis_fallback` means that process is counting in memory until it restarts. A burst of HTTP 429s on `auth.login` or `auth.register` is the auth-abuse signal. Per-user 429s are messaging, listings, offers, and reports.
+
+`SLOW_QUERY_LOG=1` warns on Prisma queries at or above `SLOW_QUERY_MS` (default 200). The line includes SQL text with placeholders, not bound values. Leave it off unless you are investigating.
 
 ## 6. Release strategy
 
@@ -151,6 +199,6 @@ Use a simple staging-to-production path:
 - Structured logs: request id, user id, route, latency, and status code
 - Metrics: listing creation, offer acceptance, message throughput, payment failures
 - Alerts: DB connectivity, Redis health, S3 upload failures, payment webhook issues, elevated 5xx rates
-- Health checks: `/health`, `/ready`, and critical dependency liveness checks
+- Health checks: `GET /api/v1/health` (liveness) and `GET /api/v1/ready` (Postgres, and Redis when `REDIS_URL` is set)
 
 This approach keeps the first release stable while leaving room for scaling and hardening as Neighborly expands its local marketplace and community platform.

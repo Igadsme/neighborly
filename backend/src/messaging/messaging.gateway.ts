@@ -11,11 +11,8 @@ import {
 import { JwtService } from '@nestjs/jwt'
 import { Server, Socket } from 'socket.io'
 import { PrismaService } from '../prisma/prisma.service'
-
-interface AccessTokenClaims {
-  sub?: string
-  email?: string
-}
+import { readAccessToken } from '../auth/access-token'
+import { accountSelect, isActiveAccount } from '../auth/account'
 
 type HandshakeSocket = Socket
 
@@ -31,18 +28,16 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection {
 
   afterInit(server: Server) {
     server.use((socket, next) => {
-      try {
-        this.attachUser(socket)
-        next()
-      } catch (error) {
-        next(error instanceof Error ? error : new Error('Unauthorized'))
-      }
+      void this.attachUser(socket).then(
+        () => next(),
+        error => next(error instanceof Error ? error : new Error('Unauthorized'))
+      )
     })
   }
 
-  handleConnection(client: HandshakeSocket) {
+  async handleConnection(client: HandshakeSocket) {
     try {
-      this.attachUser(client)
+      await this.attachUser(client)
     } catch {
       client.disconnect(true)
     }
@@ -69,25 +64,17 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection {
     this.server?.to(`conversation:${conversationId}`).emit('message.created', message)
   }
 
-  private attachUser(socket: HandshakeSocket) {
+  private async attachUser(socket: HandshakeSocket) {
     socket.data = socket.data ?? {}
     socket.data.userId = undefined
 
     const token = tokenFrom(socket)
     if (!token) throw new Error('Unauthorized')
 
-    let payload: AccessTokenClaims | string
-    try {
-      payload = this.jwt.verify<AccessTokenClaims>(token, { secret: process.env.JWT_SECRET })
-    } catch {
-      throw new Error('Unauthorized')
-    }
-
-    if (!payload || typeof payload === 'string' || typeof payload.sub !== 'string' || !payload.sub || typeof payload.email !== 'string' || !payload.email) {
-      throw new Error('Unauthorized')
-    }
-
-    socket.data.userId = payload.sub
+    const claims = readAccessToken(this.jwt, token)
+    const account = await this.prisma.user.findUnique({ where: { id: claims.sub }, select: accountSelect })
+    if (!isActiveAccount(account)) throw new Error('Unauthorized')
+    socket.data.userId = claims.sub
   }
 }
 

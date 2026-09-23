@@ -1,5 +1,19 @@
 # Security Plan
 
+## What the API enforces today
+
+This section is the Phase 4 contract. Sections below it are the longer target plan. They are not all implemented. This release is not production ready.
+
+- Access tokens are HS256 JWTs in `Authorization: Bearer`. No refresh token is issued. No cookie is set. CORS is an explicit origin list with `credentials: false`. `*` is rejected.
+- `AuthGuard` and the `/realtime` handshake load `User.status` and `deletedAt`. A suspended, deleted, or missing account is rejected even when the access token still verifies. Login already rejects a non-`ACTIVE` account.
+- Helmet sets the usual security headers. HSTS and the default content security policy are on when `NODE_ENV=production`. Swagger at `/docs` is off in production.
+- JSON bodies are limited to 256kb. `multipart/form-data` is rejected with 415. No upload route is mounted. `assertImageUpload` is the gate for a future image route (`MAX_UPLOAD_SIZE_MB`, default 5, max 10; JPEG, PNG, WebP).
+- `X-Forwarded-For` is used for auth rate limits only when `TRUST_PROXY=1`. Production must set `TRUST_PROXY` to `0` or `1`.
+- Rate limits use Redis when `REDIS_URL` is set. If Redis errors, the process keeps an in-memory window and logs `rate_limit.redis_fallback` once. Production boot requires `REDIS_URL`. `/ready` fails when that Redis ping fails.
+- Each response gets `x-request-id`. Request lines are JSON (`http.request`) and omit the query string. Auth and suspension events are `audit: true` lines. 5xx responses call `captureException` in `backend/src/common/logger.ts`. That function is the Sentry hook. The Sentry SDK is not bundled.
+- Validation still uses the global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`). Auth passwords are 12–128 characters on register and at most 128 on login. Free-text sanitizing from Phase 3 is unchanged.
+- Secrets belong in `backend/.env` or the host secret store. The committed template is `env.example`. `.env*` is gitignored.
+
 ## 1. Security principles
 
 Neighborly must treat trust, identity, and payments as first-class concerns. The current prototype includes real-world signals like verified sellers, reviews, location, and transaction flows, so the backend must be built with explicit safety and abuse controls.

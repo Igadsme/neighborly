@@ -1,9 +1,13 @@
 import { HttpException, HttpStatus } from '@nestjs/common'
+import { currentRequestId, writeLog } from './logger'
+import { trustProxyEnabled } from './http-security'
 
 type Bucket = { count: number; resetAt: number }
+type RateLimitRedis = { incr: (key: string) => Promise<number>; pexpire: (key: string, ms: number) => Promise<number> }
 
 const memory = new Map<string, Bucket>()
-let redisClient: { incr: (key: string) => Promise<number>; pexpire: (key: string, ms: number) => Promise<number> } | null | undefined
+let redisClient: RateLimitRedis | null | undefined
+let loggedRedisFallback = false
 
 export const rateLimitPolicies = {
   authRegister: { env: 'RATE_LIMIT_AUTH_REGISTER', limit: 5, windowMs: 15 * 60 * 1000 },
@@ -18,6 +22,13 @@ export type RateLimitScope = keyof typeof rateLimitPolicies
 
 export function resetRateLimitsForTests() {
   memory.clear()
+  redisClient = undefined
+  loggedRedisFallback = false
+}
+
+export function setRateLimitClientForTests(client: RateLimitRedis | null) {
+  redisClient = client
+  loggedRedisFallback = false
 }
 
 export function rateLimitsEnabled() {
@@ -32,10 +43,13 @@ function configuredLimit(envName: string, fallback: number) {
 }
 
 export function clientAddress(request: { headers?: Record<string, string | string[] | undefined>; ip?: string }) {
-  const forwarded = request.headers?.['x-forwarded-for']
-  const first = Array.isArray(forwarded) ? forwarded[0] : forwarded
-  const ip = first?.split(',')[0]?.trim()
-  return ip || request.ip || 'unknown'
+  if (trustProxyEnabled()) {
+    const forwarded = request.headers?.['x-forwarded-for']
+    const first = Array.isArray(forwarded) ? forwarded[0] : forwarded
+    const ip = first?.split(',')[0]?.trim()
+    if (ip) return ip
+  }
+  return request.ip || 'unknown'
 }
 
 export async function enforceRateLimit(scope: RateLimitScope, id: string) {
@@ -55,6 +69,7 @@ async function hit(key: string, windowMs: number) {
       return count
     } catch {
       // A Redis outage falls back to the in-process window so limits stay on.
+      noteRedisFallback()
     }
   }
   const now = Date.now()
@@ -67,10 +82,16 @@ async function hit(key: string, windowMs: number) {
   return current.count
 }
 
+function noteRedisFallback() {
+  if (loggedRedisFallback) return
+  loggedRedisFallback = true
+  writeLog('warn', 'rate_limit.redis_fallback', { requestId: currentRequestId() })
+}
+
 async function getRedis() {
+  if (redisClient !== undefined) return redisClient
   const url = process.env.REDIS_URL?.trim()
   if (!url) return null
-  if (redisClient !== undefined) return redisClient
   try {
     const { default: Redis } = await import('ioredis')
     const client = new Redis(url, { maxRetriesPerRequest: 1, enableOfflineQueue: false, lazyConnect: true })
@@ -78,6 +99,7 @@ async function getRedis() {
     redisClient = client
     return client
   } catch {
+    noteRedisFallback()
     redisClient = null
     return null
   }
