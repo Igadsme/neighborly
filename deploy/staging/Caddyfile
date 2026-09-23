@@ -1,0 +1,22 @@
+# Local staging TLS. Caddy's internal CA is not a public certificate.
+# The site port matches the published host port so the Host header matches.
+{
+	admin off
+	persist_config off
+}
+
+https://staging.neighborly.localhost:8444 {
+	tls internal
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle /socket.io/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy web:80
+	}
+}

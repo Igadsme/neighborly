@@ -24,6 +24,161 @@ services:
     volumes:
       - neighborly-redis:/data
 
+  # Staging profile. Does not replace the dev Postgres and Redis services above.
+  # Start with: scripts/staging-up.sh
+  # Local fixture passwords in this profile are not production secrets.
+  staging-postgres:
+    profiles: ["staging"]
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: neighborly
+      POSTGRES_USER: neighborly
+      POSTGRES_PASSWORD: neighborly
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - neighborly-staging-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neighborly -d neighborly"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+  staging-redis:
+    profiles: ["staging"]
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - neighborly-staging-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+  minio:
+    profiles: ["staging"]
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: neighborly-staging
+      MINIO_ROOT_PASSWORD: neighborly-staging-local-only
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - neighborly-staging-minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+  minio-init:
+    profiles: ["staging"]
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: neighborly-staging
+      MINIO_ROOT_PASSWORD: neighborly-staging-local-only
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" && mc mb --ignore-existing local/neighborly-media
+    restart: "no"
+  staging-migrate:
+    profiles: ["staging"]
+    image: neighborly-api:staging
+    build:
+      context: .
+      dockerfile: deploy/staging/api.Dockerfile
+    env_file:
+      - .env.staging
+    command: ["/app/db-setup.sh"]
+    depends_on:
+      staging-postgres:
+        condition: service_healthy
+    restart: "no"
+  api:
+    profiles: ["staging"]
+    image: neighborly-api:staging
+    build:
+      context: .
+      dockerfile: deploy/staging/api.Dockerfile
+    env_file:
+      - .env.staging
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      staging-migrate:
+        condition: service_completed_successfully
+      staging-redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/v1/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+  web:
+    profiles: ["staging"]
+    image: neighborly-web:staging
+    build:
+      context: .
+      dockerfile: deploy/staging/web.Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://staging.neighborly.localhost:8444/api/v1}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+  caddy:
+    profiles: ["staging"]
+    image: neighborly-caddy:staging
+    build:
+      context: .
+      dockerfile: deploy/staging/proxy.Dockerfile
+    ports:
+      - "127.0.0.1:8444:8444"
+    volumes:
+      - neighborly-staging-caddy:/data
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-kfsS",
+          "--resolve",
+          "staging.neighborly.localhost:8444:127.0.0.1",
+          "https://staging.neighborly.localhost:8444/api/v1/health",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
 volumes:
   neighborly-postgres:
   neighborly-redis:
+  neighborly-staging-postgres:
+  neighborly-staging-redis:
+  neighborly-staging-minio:
+  neighborly-staging-caddy:
