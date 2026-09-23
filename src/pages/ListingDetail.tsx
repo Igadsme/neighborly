@@ -47,7 +47,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
   const [messageSent, setMessageSent] = useState(false)
   const [messageSending, setMessageSending] = useState(false)
   const [messageError, setMessageError] = useState('')
-  const [reported, setReported] = useState(false)
+  const [actionNote, setActionNote] = useState('')
   const [zoomed, setZoomed] = useState(false)
   const [relatedRows, setRelatedRows] = useState<Listing[]>([])
   const [relatedLoading, setRelatedLoading] = useState(fromApi)
@@ -485,10 +485,11 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                           className="w-full h-10 pl-7 pr-3 bg-white border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#E8694A]"
                         />
                       </div>
-                      <Button variant="secondary" size="sm" fullWidth>Send offer</Button>
+                      <Button variant="secondary" size="sm" fullWidth onClick={() => setActionNote("Offers on a listing aren't available yet. Message the seller instead.")}>Send offer</Button>
                     </div>
                   )}
-                  <Button variant="outline" size="md" fullWidth>Reserve item</Button>
+                  {actionNote && <p className="text-xs text-[#A63D27]" role="alert">{actionNote}</p>}
+                  <Button variant="outline" size="md" fullWidth onClick={() => setActionNote("Reserving an item isn't available yet.")}>Reserve item</Button>
                 </div>
 
                 <div className="mt-5 pt-5 border-t border-[#F5F4EF] space-y-2">
@@ -540,7 +541,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {listing.seller.verified && <Badge variant="green" size="sm">✓ Email verified</Badge>}
                   {listing.seller.idVerified && <Badge variant="green" size="sm">🪪 ID verified</Badge>}
-                  <Badge variant="blue" size="sm">⚡ Fast replies</Badge>
+                  {!fromApi && <Badge variant="blue" size="sm">⚡ Fast replies</Badge>}
                 </div>
 
                 <button onClick={() => onNavigate('profile', isUuid(listing.seller.id) ? listing.seller.id : undefined)} className="w-full py-2 text-sm font-medium text-[#2D6A4F] border border-[#2D6A4F]/30 rounded-xl hover:bg-[#F0FBF3] transition-colors">
@@ -550,11 +551,12 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
 
               {/* Report */}
               <button
-                onClick={() => setReported(true)}
-                className={`w-full text-xs font-medium text-center py-2 transition-colors ${reported ? 'text-[#E8694A]' : 'text-[#C5CCDA] hover:text-[#8A9AB5]'}`}
+                onClick={() => setActionNote("Reporting isn't available yet.")}
+                className="w-full text-xs font-medium text-center py-2 transition-colors text-[#C5CCDA] hover:text-[#8A9AB5]"
               >
-                {reported ? '✓ Report submitted' : 'Report this listing'}
+                Report this listing
               </button>
+              {actionNote && <p className="text-xs text-[#A63D27] text-center" role="alert">{actionNote}</p>}
             </div>
           </div>
         </div>

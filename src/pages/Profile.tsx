@@ -31,14 +31,31 @@ function ratingBreakdown(reviews: ProfileReview[]) {
 
 export default function Profile({ onNavigate, userId }: ProfileProps) {
   const [activeTab, setActiveTab] = useState<'listings' | 'reviews' | 'sold'>('listings')
-  const [reported, setReported] = useState(false)
-  const [following, setFollowing] = useState(false)
+  const [profileNote, setProfileNote] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [profile, setProfile] = useState<PublicProfile | null>(null)
   const [reviews, setReviews] = useState<ProfileReview[]>([])
   const [activeListings, setActiveListings] = useState<ApiListing[]>([])
   const [soldListings, setSoldListings] = useState<ApiListing[]>([])
+
+  const messageProfile = async () => {
+    if (!userId) {
+      setProfileNote('Open Messages to continue a conversation.')
+      onNavigate('messages')
+      return
+    }
+    setProfileNote('')
+    try {
+      const result = await api.conversations.create({
+        participantId: userId,
+        body: 'Hi, I saw your profile on Neighborly.',
+      })
+      onNavigate('messages', result.conversation.id)
+    } catch (cause: unknown) {
+      setProfileNote(readStatus(cause, 'Unable to message this neighbor.'))
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -125,12 +142,12 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
             </div>
             <div className="flex gap-2 pb-2">
               <button
-                onClick={() => setFollowing(!following)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all ${following ? 'bg-[#2D6A4F] text-white border-[#2D6A4F]' : 'bg-white text-[#1B2A4A] border-[#E8E6DF] hover:border-[#2D6A4F]'}`}
+                onClick={() => setProfileNote("Following neighbors isn't available yet.")}
+                className="px-4 py-2 rounded-full text-sm font-semibold border transition-all bg-white text-[#1B2A4A] border-[#E8E6DF] hover:border-[#2D6A4F]"
               >
-                {following ? '✓ Following' : 'Follow'}
+                Follow
               </button>
-              <Button variant="primary" size="sm" onClick={() => onNavigate('messages')}>
+              <Button variant="primary" size="sm" onClick={() => void messageProfile()}>
                 <Icon name="message" size={13} />
                 Message
               </Button>
@@ -300,11 +317,12 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
         {/* Report */}
         <div className="text-center mt-8">
           <button
-            onClick={() => setReported(true)}
-            className={`text-xs font-medium transition-colors ${reported ? 'text-[#E8694A]' : 'text-[#C5CCDA] hover:text-[#8A9AB5]'}`}
+            onClick={() => setProfileNote("Reporting isn't available yet.")}
+            className="text-xs font-medium transition-colors text-[#C5CCDA] hover:text-[#8A9AB5]"
           >
-            {reported ? '✓ Report submitted. Our team will review this profile.' : 'Report this profile'}
+            Report this profile
           </button>
+          {profileNote && <p className="text-xs text-[#A63D27] mt-2" role="alert">{profileNote}</p>}
         </div>
           </>
         )}

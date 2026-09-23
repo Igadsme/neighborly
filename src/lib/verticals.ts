@@ -35,6 +35,7 @@ export interface HousingCard {
     rating: number
     reviews: number
   }
+  ownerId: string
 }
 
 export interface JobCard {
@@ -69,6 +70,7 @@ export interface ServiceCard {
   availability: string
   tags: string[]
   image: string
+  ownerId: string
 }
 
 export interface CommunityPostCard {
@@ -105,6 +107,7 @@ export interface LostFoundCard {
   neighborhood: string
   posted: string
   contact: string
+  authorId: string
   image: string
 }
 
@@ -141,6 +144,7 @@ export function housingCard(row: ApiHousing): HousingCard {
     utilities: row.utilities || "N/A",
     images: row.images.map((image) => image.objectKey || "").filter(Boolean),
     verified: row.verified,
+    ownerId: row.owner.id,
     seller: {
       avatar: "",
       name: personName(row.owner),
@@ -186,6 +190,7 @@ export function serviceCard(row: ApiServiceListing): ServiceCard {
     availability: row.availability,
     tags: row.tags ?? [],
     image: row.image || "",
+    ownerId: row.owner.id,
   }
 }
 
@@ -232,6 +237,7 @@ export function lostFoundCard(row: ApiLostFound): LostFoundCard {
     neighborhood: row.neighborhood,
     posted: relativeTime(row.createdAt),
     contact: personName(row.author),
+    authorId: row.author.id,
     image: row.image || "",
   }
 }

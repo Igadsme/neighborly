@@ -39,9 +39,10 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "instant" })
   }
 
-  const signIn = () => {
+  const signIn = (next?: string, id?: string) => {
     setIsSignedIn(true)
-    navigate("home")
+    const destination = next && next !== "landing" && next !== "onboarding" ? next : "home"
+    navigate(destination, id)
   }
 
   const signOut = () => {
@@ -205,7 +206,9 @@ export default function App() {
 
         {page === "jobs" && isSignedIn && <Jobs />}
 
-        {page === "community" && isSignedIn && <Community />}
+        {page === "community" && isSignedIn && (
+          <Community onNavigate={navigate as any} />
+        )}
 
         {/* Redirect to sign in if accessing signed-in pages without auth */}
         {!isSignedIn && page !== "landing" && page !== "onboarding" && (

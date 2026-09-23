@@ -1,5 +1,6 @@
 import type {
   AcceptOfferResult,
+  ApiCommunityComment,
   ApiCommunityEvent,
   ApiCommunityPost,
   ApiConversation,
@@ -22,7 +23,12 @@ import type {
   AuthResponse,
   CommunityPostInput,
   CommunityPostQuery,
+  CommunitySummary,
   CreateConversationInput,
+  GiveawayInput,
+  LostFoundInput,
+  NeighborhoodCount,
+  ServiceCreateInput,
   CreateConversationResult,
   CurrentUser,
   HousingQuery,
@@ -173,6 +179,12 @@ export const api = {
       }),
     publish: (id: string) =>
       request<ApiListing>(`/listings/${id}/publish`, { method: "POST" }),
+    pause: (id: string) =>
+      request<ApiListing>(`/listings/${id}/pause`, { method: "POST" }),
+    markSold: (id: string) =>
+      request<ApiListing>(`/listings/${id}/sold`, { method: "POST" }),
+    mine: () => request<ApiListing[]>("/listings/mine"),
+    neighborhoods: () => request<NeighborhoodCount[]>("/listings/neighborhoods"),
     get: (id: string) => request<ApiListing>(`/listings/${id}`),
     update: (id: string, input: Partial<ListingInput>) =>
       request<unknown>(`/listings/${id}`, {
@@ -290,10 +302,23 @@ export const api = {
         method: "POST",
         body: JSON.stringify(input),
       }),
+    create: (input: ServiceCreateInput) =>
+      request<ApiServiceListing>("/services", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
   },
   community: {
+    summary: () => request<CommunitySummary>("/community/summary"),
     posts: (query: CommunityPostQuery = {}) =>
       request<ApiCommunityPost[]>(`/community/posts${queryString(query)}`),
+    comments: (id: string) =>
+      request<ApiCommunityComment[]>(`/community/posts/${id}/comments`),
+    comment: (id: string, body: string) =>
+      request<ApiCommunityComment>(`/community/posts/${id}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ body }),
+      }),
     createPost: (input: CommunityPostInput) =>
       request<ApiCommunityPost>("/community/posts", {
         method: "POST",
@@ -311,7 +336,17 @@ export const api = {
         { method: "POST" },
       ),
     lostFound: () => request<ApiLostFound[]>("/community/lost-found"),
+    createLostFound: (input: LostFoundInput) =>
+      request<ApiLostFound>("/community/lost-found", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
     giveaways: () => request<ApiGiveaway[]>("/community/giveaways"),
+    createGiveaway: (input: GiveawayInput) =>
+      request<ApiGiveaway>("/community/giveaways", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
     claim: (id: string) =>
       request<{ claimed: boolean; giveaway: ApiGiveaway }>(
         `/community/giveaways/${id}/claim`,

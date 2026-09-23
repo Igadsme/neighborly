@@ -855,11 +855,10 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                         🚀 Boost your listing
                       </p>
                       <p className="text-xs text-[#8A9AB5] mt-0.5">
-                        Get 5× more views with a promoted listing — $4.99 for 7
-                        days
+                        Promotion isn't available yet. Payments are not connected.
                       </p>
                     </div>
-                    <Button variant="secondary" size="sm">
+                    <Button variant="secondary" size="sm" disabled>
                       Promote
                     </Button>
                   </div>
