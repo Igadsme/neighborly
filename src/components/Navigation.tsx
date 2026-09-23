@@ -130,6 +130,8 @@ export default function Navigation({
             <div className="flex items-center gap-2 ml-auto">
               {/* Messages */}
               <button
+                type="button"
+                aria-label="Messages"
                 onClick={() => onNavigate("messages")}
                 className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
                   isActive("messages")
@@ -147,6 +149,8 @@ export default function Navigation({
 
               {/* Saved */}
               <button
+                type="button"
+                aria-label="Saved items"
                 onClick={() => onNavigate("saved")}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
                   isActive("saved")
@@ -169,6 +173,9 @@ export default function Navigation({
               {/* Profile */}
               <div className="relative">
                 <button
+                  type="button"
+                  aria-label="Account menu"
+                  aria-expanded={profileOpen}
                   onClick={() => setProfileOpen(!profileOpen)}
                   className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-full border border-[#E8E6DF] hover:border-[#C5CCDA] transition-colors"
                 >
@@ -262,6 +269,7 @@ export default function Navigation({
             />
             <input
               type="text"
+              aria-label="Search"
               placeholder="Search..."
               value={mobileSearch}
               onChange={(e) => setMobileSearch(e.target.value)}
@@ -271,6 +279,8 @@ export default function Navigation({
           </div>
 
           <button
+            type="button"
+            aria-label="Messages"
             onClick={() => onNavigate("messages")}
             className="relative w-8 h-8 flex items-center justify-center text-[#5C6E8A]"
           >

@@ -16,6 +16,7 @@ describe('http security', () => {
     expect(helmetOptions('production').contentSecurityPolicy).toBeUndefined()
     expect(helmetOptions('development').contentSecurityPolicy).toBe(false)
     expect(helmetOptions('production').hsts).toBe(true)
+    expect(helmetOptions('production').xPoweredBy).toBeUndefined()
   })
 
   it('trusts forwarded addresses only when TRUST_PROXY=1', () => {

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer'
-import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator'
+import { IsBoolean, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator'
 
 export class CreateListingDto {
   @IsUUID()
@@ -131,5 +131,7 @@ export class SaveSearchDto {
   @IsString()
   query!: string
 
-  filters!: Record<string, unknown>
+  @IsOptional()
+  @IsObject()
+  filters?: Record<string, unknown>
 }

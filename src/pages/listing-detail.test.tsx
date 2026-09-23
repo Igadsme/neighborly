@@ -317,6 +317,13 @@ describe("Listing detail", () => {
     expect(await screen.findByRole("button", { name: "Saved" })).toBeTruthy()
   })
 
+  it("says sharing a link is not available from the photo control", async () => {
+    listingRoutes({})
+    render(<ListingDetail listingId={listingId} onNavigate={() => undefined} />)
+    fireEvent.click(await screen.findByRole("button", { name: "Share listing" }))
+    expect((await screen.findAllByText("Sharing a link isn't available in this version.")).length).toBeGreaterThan(0)
+  })
+
   it("submits a listing report from the existing control", async () => {
     const reportBody = { current: null as unknown }
     listingRoutes({ messageBody: reportBody })

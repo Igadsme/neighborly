@@ -102,7 +102,7 @@ The Create Listing `<select>` uses a shorter hardcoded name list and resolves `c
 | `DELETE` | `/listings/:id` | Yes | Owner only. Sets `ARCHIVED` and `deletedAt`. |
 | `POST` | `/listings/:id/favorite` | Yes | Toggle. `{ saved: true \| false }`. |
 | `GET` | `/listings/favorites` | Yes | Favorites for the caller, newest first, listing included. |
-| `POST` | `/listings/saved-searches` | Yes | `{ query, filters }`. Empty query is 409. |
+| `POST` | `/listings/saved-searches` | Yes | `{ query, filters? }`. `filters` is an optional object. Empty query is 409. |
 | `GET` | `/listings/saved-searches` | Yes | Caller's rows, `updatedAt` desc. |
 
 `POST /listings` body (unknown fields are rejected):
@@ -424,7 +424,7 @@ All guarded. Reports and blocks use the caller id from the access token. A calle
 | `DELETE` | `/safety/blocks/:userId` | 404 `"Block not found"` when that block is not the caller’s. A non-UUID is 400. |
 | `GET` | `/moderation/reports` | `MODERATOR` or `ADMIN` only. Query `status` defaults to `OPEN`. Anyone else is 403 `"Moderator access is required"`. |
 | `GET` | `/moderation/reports/:id` | Staff only. Includes a short `preview` of the target. 404 `"Report not found"`. |
-| `POST` | `/moderation/reports/:id/actions` | Body `{ "kind", "note?" }`. `kind` is `DISMISS`, `RESOLVE`, `HIDE`, `SUSPEND_USER`, or `RESTORE_USER`. A closed report is 409 `"This report is already closed"`. `HIDE` archives a listing or community post (`deletedAt` set) or sets `Message.hiddenAt`. `HIDE` on a user report is 409 `"This action does not apply to that report"`. `SUSPEND_USER` sets that account to `SUSPENDED`. `RESTORE_USER` sets it back to `ACTIVE`. Staff cannot suspend or restore their own account from a report (409). |
+| `POST` | `/moderation/reports/:id/actions` | Body `{ "kind", "note?" }`. `kind` is `DISMISS`, `RESOLVE`, `HIDE`, `SUSPEND_USER`, or `RESTORE_USER`. A closed report is 409 `"This report is already closed"`, except `RESTORE_USER` on a `RESOLVED` report whose target account is still `SUSPENDED`. `HIDE` archives a listing or community post (`deletedAt` set) or sets `Message.hiddenAt`. `HIDE` on a user report is 409 `"This action does not apply to that report"`. `SUSPEND_USER` sets that account to `SUSPENDED` and resolves the report. `RESTORE_USER` sets it back to `ACTIVE`, including after that resolve. Staff cannot suspend or restore their own account from a report (409). |
 
 There is no screen that grants `StaffRole`. Insert `StaffRoleAssignment` directly. There is no notification list.
 

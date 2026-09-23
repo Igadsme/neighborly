@@ -35,6 +35,9 @@ describe('Listing draft HTTP', () => {
         stored = { ...stored, ...args.data }
         return stored
       })
+    },
+    savedSearch: {
+      create: jest.fn(async (args: { data: Record<string, unknown> }) => ({ id: 'search-1', ...args.data }))
     }
   }
 
@@ -131,5 +134,24 @@ describe('Listing draft HTTP', () => {
     })
     expect(response.status).toBe(409)
     expect(prisma.listing.update).not.toHaveBeenCalled()
+  })
+
+  it('POST /api/v1/listings/saved-searches keeps the filter object the Explore screen sends', async () => {
+    const response = await fetch(`${baseUrl}/api/v1/listings/saved-searches`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        query: 'walnut table',
+        filters: { category: 'Furniture', verifiedOnly: true, maxPrice: '400' }
+      })
+    })
+    expect(response.status).toBe(201)
+    expect(prisma.savedSearch.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        userId: 'user-1',
+        query: 'walnut table',
+        filters: { category: 'Furniture', verifiedOnly: true, maxPrice: '400' }
+      })
+    }))
   })
 })
