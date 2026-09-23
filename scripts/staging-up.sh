@@ -12,6 +12,10 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
+# This volume writes AppleDouble files. BuildKit fails when it cannot read their xattrs.
+export COPYFILE_DISABLE=1
+find "$ROOT" \( -path '*/node_modules/*' -o -path '*/.git/*' \) -prune -o -name '._*' -exec rm -f {} +
+
 if [ ! -f .env.staging ]; then
   cp env.staging.example .env.staging
 fi
