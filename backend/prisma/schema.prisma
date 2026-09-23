@@ -73,6 +73,41 @@ enum QuoteStatus {
   ACCEPTED
 }
 
+enum StaffRole {
+  MODERATOR
+  ADMIN
+}
+
+enum ReportTargetType {
+  LISTING
+  USER
+  MESSAGE
+  COMMUNITY_POST
+}
+
+enum ReportReason {
+  SPAM
+  SCAM
+  HARASSMENT
+  INAPPROPRIATE
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum ModerationActionKind {
+  DISMISS
+  RESOLVE
+  HIDE
+  SUSPEND_USER
+  RESTORE_USER
+}
+
 model User {
   id                 String               @id @default(uuid()) @db.Uuid
   email              String               @unique
@@ -108,6 +143,11 @@ model User {
   lostFoundItems     LostFoundItem[]
   giveaways          Giveaway[]           @relation("GiveawayAuthor")
   claimedGiveaways   Giveaway[]           @relation("GiveawayClaimer")
+  staffRoles         StaffRoleAssignment[]
+  blocksGiven        BlockedUser[]        @relation("BlocksGiven")
+  blocksReceived     BlockedUser[]        @relation("BlocksReceived")
+  reportsFiled       Report[]             @relation("ReportsFiled")
+  moderationActions  ModerationAction[]
 }
 
 model Profile {
@@ -326,6 +366,7 @@ model Message {
   conversationId String       @db.Uuid
   senderId       String       @db.Uuid
   body           String
+  hiddenAt       DateTime?
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender         User         @relation("MessageSender", fields: [senderId], references: [id])
@@ -652,4 +693,59 @@ model Giveaway {
 
   @@index([status, claimed, createdAt])
   @@index([authorId, status])
+}
+
+model StaffRoleAssignment {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  role      StaffRole
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([role])
+}
+
+model BlockedUser {
+  id        String   @id @default(uuid()) @db.Uuid
+  blockerId String   @db.Uuid
+  blockedId String   @db.Uuid
+  createdAt DateTime @default(now())
+  blocker   User     @relation("BlocksGiven", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("BlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+model Report {
+  id         String           @id @default(uuid()) @db.Uuid
+  reporterId String           @db.Uuid
+  targetType ReportTargetType
+  targetId   String           @db.Uuid
+  reason     ReportReason
+  details    String?
+  status     ReportStatus     @default(OPEN)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  reporter   User             @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: Cascade)
+  actions    ModerationAction[]
+
+  @@unique([reporterId, targetType, targetId])
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+}
+
+model ModerationAction {
+  id        String               @id @default(uuid()) @db.Uuid
+  reportId  String               @db.Uuid
+  actorId   String               @db.Uuid
+  kind      ModerationActionKind
+  note      String?
+  createdAt DateTime             @default(now())
+  report    Report               @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  actor     User                 @relation(fields: [actorId], references: [id])
+
+  @@index([reportId, createdAt])
+  @@index([actorId])
 }

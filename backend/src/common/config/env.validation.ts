@@ -4,7 +4,7 @@ export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
   PORT: Joi.number().port().default(3000),
   DATABASE_URL: Joi.string().uri({ scheme: ['postgresql', 'postgres'] }).required(),
-  // Unused until a Redis client exists. Compose still starts Redis for later slices.
+  // Used for rate-limit counters when set. An empty value keeps the in-process window.
   REDIS_URL: Joi.string().uri({ scheme: ['redis', 'rediss'] }).optional().allow(''),
   JWT_SECRET: Joi.string().min(32).required(),
   JWT_ACCESS_TTL: Joi.string().default('15m'),

@@ -1,7 +1,8 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
+import { assertNotBlocked } from '../common/blocks'
 import { publicUserSelect } from '../common/public-user.select'
-import { cleanText } from '../common/text'
+import { cleanText, sanitizeText } from '../common/text'
 import { reactionEmojis } from '../common/vertical-values'
 import { PrismaService } from '../prisma/prisma.service'
 import {
@@ -147,8 +148,8 @@ export class CommunityService {
       data: {
         authorId,
         type: input.type,
-        title: input.title.trim(),
-        body: input.body.trim(),
+        title: sanitizeText(input.title, 200),
+        body: sanitizeText(input.body),
         neighborhood: input.neighborhood.trim(),
         city: cleanText(input.city),
         status: 'PUBLISHED'
@@ -180,7 +181,8 @@ export class CommunityService {
   }
 
   async react(userId: string, postId: string, input: ReactionDto) {
-    await this.getPost(postId)
+    const post = await this.getPost(postId)
+    await assertNotBlocked(this.prisma, userId, post.author.id)
     const where = { postId_userId: { postId, userId } }
     const existing = await this.prisma.communityReaction.findUnique({ where })
     if (existing?.emoji === input.emoji) await this.prisma.communityReaction.delete({ where })
@@ -198,9 +200,12 @@ export class CommunityService {
   }
 
   async createComment(userId: string, postId: string, input: CreateCommentDto) {
-    await this.getPost(postId)
+    const post = await this.getPost(postId)
+    await assertNotBlocked(this.prisma, userId, post.author.id)
+    const body = sanitizeText(input.body, 4000)
+    if (!body) throw new BadRequestException('Comment body is required')
     return this.prisma.communityComment.create({
-      data: { postId, authorId: userId, body: input.body.trim() },
+      data: { postId, authorId: userId, body },
       select: commentSelect
     })
   }

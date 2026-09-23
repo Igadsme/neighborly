@@ -19,7 +19,8 @@ describe('Conversations HTTP', () => {
     user: { findUnique: jest.fn() },
     listing: { findUnique: jest.fn() },
     conversation: { findFirst: jest.fn(), create: jest.fn() },
-    conversationParticipant: { findUnique: jest.fn() },
+    conversationParticipant: { findUnique: jest.fn(), findMany: jest.fn() },
+    blockedUser: { findFirst: jest.fn() },
     $transaction: jest.fn()
   }
   let app: INestApplication
@@ -59,6 +60,8 @@ describe('Conversations HTTP', () => {
     prisma.conversation.findFirst.mockResolvedValue(null)
     prisma.conversation.create.mockResolvedValue({ id: conversationId })
     prisma.conversationParticipant.findUnique.mockResolvedValue({ userId: callerId, conversationId })
+    prisma.conversationParticipant.findMany.mockResolvedValue([])
+    prisma.blockedUser.findFirst.mockResolvedValue(null)
     prisma.$transaction.mockImplementation(async (work: (tx: {
       conversation: { findFirst: typeof prisma.conversation.findFirst; create: typeof prisma.conversation.create; update: () => Promise<unknown> }
       message: { create: (args: { data: { body: string; conversationId: string; senderId: string } }) => Promise<unknown> }

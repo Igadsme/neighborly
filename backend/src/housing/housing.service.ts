@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { publicUserSelect } from '../common/public-user.select'
-import { cleanList, cleanText } from '../common/text'
+import { cleanList, cleanText, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateHousingDto, ListHousingQuery, UpdateHousingDto } from './dto'
 
@@ -102,8 +102,8 @@ export class HousingService {
     const created = await this.prisma.housingListing.create({
       data: {
         ownerId,
-        title: input.title.trim(),
-        description: input.description.trim(),
+        title: sanitizeText(input.title, 140),
+        description: sanitizeText(input.description),
         propertyType: input.type,
         listingType: input.listingType,
         priceCents: input.priceCents,

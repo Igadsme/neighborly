@@ -81,6 +81,7 @@ describe('RequestsService accept path', () => {
     }
     return {
       requestOffer: client.requestOffer,
+      blockedUser: { findFirst: async () => null },
       $transaction: async (work: (tx: typeof client) => Promise<unknown>) => work(client),
       state
     }

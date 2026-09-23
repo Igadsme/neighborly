@@ -12,6 +12,7 @@ import { MessagingModule } from './messaging/messaging.module'
 import { UsersModule } from './users/users.module'
 import { CategoriesModule } from './categories/categories.module'
 import { CommunityModule } from './community/community.module'
+import { SafetyModule } from './safety/safety.module'
 import { HousingModule } from './housing/housing.module'
 import { JobsModule } from './jobs/jobs.module'
 import { ServicesModule } from './services/services.module'
@@ -32,7 +33,8 @@ import { ServicesModule } from './services/services.module'
     HousingModule,
     JobsModule,
     ServicesModule,
-    CommunityModule
+    CommunityModule,
+    SafetyModule
   ]
 })
 export class AppModule {}

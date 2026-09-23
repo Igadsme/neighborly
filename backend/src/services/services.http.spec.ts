@@ -86,6 +86,7 @@ function expectPublicService(body: unknown) {
 describe('Services HTTP', () => {
   let serviceOwnerId = 'provider-1'
   const prisma = {
+    blockedUser: { findFirst: jest.fn(async () => null) },
     serviceListing: {
       findMany: jest.fn(async (args: { select: SelectSpec }) => [projectSelect(service, args.select)]),
       findFirst: jest.fn(async (args: { select?: SelectSpec }) => {

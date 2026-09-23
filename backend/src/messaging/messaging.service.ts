@@ -1,7 +1,16 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
+import { assertNotBlocked } from '../common/blocks'
+import { publicUserSelect } from '../common/public-user.select'
+import { sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
 import { MessagingGateway } from './messaging.gateway'
+
+function redactMessage<T extends { body: string; hiddenAt?: Date | null }>(message: T) {
+  const { hiddenAt, ...rest } = message
+  if (!hiddenAt) return rest
+  return { ...rest, body: 'This message was removed' }
+}
 
 @Injectable()
 export class MessagingService {
@@ -10,24 +19,48 @@ export class MessagingService {
     private readonly realtime: MessagingGateway
   ) {}
 
-  listConversations(userId: string) {
-    return this.prisma.conversation.findMany({
+  async listConversations(userId: string) {
+    const rows = await this.prisma.conversation.findMany({
       where: { participants: { some: { userId } } },
-      include: { participants: { include: { user: { include: { profile: true } } } }, messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      select: {
+        id: true,
+        createdAt: true,
+        updatedAt: true,
+        participants: {
+          select: {
+            userId: true,
+            lastReadAt: true,
+            user: { select: publicUserSelect }
+          }
+        },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { id: true, conversationId: true, senderId: true, body: true, createdAt: true, hiddenAt: true }
+        }
+      },
       orderBy: { updatedAt: 'desc' }
     })
+    return rows.map(row => ({ ...row, messages: row.messages.map(redactMessage) }))
   }
 
-  listMessages(userId: string, conversationId: string) {
-    return this.assertParticipant(userId, conversationId).then(() =>
-      this.prisma.message.findMany({ where: { conversationId }, orderBy: { createdAt: 'asc' } })
-    )
+  async listMessages(userId: string, conversationId: string) {
+    await this.assertParticipant(userId, conversationId)
+    const rows = await this.prisma.message.findMany({ where: { conversationId }, orderBy: { createdAt: 'asc' } })
+    return rows.map(redactMessage)
   }
 
   async sendMessage(userId: string, conversationId: string, body: string) {
     await this.assertParticipant(userId, conversationId)
+    const others = await this.prisma.conversationParticipant.findMany({
+      where: { conversationId, NOT: { userId } },
+      select: { userId: true }
+    })
+    for (const other of others) await assertNotBlocked(this.prisma, userId, other.userId)
+    const clean = sanitizeText(body, 4000)
+    if (!clean) throw new BadRequestException('Message body is required')
     const message = await this.prisma.$transaction(async tx => {
-      const created = await tx.message.create({ data: { conversationId, senderId: userId, body: body.trim() } })
+      const created = await tx.message.create({ data: { conversationId, senderId: userId, body: clean } })
       await tx.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })
       return created
     })
@@ -36,7 +69,7 @@ export class MessagingService {
   }
 
   async createConversation(userId: string, input: { participantId: string; body: string; listingId?: string }) {
-    const body = input.body.trim()
+    const body = sanitizeText(input.body, 4000)
     if (!body) throw new BadRequestException('Message body is required')
     if (input.participantId === userId) throw new BadRequestException('You cannot message yourself')
 
@@ -46,6 +79,7 @@ export class MessagingService {
     })
     if (!other || other.deletedAt || other.status === 'DELETED') throw new NotFoundException('User not found')
     if (other.status !== 'ACTIVE') throw new BadRequestException('This person cannot receive messages')
+    await assertNotBlocked(this.prisma, userId, input.participantId)
 
     if (input.listingId) {
       const listing = await this.prisma.listing.findUnique({

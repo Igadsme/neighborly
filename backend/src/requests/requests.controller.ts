@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nest
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
+import { enforceRateLimit } from '../common/rate-limit'
 import { CounterOfferDto, CreateOfferDto, CreateRequestDto, ListOffersQuery } from './dto'
 import { RequestsService } from './requests.service'
 
@@ -45,14 +46,16 @@ export class RequestsController {
   @Post('/offers/:id/counter')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  counter(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() input: CounterOfferDto) {
+  async counter(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() input: CounterOfferDto) {
+    await enforceRateLimit('offers', req.user.id)
     return this.requests.counterOffer(req.user.id, id, input)
   }
 
   @Post(':id/offers')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  createOffer(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() input: CreateOfferDto) {
+  async createOffer(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() input: CreateOfferDto) {
+    await enforceRateLimit('offers', req.user.id)
     return this.requests.createOffer(req.user.id, id, input)
   }
 }
