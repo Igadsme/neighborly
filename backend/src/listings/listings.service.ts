@@ -1,7 +1,32 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
+import { publicUserSelect } from '../common/public-user.select'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateListingDto, ListListingsQuery, SaveSearchDto, UpdateListingDto } from './dto'
+
+const publicSeller = { select: publicUserSelect }
+
+const publicListingSelect = {
+  id: true,
+  sellerId: true,
+  categoryId: true,
+  title: true,
+  description: true,
+  priceCents: true,
+  condition: true,
+  status: true,
+  neighborhood: true,
+  city: true,
+  radiusMiles: true,
+  pickupAvailable: true,
+  deliveryAvailable: true,
+  shippingAvailable: true,
+  createdAt: true,
+  updatedAt: true,
+  deletedAt: true,
+  category: true,
+  seller: publicSeller
+} satisfies Prisma.ListingSelect
 
 @Injectable()
 export class ListingsService {
@@ -15,7 +40,7 @@ export class ListingsService {
         categoryId: query.categoryId,
         ...(search ? { OR: [{ title: { contains: search, mode: 'insensitive' } }, { description: { contains: search, mode: 'insensitive' } }] } : {})
       },
-      include: { images: true, category: true, seller: { include: { profile: true } } },
+      select: { ...publicListingSelect, images: true },
       orderBy: { createdAt: 'desc' },
       take: query.limit,
       skip: query.offset
@@ -47,7 +72,7 @@ export class ListingsService {
   async get(id: string) {
     const listing = await this.prisma.listing.findFirst({
       where: { id, deletedAt: null },
-      include: { images: { orderBy: { sortOrder: 'asc' } }, category: true, seller: { include: { profile: true } } }
+      select: { ...publicListingSelect, images: { orderBy: { sortOrder: 'asc' } } }
     })
     if (!listing) throw new NotFoundException('Listing not found')
     return listing
@@ -92,7 +117,7 @@ export class ListingsService {
   listFavorites(userId: string) {
     return this.prisma.favorite.findMany({
       where: { userId, listing: { deletedAt: null, status: { not: 'DELETED' } } },
-      include: { listing: { include: { images: true, category: true, seller: { include: { profile: true } } } } },
+      include: { listing: { select: { ...publicListingSelect, images: true } } },
       orderBy: { createdAt: 'desc' }
     })
   }
