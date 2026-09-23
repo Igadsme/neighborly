@@ -189,6 +189,8 @@ All guarded. Caller must already be a `ConversationParticipant` or the service t
 
 Not implemented: create conversation, typing, attachments, read receipts per message. Listing detail does not add `POST /conversations`. Sending a message from a live listing stays in the painted modal and does not persist a thread or open Messages as if the send succeeded.
 
+The signed-in nav badge does not call a notification route. It counts rows from this `GET /conversations` response: the latest message (`messages[0]`, the list takes one) was sent by someone else, and the caller's `lastReadAt` is missing or earlier than that message's `createdAt`. Zero, signed-out, and 401 paint no badge. `GET /notifications` is not implemented.
+
 ### Transactions
 
 Guarded. Caller must be a `TransactionParticipant`.
@@ -401,7 +403,7 @@ These routes are the remainder of the v1 contract. They are not implemented. Pat
 
 - `POST /transactions/:id/appointments` — `startsAt`, `locationNote`. The Dashboard meetup cards bind here later.
 - One review per author per transaction (constraint still target). `POST /reviews` and `GET /users/:id/reviews` are implemented. Dashboard does not yet hide a prompt when that list already contains the author's review.
-- Reports, blocks, moderation actions, notification list, and mark-read. Buttons exist on Listing Detail and Profile and only flip local React state.
+- Reports, blocks, moderation actions, a notification list, and notification mark-read. Buttons exist on Listing Detail and Profile and only flip local React state. Conversation read state is already `PATCH /conversations/:id/read`. The nav message badge reads `GET /conversations` and does not add `GET /notifications`.
 
 ### Explicitly out of v1
 

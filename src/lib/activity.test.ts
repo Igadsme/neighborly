@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { activityItems } from "./activity"
+import { activityItems, unreadConversations } from "./activity"
 import type { ApiConversation, ApiTransaction } from "../api/types"
 import type { OfferRow } from "./view"
 
@@ -25,7 +25,10 @@ describe("dashboard activity", () => {
         updatedAt: "2026-09-22T13:00:00.000Z",
         participants: [
           { userId: "user-1" },
-          { userId: "user-2", user: { id: "user-2", profile: { displayName: "Ada L" } } },
+          {
+            userId: "user-2",
+            user: { id: "user-2", profile: { displayName: "Ada L" } },
+          },
         ],
         messages: [
           {
@@ -62,6 +65,76 @@ describe("dashboard activity", () => {
       "Ada L: See you Saturday",
       "Ada offered $80 on Need a desk",
     ])
-    expect(items.map((item) => item.text).join(" ")).not.toMatch(/Marcus|Priya|David/)
+    expect(items.map((item) => item.text).join(" ")).not.toMatch(
+      /Marcus|Priya|David/,
+    )
+  })
+})
+
+function thread(input: {
+  id: string
+  senderId: string
+  createdAt: string
+  lastReadAt?: string | null
+  messages?: ApiConversation["messages"]
+}): ApiConversation {
+  return {
+    id: input.id,
+    createdAt: input.createdAt,
+    updatedAt: input.createdAt,
+    participants: [
+      { userId: "user-1", lastReadAt: input.lastReadAt },
+      {
+        userId: "user-2",
+        user: { id: "user-2", profile: { displayName: "Ada L" } },
+      },
+    ],
+    messages: input.messages ?? [
+      {
+        id: `${input.id}-m`,
+        conversationId: input.id,
+        senderId: input.senderId,
+        body: "hello",
+        createdAt: input.createdAt,
+      },
+    ],
+  }
+}
+
+describe("unread conversations", () => {
+  it("counts threads whose latest message is newer than the caller lastReadAt", () => {
+    const conversations = [
+      thread({
+        id: "new",
+        senderId: "user-2",
+        createdAt: "2026-09-22T13:00:00.000Z",
+      }),
+      thread({
+        id: "stale-read",
+        senderId: "user-2",
+        createdAt: "2026-09-22T13:00:00.000Z",
+        lastReadAt: "2026-09-22T12:00:00.000Z",
+      }),
+      thread({
+        id: "caught-up",
+        senderId: "user-2",
+        createdAt: "2026-09-22T13:00:00.000Z",
+        lastReadAt: "2026-09-22T13:00:00.000Z",
+      }),
+      thread({
+        id: "mine",
+        senderId: "user-1",
+        createdAt: "2026-09-22T13:00:00.000Z",
+      }),
+      thread({
+        id: "empty",
+        senderId: "user-2",
+        createdAt: "2026-09-22T13:00:00.000Z",
+        messages: [],
+      }),
+    ]
+
+    expect(unreadConversations(conversations, "user-1")).toBe(2)
+    expect(unreadConversations([], "user-1")).toBe(0)
   })
 })

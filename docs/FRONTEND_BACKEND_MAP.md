@@ -14,6 +14,7 @@ v1 wiring does not add AI calls. The Create Listing AI Review step and landing s
 | --- | --- | --- |
 | `App` boot | "Loading Neighborly..." until session check finishes | `GET /users/me` when `neighborly.access_token` is set. Failure clears the token. |
 | `App` sign-out | Returns to `landing` | `api.auth.signOut` removes the token only. |
+| `Navigation` message badge | Same coral count on the desktop header, the mobile header, and the mobile bottom nav. The badge stays hidden at 0. Click still opens `messages`. | `GET /conversations` after a session. The count is conversations whose latest message is from someone else and whose caller `lastReadAt` is missing or older than that message (`unreadConversations`). `GET /conversations` returns only the latest message, so this is a thread count, not a notification feed. 401, an empty inbox, and signed-out all hide the badge. There is no `GET /notifications`. |
 | Signed-out gate | Any page other than `landing` and `onboarding` shows the existing house empty state with two buttons, both navigating to `landing` | None |
 | `Landing` sign-in dialog | Email and password, inline error, disabled while submitting | `POST /auth/login` |
 | `Onboarding` | Multi-step account setup. Email path persists. | `POST /auth/register`, then `PATCH /users/me/onboarding` |
@@ -53,7 +54,7 @@ These controls and copy do not have an endpoint. They stay on screen and are not
 - Jobs city field stays "Atlanta, GA" and is not a query param. Share has no handler. Responsibility bullets fall back to the original four lines only when a job has an empty `responsibilities` array.
 - Services heart and "Become a provider".
 - Community "+ Post lost/found" and "+ Give something" have no composer yet. Reply and Share on a post do not open a thread. Lost-and-found "Contact" does not start a conversation.
-- `Navigation` unread badge is still the hardcoded `2` in `App`.
+- Explore's bell ("Save alert"), the Saved Items price-alert bell, and Onboarding notification toggles are not the nav message badge. They stay local. Saved-search delivery and a notification list are still target.
 
 ## TARGET
 
@@ -78,7 +79,7 @@ These controls and copy do not have an endpoint. They stay on screen and are not
 | `jobs` | `Jobs.tsx` | List/detail, apply, save | Atlanta field and the responsibility fallback | Implemented | Apply and save persist. |
 | `community` | `Community.tsx` | Posts, events, lost & found, giveaways | "2,847 neighbors" and giveaway tips | Implemented | Reactions, RSVP, claim, and new posts persist. |
 
-`Navigation` (`src/components/Navigation.tsx`) highlights the current page id, pins location to a local Atlanta list, and shows `unreadMessages` from the prop (hardcoded `2` in `App`). Sign-out calls the prop. Global search is not a request.
+`Navigation` (`src/components/Navigation.tsx`) highlights the current page id, pins location to a local Atlanta list, and shows `unreadMessages` from `App`. That number is the live unread-thread count from `GET /conversations`, or 0 when the caller is signed out, the list is caught up, or the list returns 401. The badge chrome is unchanged. Sign-out calls the prop. Global search is not a request. The Messages inbox row still marks a thread unread from the other participant's `lastReadAt`; the nav badge and the Dashboard "N unread" line both use the caller's `lastReadAt`.
 
 ### Domain map (target bindings, existing screens only)
 

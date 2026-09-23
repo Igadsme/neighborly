@@ -13,7 +13,7 @@ interface NavProps {
 export default function Navigation({
   currentPage,
   onNavigate,
-  unreadMessages = 2,
+  unreadMessages = 0,
   onSignOut,
 }: NavProps) {
   const [locationOpen, setLocationOpen] = useState(false)
