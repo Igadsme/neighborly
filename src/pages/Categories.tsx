@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ListingCard, SectionHeader, Icon } from '../components/ui'
-import { listings } from '../data'
+import { type Listing } from '../data'
 import { api, readStatus } from '../api/client'
+import { listingFromApi } from '../lib/view'
 
 type Page = 'explore' | 'listing' | 'housing' | 'services' | 'jobs' | 'community'
 
@@ -102,6 +103,9 @@ export default function Categories({ onNavigate }: CategoriesProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [empty, setEmpty] = useState(false)
+  const [featured, setFeatured] = useState<Listing[]>([])
+  const [featuredLoading, setFeaturedLoading] = useState(true)
+  const [featuredError, setFeaturedError] = useState('')
 
   useEffect(() => {
     let active = true
@@ -123,6 +127,24 @@ export default function Categories({ onNavigate }: CategoriesProps) {
       })
       .finally(() => {
         if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    api.listings
+      .list({ status: 'PUBLISHED', limit: 6 })
+      .then((rows) => {
+        if (active) setFeatured(rows.slice(0, 6).map((row) => listingFromApi(row)))
+      })
+      .catch((cause: unknown) => {
+        if (active) setFeaturedError(readStatus(cause, 'Listings could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setFeaturedLoading(false)
       })
     return () => {
       active = false
@@ -217,11 +239,22 @@ export default function Categories({ onNavigate }: CategoriesProps) {
         {/* Featured listings preview */}
         <section className="mb-12">
           <SectionHeader title="Featured in Atlanta" subtitle="Curated picks from trusted sellers" action={() => onNavigate('explore')} actionLabel="Browse all" />
-          <div className="listing-grid">
-            {listings.slice(0, 6).map(listing => (
-              <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing', listing.id)} />
-            ))}
-          </div>
+          {featuredLoading && <p className="text-sm text-[#8A9AB5]">Loading listings…</p>}
+          {featuredError && (
+            <p className="text-sm text-[#A63D27]" role="alert">
+              {featuredError}
+            </p>
+          )}
+          {!featuredLoading && !featuredError && featured.length === 0 && (
+            <p className="text-sm text-[#8A9AB5]">No featured listings yet.</p>
+          )}
+          {!featuredLoading && !featuredError && featured.length > 0 && (
+            <div className="listing-grid">
+              {featured.map(listing => (
+                <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing', listing.id)} />
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Popular by neighborhood */}
