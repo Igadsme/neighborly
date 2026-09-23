@@ -1,11 +1,13 @@
-import { useState } from 'react'
-import { ListingCard, SectionHeader, Badge, Avatar, StarRating, Icon, Button, Chip } from '../components/ui'
-import { listings, services, communityPosts } from '../data'
+import { useEffect, useState } from 'react'
+import { ListingCard, SectionHeader, Badge, Avatar, StarRating, Icon, Button } from '../components/ui'
+import { services, communityPosts, type Listing } from '../data'
+import { api, readError } from '../api/client'
+import { listingFromApi, mediaSrc } from '../lib/view'
 
 type Page = 'home' | 'explore' | 'categories' | 'map' | 'listing' | 'create' | 'messages' | 'saved' | 'profile' | 'dashboard' | 'housing' | 'services' | 'jobs' | 'community'
 
 interface HomeFeedProps {
-  onNavigate: (p: Page) => void
+  onNavigate: (p: Page, id?: string) => void
 }
 
 const quickCategories = [
@@ -52,10 +54,55 @@ const suggestedPeople = [
   { name: 'Tyler Brooks', neighborhood: 'East Atlanta', avatar: 'photo-1570295999919-56ceb5ecca61', rating: 4.5, transactions: 10 },
 ]
 
+function ListingThumb({ listing, free }: { listing: Listing; free?: boolean }) {
+  const src = mediaSrc(listing.images[0], 'w=160&h=160&fit=crop&auto=format')
+  return (
+    <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF] relative">
+      {src && <img src={src} alt={listing.title} className="w-full h-full object-cover" />}
+      {free && (
+        <div className="absolute top-1 left-1 bg-[#2D6A4F] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">FREE</div>
+      )}
+    </div>
+  )
+}
+
 export default function HomeFeed({ onNavigate }: HomeFeedProps) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [listings, setListings] = useState<Listing[]>([])
+  const [newToday, setNewToday] = useState<Listing[]>([])
+  const [listingsLoading, setListingsLoading] = useState(true)
+  const [listingsError, setListingsError] = useState('')
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+
+  useEffect(() => {
+    let active = true
+    api.listings
+      .list({ limit: 24 })
+      .then((rows) => {
+        if (!active) return
+        const cards = rows.map((row) => listingFromApi(row))
+        const dayAgo = Date.now() - 24 * 60 * 60 * 1000
+        const fresh = new Set(
+          rows
+            .filter((row) => row.createdAt && new Date(row.createdAt).getTime() >= dayAgo)
+            .map((row) => row.id),
+        )
+        setListings(cards)
+        setNewToday(cards.filter((card) => fresh.has(card.id)).slice(0, 4))
+      })
+      .catch((cause: unknown) => {
+        if (active) setListingsError(readError(cause, 'Listings could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setListingsLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const freeListings = listings.filter((listing) => listing.isFree).slice(0, 3)
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-24 md:pb-0">
@@ -138,11 +185,25 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
             action={() => onNavigate('explore')}
             actionLabel="See all"
           />
-          <div className="listing-grid">
-            {listings.slice(0, 8).map(listing => (
-              <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing')} />
-            ))}
-          </div>
+          {listingsLoading ? (
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+              Loading listings…
+            </div>
+          ) : listingsError ? (
+            <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D]">
+              {listingsError}
+            </div>
+          ) : listings.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+              No listings nearby yet.
+            </div>
+          ) : (
+            <div className="listing-grid">
+              {listings.slice(0, 8).map(listing => (
+                <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing', listing.id)} />
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Two-column layout: Recommended + Free */}
@@ -152,10 +213,8 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
             <SectionHeader title="Recommended for you" subtitle="Based on your interests" action={() => onNavigate('explore')} actionLabel="More" />
             <div className="space-y-3">
               {listings.slice(2, 5).map(listing => (
-                <div key={listing.id} onClick={() => onNavigate('listing')} className="flex gap-3 bg-white rounded-2xl border border-[#E8E6DF] p-3 cursor-pointer hover:border-[#2D6A4F]/30 transition-all card-hover">
-                  <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF]">
-                    <img src={`https://images.unsplash.com/${listing.images[0]}?w=160&h=160&fit=crop&auto=format`} alt={listing.title} className="w-full h-full object-cover" />
-                  </div>
+                <div key={listing.id} onClick={() => onNavigate('listing', listing.id)} className="flex gap-3 bg-white rounded-2xl border border-[#E8E6DF] p-3 cursor-pointer hover:border-[#2D6A4F]/30 transition-all card-hover">
+                  <ListingThumb listing={listing} />
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-1">{listing.title}</p>
                     <p className="text-xs text-[#8A9AB5] mt-0.5">{listing.neighborhood} · {listing.distance}</p>
@@ -163,7 +222,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                       <span className="font-bold text-sm text-[#1B2A4A]">
                         {listing.isFree ? <span className="text-[#2D6A4F]">Free</span> : `$${listing.price?.toLocaleString()}`}
                       </span>
-                      <Badge variant="navy" size="sm">{listing.condition}</Badge>
+                      {listing.condition && <Badge variant="navy" size="sm">{listing.condition}</Badge>}
                     </div>
                   </div>
                 </div>
@@ -175,12 +234,9 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
           <div>
             <SectionHeader title="Free near you" subtitle="Give, get, reduce waste" action={() => onNavigate('explore')} actionLabel="More" />
             <div className="space-y-3">
-              {[listings[4], ...listings.filter(l => l.isFree)].slice(0, 3).map((listing, i) => (
-                <div key={listing.id + i} onClick={() => onNavigate('listing')} className="flex gap-3 bg-white rounded-2xl border border-[#E8E6DF] p-3 cursor-pointer hover:border-[#74C69D]/50 transition-all card-hover">
-                  <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF] relative">
-                    <img src={`https://images.unsplash.com/${listing.images[0]}?w=160&h=160&fit=crop&auto=format`} alt={listing.title} className="w-full h-full object-cover" />
-                    <div className="absolute top-1 left-1 bg-[#2D6A4F] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">FREE</div>
-                  </div>
+              {freeListings.map((listing) => (
+                <div key={listing.id} onClick={() => onNavigate('listing', listing.id)} className="flex gap-3 bg-white rounded-2xl border border-[#E8E6DF] p-3 cursor-pointer hover:border-[#74C69D]/50 transition-all card-hover">
+                  <ListingThumb listing={listing} free />
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-2">{listing.title}</p>
                     <p className="text-xs text-[#8A9AB5] mt-0.5">{listing.neighborhood} · {listing.distance}</p>
@@ -295,8 +351,8 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
         <section className="mb-10">
           <SectionHeader title="New today" subtitle="Just posted in the last 24 hours" action={() => onNavigate('explore')} actionLabel="See all" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {listings.slice(4, 8).map(listing => (
-              <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing')} compact />
+            {newToday.map(listing => (
+              <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing', listing.id)} compact />
             ))}
           </div>
         </section>

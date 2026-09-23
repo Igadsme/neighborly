@@ -5,7 +5,7 @@ import { sellers, listings } from '../data'
 type Page = 'listing' | 'messages'
 
 interface ProfileProps {
-  onNavigate: (p: Page) => void
+  onNavigate: (p: Page, id?: string) => void
 }
 
 const seller = sellers[0]
@@ -160,7 +160,7 @@ export default function Profile({ onNavigate }: ProfileProps) {
         {activeTab === 'listings' && (
           <div className="listing-grid">
             {userListings.map(listing => (
-              <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing')} />
+              <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing', listing.id)} />
             ))}
           </div>
         )}

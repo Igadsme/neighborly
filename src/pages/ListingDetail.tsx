@@ -1,35 +1,138 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Avatar, StarRating, Badge, Button, Icon, ListingCard } from '../components/ui'
-import { listings } from '../data'
+import { listings, type Listing } from '../data'
+import { api, readError } from '../api/client'
+import { isUuid, listingFromApi, mediaSrc } from '../lib/view'
 
 type Page = 'listing' | 'messages' | 'profile' | 'explore'
 
 interface ListingDetailProps {
-  onNavigate: (p: Page) => void
+  listingId?: string | null
+  onNavigate: (p: Page, id?: string) => void
 }
 
 const safeSpots = ['Publix on Moreland Ave', 'Chase Bank ATM (Ponce)', 'Starbucks — Edgewood', 'APD Precinct 6 Lobby']
 
-export default function ListingDetail({ onNavigate }: ListingDetailProps) {
-  const listing = listings[0]
+export default function ListingDetail({ listingId, onNavigate }: ListingDetailProps) {
+  const fixture = listingId ? listings.find((item) => item.id === listingId) : undefined
+  const fromApi = isUuid(listingId)
+  const [apiListing, setApiListing] = useState<Listing | null>(null)
+  const [loading, setLoading] = useState(fromApi)
+  const [loadError, setLoadError] = useState('')
   const [activeImage, setActiveImage] = useState(0)
-  const [saved, setSaved] = useState(listing.saved)
+  const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [offerOpen, setOfferOpen] = useState(false)
   const [offerAmount, setOfferAmount] = useState('')
   const [messageOpen, setMessageOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [messageSent, setMessageSent] = useState(false)
+  const [messageError, setMessageError] = useState('')
   const [reported, setReported] = useState(false)
   const [zoomed, setZoomed] = useState(false)
 
-  const relatedListings = listings.slice(1, 5)
+  useEffect(() => {
+    if (fixture) setSaved(fixture.saved)
+  }, [fixture])
 
-  const handleSendMessage = () => {
-    if (message.trim()) {
-      setMessageSent(true)
-      setTimeout(() => { setMessageOpen(false); onNavigate('messages') }, 1200)
+  useEffect(() => {
+    if (!fromApi || !listingId) return
+    let active = true
+    setLoading(true)
+    setLoadError('')
+    setApiListing(null)
+    api.listings
+      .get(listingId)
+      .then((row) => {
+        if (!active) return
+        const next = listingFromApi(row)
+        setApiListing(next)
+        setSaved(next.saved)
+      })
+      .catch((cause: unknown) => {
+        if (active) setLoadError(readError(cause, 'This listing could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [fromApi, listingId])
+
+  const listing = fromApi ? apiListing : fixture ?? null
+  const relatedListings = fromApi || !listing
+    ? []
+    : listings.filter((item) => item.id !== listing.id).slice(0, 4)
+
+  const toggleSaved = async () => {
+    if (!listing) return
+    if (!fromApi) {
+      setSaved((value) => !value)
+      return
+    }
+    setSaveError('')
+    try {
+      const result = await api.listings.toggleFavorite(listing.id)
+      setSaved(result.saved)
+    } catch (cause: unknown) {
+      setSaveError(readError(cause, 'Saving this listing is unavailable.'))
     }
   }
+
+  const handleSendMessage = () => {
+    if (!message.trim()) return
+    if (fromApi) {
+      setMessageError("Starting a conversation from a listing isn't available yet.")
+      return
+    }
+    setMessageSent(true)
+    setTimeout(() => { setMessageOpen(false); onNavigate('messages') }, 1200)
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
+        <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+          Loading listing…
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError || !listing) {
+    return (
+      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center px-4">
+        <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D] max-w-md text-center">
+          {loadError || 'Choose a listing to see its details.'}
+        </div>
+      </div>
+    )
+  }
+
+  const cover = (image: string | undefined, params: string) => mediaSrc(image, params)
+  const detailRows = fromApi
+    ? [
+        { label: 'Condition', value: listing.condition || '—' },
+        { label: 'Category', value: listing.category || '—' },
+        { label: 'Neighborhood', value: listing.neighborhood || '—' },
+        { label: 'City', value: listing.city || '—' },
+        { label: 'Pickup', value: listing.pickupAvailable ? 'Available' : 'Not available' },
+        { label: 'Delivery', value: listing.deliveryAvailable ? 'Available' : 'Not available' },
+        { label: 'Shipping', value: listing.shippingAvailable ? 'Available' : 'Not available' },
+      ]
+    : [
+        { label: 'Condition', value: listing.condition },
+        { label: 'Category', value: listing.category },
+        { label: 'Subcategory', value: listing.subcategory || 'Sofas & Couches' },
+        { label: 'Brand', value: 'West Elm' },
+        { label: 'Dimensions', value: '81" W × 33" D × 30" H' },
+        { label: 'Color', value: 'Charcoal Gray' },
+        { label: 'Material', value: 'Performance velvet' },
+        { label: 'Pet-free home', value: 'Yes' },
+        { label: 'Smoke-free', value: 'Yes' },
+        { label: 'Original price', value: '$1,299' },
+      ]
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-32 md:pb-16">
@@ -39,9 +142,9 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 flex items-center gap-2 text-sm text-[#8A9AB5]">
           <button onClick={() => onNavigate('explore')} className="hover:text-[#2D6A4F] transition-colors">Explore</button>
           <Icon name="chevronRight" size={12} />
-          <span>Furniture</span>
+          <span>{listing.category || 'Listing'}</span>
           <Icon name="chevronRight" size={12} />
-          <span className="text-[#1B2A4A] font-medium truncate">West Elm Mid-Century Sofa</span>
+          <span className="text-[#1B2A4A] font-medium truncate">{listing.title}</span>
         </div>
       </div>
 
@@ -57,15 +160,17 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
                 className="relative bg-[#F5F4EF] rounded-3xl overflow-hidden mb-3 cursor-zoom-in h-72 md:h-[480px]"
                 onClick={() => setZoomed(!zoomed)}
               >
+                {cover(listing.images[activeImage], 'w=900&h=600&fit=crop&auto=format') && (
                 <img
-                  src={`https://images.unsplash.com/${listing.images[activeImage]}?w=900&h=600&fit=crop&auto=format`}
+                  src={cover(listing.images[activeImage], 'w=900&h=600&fit=crop&auto=format')!}
                   alt={listing.title}
                   className="w-full h-full object-cover"
                 />
+                )}
                 {/* Actions overlay */}
                 <div className="absolute top-4 right-4 flex gap-2">
                   <button
-                    onClick={e => { e.stopPropagation(); setSaved(!saved) }}
+                    onClick={e => { e.stopPropagation(); void toggleSaved() }}
                     className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-md hover:scale-110 transition-transform"
                   >
                     <Icon name="heart" size={16} className={saved ? 'fill-[#E8694A] stroke-[#E8694A]' : 'stroke-[#5C6E8A]'} />
@@ -76,7 +181,7 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
                 </div>
                 {/* Image counter */}
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs font-medium px-3 py-1 rounded-full backdrop-blur-sm">
-                  {activeImage + 1} / {listing.images.length}
+                  {listing.images.length ? activeImage + 1 : 0} / {listing.images.length}
                 </div>
                 {/* Condition badge */}
                 <div className="absolute top-4 left-4">
@@ -90,9 +195,11 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
                   <button
                     key={i}
                     onClick={() => setActiveImage(i)}
-                    className={`w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${activeImage === i ? 'border-[#2D6A4F]' : 'border-transparent'}`}
+                    className={`w-20 h-20 rounded-xl overflow-hidden border-2 transition-all bg-[#F5F4EF] ${activeImage === i ? 'border-[#2D6A4F]' : 'border-transparent'}`}
                   >
-                    <img src={`https://images.unsplash.com/${img}?w=160&h=160&fit=crop&auto=format`} alt="" className="w-full h-full object-cover" />
+                    {cover(img, 'w=160&h=160&fit=crop&auto=format') && (
+                      <img src={cover(img, 'w=160&h=160&fit=crop&auto=format')!} alt="" className="w-full h-full object-cover" />
+                    )}
                   </button>
                 ))}
                 <button className="w-20 h-20 rounded-xl border-2 border-dashed border-[#E8E6DF] flex flex-col items-center justify-center text-[#C5CCDA] hover:border-[#2D6A4F]/30 transition-colors">
@@ -107,14 +214,14 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
               <div className="flex items-start justify-between gap-4 mb-3">
                 <h1 className="font-display text-2xl md:text-3xl font-semibold text-[#1B2A4A] leading-tight">{listing.title}</h1>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-3xl font-bold text-[#1B2A4A]">${listing.price?.toLocaleString()}</p>
+                  <p className="text-3xl font-bold text-[#1B2A4A]">{listing.isFree ? 'Free' : listing.price != null ? `$${listing.price.toLocaleString()}` : 'OBO'}</p>
                   <p className="text-xs text-[#8A9AB5]">or best offer</p>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 mb-3">
-                <Badge variant="blue">{listing.condition}</Badge>
-                <Badge variant="green">Pickup available</Badge>
+                {listing.condition && <Badge variant="blue">{listing.condition}</Badge>}
+                {listing.pickupAvailable && <Badge variant="green">Pickup available</Badge>}
                 {listing.deliveryAvailable && <Badge variant="blue">Delivery</Badge>}
               </div>
 
@@ -133,7 +240,9 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
                 <span className="text-xs font-semibold text-[#2D6A4F] uppercase tracking-wide">Neighborly AI Summary</span>
               </div>
               <p className="text-sm text-[#1B2A4A] leading-relaxed">
-                This West Elm mid-century modern sofa is in like-new condition — no stains, wear, or damage noted. The seller has 47 five-star reviews and 52 completed transactions. At $650 for a sofa that retailed at $1,299, this is priced <strong>~50% below retail</strong>, which is fair market value for this condition. Estimated value range: $550–$750.
+                {fromApi
+                  ? listing.description
+                  : <>This West Elm mid-century modern sofa is in like-new condition — no stains, wear, or damage noted. The seller has 47 five-star reviews and 52 completed transactions. At $650 for a sofa that retailed at $1,299, this is priced <strong>~50% below retail</strong>, which is fair market value for this condition. Estimated value range: $550–$750.</>}
               </p>
             </div>
 
@@ -147,18 +256,7 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
             <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 mb-6">
               <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-4">Item details</h2>
               <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Condition', value: listing.condition },
-                  { label: 'Category', value: listing.category },
-                  { label: 'Subcategory', value: listing.subcategory || 'Sofas & Couches' },
-                  { label: 'Brand', value: 'West Elm' },
-                  { label: 'Dimensions', value: '81" W × 33" D × 30" H' },
-                  { label: 'Color', value: 'Charcoal Gray' },
-                  { label: 'Material', value: 'Performance velvet' },
-                  { label: 'Pet-free home', value: 'Yes' },
-                  { label: 'Smoke-free', value: 'Yes' },
-                  { label: 'Original price', value: '$1,299' },
-                ].map(({ label, value }) => (
+                {detailRows.map(({ label, value }) => (
                   <div key={label} className="flex flex-col">
                     <span className="text-xs font-semibold text-[#8A9AB5] uppercase tracking-wide">{label}</span>
                     <span className="text-sm text-[#1B2A4A] mt-0.5">{value}</span>
@@ -171,19 +269,19 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
             <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 mb-6">
               <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-4">Pickup & delivery</h2>
               <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-[#F0FBF3] rounded-xl">
+                <div className={`flex items-center gap-3 p-3 rounded-xl ${listing.pickupAvailable ? 'bg-[#F0FBF3]' : 'bg-[#F5F4EF] opacity-50'}`}>
                   <div className="w-9 h-9 rounded-full bg-[#D8F3DC] flex items-center justify-center"><Icon name="mapPin" size={15} className="text-[#2D6A4F]" /></div>
                   <div>
-                    <p className="font-medium text-sm text-[#1B2A4A]">Pickup available</p>
-                    <p className="text-xs text-[#8A9AB5]">Decatur, GA — seller can help load</p>
+                    <p className="font-medium text-sm text-[#1B2A4A]">{listing.pickupAvailable ? 'Pickup available' : 'Pickup — not available'}</p>
+                    <p className="text-xs text-[#8A9AB5]">{listing.neighborhood || 'Nearby'} — seller can help load</p>
                   </div>
-                  <Icon name="check" size={14} className="ml-auto text-[#2D6A4F]" />
+                  {listing.pickupAvailable && <Icon name="check" size={14} className="ml-auto text-[#2D6A4F]" />}
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-[#F5F4EF] rounded-xl opacity-50">
+                <div className={`flex items-center gap-3 p-3 rounded-xl ${listing.deliveryAvailable ? 'bg-[#F0FBF3]' : 'bg-[#F5F4EF] opacity-50'}`}>
                   <div className="w-9 h-9 rounded-full bg-[#EEF0F5] flex items-center justify-center"><Icon name="truck" size={15} className="text-[#8A9AB5]" /></div>
                   <div>
-                    <p className="font-medium text-sm text-[#1B2A4A]">Delivery — not available</p>
-                    <p className="text-xs text-[#8A9AB5]">Seller does not offer delivery</p>
+                    <p className="font-medium text-sm text-[#1B2A4A]">{listing.deliveryAvailable ? 'Delivery available' : 'Delivery — not available'}</p>
+                    <p className="text-xs text-[#8A9AB5]">{listing.deliveryAvailable ? 'Seller offers delivery' : 'Seller does not offer delivery'}</p>
                   </div>
                 </div>
               </div>
@@ -211,7 +309,10 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
             <div className="mb-6">
               <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-4">Seller reviews</h2>
               <div className="space-y-4">
-                {[
+                {fromApi && (
+                  <p className="text-sm text-[#8A9AB5]">Seller reviews appear after completed exchanges.</p>
+                )}
+                {!fromApi && [
                   { name: 'Priya P.', avatar: 'photo-1494790108755-2616b612b77c', rating: 5, date: '2 weeks ago', text: 'Marcus was super responsive, item was exactly as described. Smooth pickup!' },
                   { name: 'James R.', avatar: 'photo-1507003211169-0a1dd7228f2d', rating: 5, date: '1 month ago', text: 'Great seller, fair price, very easy transaction. Would definitely buy from him again.' },
                   { name: 'Sofia M.', avatar: 'photo-1534528741775-53994a69daeb', rating: 4, date: '6 weeks ago', text: 'Sold me a great desk. Took a bit to schedule pickup but once we did it was totally smooth.' },
@@ -241,7 +342,7 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
               <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-4">Similar listings</h2>
               <div className="grid grid-cols-2 gap-4">
                 {relatedListings.map(l => (
-                  <ListingCard key={l.id} listing={l} onClick={() => {}} compact />
+                  <ListingCard key={l.id} listing={l} onClick={() => onNavigate('listing', l.id)} compact />
                 ))}
               </div>
             </div>
@@ -253,13 +354,14 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
               {/* Price card */}
               <div className="bg-white rounded-3xl border border-[#E8E6DF] shadow-md p-6">
                 <div className="flex items-baseline justify-between mb-1">
-                  <span className="text-3xl font-bold text-[#1B2A4A]">${listing.price?.toLocaleString()}</span>
-                  <button onClick={() => setSaved(!saved)} className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${saved ? 'text-[#E8694A]' : 'text-[#8A9AB5] hover:text-[#E8694A]'}`}>
+                  <span className="text-3xl font-bold text-[#1B2A4A]">{listing.isFree ? 'Free' : listing.price != null ? `$${listing.price.toLocaleString()}` : 'OBO'}</span>
+                  <button onClick={() => void toggleSaved()} className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${saved ? 'text-[#E8694A]' : 'text-[#8A9AB5] hover:text-[#E8694A]'}`}>
                     <Icon name="heart" size={15} className={saved ? 'fill-[#E8694A] stroke-[#E8694A]' : ''} />
                     {saved ? 'Saved' : 'Save'}
                   </button>
                 </div>
                 <p className="text-xs text-[#8A9AB5] mb-5">or best offer · {listing.neighborhood} · {listing.distance}</p>
+                {saveError && <p className="text-xs text-[#C4512D] mb-3">{saveError}</p>}
 
                 <div className="space-y-3">
                   <Button variant="primary" size="lg" fullWidth onClick={() => setMessageOpen(true)}>
@@ -328,7 +430,7 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
                     <p className="text-[9px] text-[#8A9AB5]">Response</p>
                   </div>
                   <div className="bg-[#F5F4EF] rounded-xl p-2 text-center">
-                    <p className="font-bold text-[#2D6A4F] text-sm">4.9★</p>
+                    <p className="font-bold text-[#2D6A4F] text-sm">{fromApi ? '—' : '4.9★'}</p>
                     <p className="text-[9px] text-[#8A9AB5]">Rating</p>
                   </div>
                 </div>
@@ -358,7 +460,7 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
 
       {/* Mobile sticky actions */}
       <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-40 bg-white border-t border-[#E8E6DF] px-4 py-3 flex gap-3 md:hidden">
-        <button onClick={() => setSaved(!saved)} className={`w-12 h-12 rounded-full border flex items-center justify-center flex-shrink-0 ${saved ? 'bg-[#FDE8E0] border-[#E8694A]' : 'bg-white border-[#E8E6DF]'}`}>
+        <button onClick={() => void toggleSaved()} className={`w-12 h-12 rounded-full border flex items-center justify-center flex-shrink-0 ${saved ? 'bg-[#FDE8E0] border-[#E8694A]' : 'bg-white border-[#E8E6DF]'}`}>
           <Icon name="heart" size={18} className={saved ? 'fill-[#E8694A] stroke-[#E8694A]' : 'stroke-[#5C6E8A]'} />
         </button>
         <Button variant="primary" size="md" fullWidth onClick={() => setMessageOpen(true)}>
@@ -375,19 +477,21 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 animate-fade-in-up">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display text-lg font-semibold text-[#1B2A4A]">Message Marcus</h3>
+              <h3 className="font-display text-lg font-semibold text-[#1B2A4A]">Message {listing.seller.name.split(' ')[0]}</h3>
               <button onClick={() => setMessageOpen(false)} className="w-8 h-8 rounded-full bg-[#F5F4EF] flex items-center justify-center hover:bg-[#E8E6DF] transition-colors">
                 <Icon name="x" size={14} />
               </button>
             </div>
             {/* Listing preview */}
             <div className="flex gap-3 p-3 bg-[#F5F4EF] rounded-xl mb-4">
-              <div className="w-12 h-12 rounded-lg overflow-hidden">
-                <img src={`https://images.unsplash.com/${listing.images[0]}?w=100&h=100&fit=crop`} alt="" className="w-full h-full object-cover" />
+              <div className="w-12 h-12 rounded-lg overflow-hidden bg-[#E8E6DF]">
+                {cover(listing.images[0], 'w=100&h=100&fit=crop') && (
+                  <img src={cover(listing.images[0], 'w=100&h=100&fit=crop')!} alt="" className="w-full h-full object-cover" />
+                )}
               </div>
               <div>
                 <p className="text-xs font-semibold text-[#1B2A4A] line-clamp-1">{listing.title}</p>
-                <p className="text-xs text-[#8A9AB5]">${listing.price?.toLocaleString()}</p>
+                <p className="text-xs text-[#8A9AB5]">{listing.isFree ? 'Free' : listing.price != null ? `$${listing.price.toLocaleString()}` : 'OBO'}</p>
               </div>
             </div>
             {messageSent ? (
@@ -406,9 +510,14 @@ export default function ListingDetail({ onNavigate }: ListingDetailProps) {
                     </button>
                   ))}
                 </div>
+                {messageError && (
+                  <div className="mb-3 rounded-xl border border-[#E8694A]/30 bg-[#FFF5F2] px-4 py-3 text-sm text-[#A63D27]" role="alert">
+                    {messageError}
+                  </div>
+                )}
                 <textarea
                   value={message}
-                  onChange={e => setMessage(e.target.value)}
+                  onChange={e => { setMessage(e.target.value); setMessageError('') }}
                   placeholder="Ask about the item, availability, or suggest a meetup..."
                   rows={3}
                   className="w-full p-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] resize-none focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-all"

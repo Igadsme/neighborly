@@ -1,12 +1,20 @@
 import type {
+  AcceptOfferResult,
+  ApiConversation,
   ApiFavorite,
+  ApiListing,
+  ApiMessage,
+  ApiRequestDetail,
+  ApiRequestSummary,
   ApiSavedSearch,
+  ApiTransaction,
   AuthResponse,
   CurrentUser,
   ListingInput,
   ListingQuery,
   NeedRequestInput,
   OfferInput,
+  ReviewInput,
 } from "./types"
 
 const API_URL = (
@@ -35,14 +43,28 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { ...options, headers })
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as {
-      message?: string
+      message?: string | string[]
     } | null
     throw new ApiError(
-      payload?.message ?? `Request failed with status ${response.status}`,
+      readMessage(payload?.message, response.status),
       response.status,
     )
   }
   return response.json() as Promise<T>
+}
+
+function readMessage(message: string | string[] | undefined, status: number) {
+  if (Array.isArray(message)) {
+    const text = message.join(" ").trim()
+    if (text) return text
+  } else if (typeof message === "string" && message.trim()) {
+    return message
+  }
+  return `Request failed with status ${status}`
+}
+
+export function readError(cause: unknown, fallback: string) {
+  return cause instanceof ApiError && cause.message ? cause.message : fallback
 }
 
 export const api = {
@@ -97,14 +119,14 @@ export const api = {
       Object.entries(query).forEach(
         ([key, value]) => value !== undefined && params.set(key, String(value)),
       )
-      return request<unknown[]>(`/listings${params.size ? `?${params}` : ""}`)
+      return request<ApiListing[]>(`/listings${params.size ? `?${params}` : ""}`)
     },
     create: (input: ListingInput) =>
-      request<unknown>("/listings", {
+      request<ApiListing>("/listings", {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    get: (id: string) => request<unknown>(`/listings/${id}`),
+    get: (id: string) => request<ApiListing>(`/listings/${id}`),
     update: (id: string, input: Partial<ListingInput>) =>
       request<unknown>(`/listings/${id}`, {
         method: "PATCH",
@@ -129,7 +151,8 @@ export const api = {
       request<Array<{ id: string; name: string; slug: string }>>("/categories"),
   },
   requests: {
-    list: () => request<unknown[]>("/requests"),
+    list: () => request<ApiRequestSummary[]>("/requests"),
+    get: (id: string) => request<ApiRequestDetail>(`/requests/${id}`),
     create: (input: NeedRequestInput) =>
       request<unknown>("/requests", {
         method: "POST",
@@ -148,21 +171,37 @@ export const api = {
         method: "POST",
         body: JSON.stringify(input),
       }),
+    acceptOffer: (requestId: string, offerId: string) =>
+      request<AcceptOfferResult>(
+        `/requests/${requestId}/offers/${offerId}/accept`,
+        { method: "POST" },
+      ),
+    rejectOffer: (requestId: string, offerId: string) =>
+      request<unknown>(`/requests/${requestId}/offers/${offerId}/reject`, {
+        method: "POST",
+      }),
   },
   transactions: {
-    list: () => request<unknown[]>("/transactions"),
+    list: () => request<ApiTransaction[]>("/transactions"),
     transition: (transactionId: string, status: string) =>
       request<unknown>(`/transactions/${transactionId}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       }),
   },
+  reviews: {
+    create: (input: ReviewInput) =>
+      request<unknown>("/reviews", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+  },
   conversations: {
-    list: () => request<unknown[]>("/conversations"),
+    list: () => request<ApiConversation[]>("/conversations"),
     messages: (conversationId: string) =>
-      request<unknown[]>(`/conversations/${conversationId}/messages`),
+      request<ApiMessage[]>(`/conversations/${conversationId}/messages`),
     send: (conversationId: string, body: string) =>
-      request<unknown>(`/conversations/${conversationId}/messages`, {
+      request<ApiMessage>(`/conversations/${conversationId}/messages`, {
         method: "POST",
         body: JSON.stringify({ body }),
       }),
