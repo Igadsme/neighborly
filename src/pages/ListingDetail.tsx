@@ -158,6 +158,20 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
     }
   }
 
+  const reportListing = async () => {
+    if (!fromApi || !listingId) {
+      setActionNote("Reporting isn't available yet.")
+      return
+    }
+    setActionNote('')
+    try {
+      await api.safety.report({ targetType: 'LISTING', targetId: listingId, reason: 'OTHER' })
+      setActionNote('Report submitted.')
+    } catch (cause: unknown) {
+      setActionNote(readStatus(cause, 'Unable to submit this report.'))
+    }
+  }
+
   const handleSendMessage = async () => {
     const body = message.trim()
     if (!body || !listing || messageSending) return
@@ -551,7 +565,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
 
               {/* Report */}
               <button
-                onClick={() => setActionNote("Reporting isn't available yet.")}
+                onClick={() => void reportListing()}
                 className="w-full text-xs font-medium text-center py-2 transition-colors text-[#C5CCDA] hover:text-[#8A9AB5]"
               >
                 Report this listing

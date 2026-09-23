@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common'
 import { JwtService, JwtSignOptions } from '@nestjs/jwt'
 import * as argon2 from 'argon2'
+import { sanitizeOptional, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
 import { LoginDto, RegisterDto } from './dto'
 
@@ -18,11 +19,11 @@ export class AuthService {
         passwordHash: await argon2.hash(input.password),
         profile: {
           create: {
-            firstName: input.firstName.trim(),
-            lastName: input.lastName.trim(),
-            neighborhood: input.neighborhood?.trim(),
-            city: input.city?.trim(),
-            state: input.state?.trim()
+            firstName: sanitizeText(input.firstName, 80),
+            lastName: sanitizeText(input.lastName, 80),
+            neighborhood: sanitizeOptional(input.neighborhood, 80),
+            city: sanitizeOptional(input.city, 80),
+            state: sanitizeOptional(input.state, 40)
           }
         }
       },

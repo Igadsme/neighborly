@@ -184,6 +184,7 @@ describe("Profile screen", () => {
     expect(screen.getByText("Sold lamp")).toBeTruthy()
     expect(screen.getByText("Sold")).toBeTruthy()
 
+    expect(screen.queryByRole("button", { name: "Block this profile" })).toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "Follow" }))
     expect(screen.getByText("Following neighbors isn't available yet.")).toBeTruthy()
     expect(screen.queryByRole("button", { name: "✓ Following" })).toBeNull()
@@ -201,6 +202,30 @@ describe("Profile screen", () => {
     expect(screen.getByText("No reviews yet.")).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Sold (0)" }))
     expect(screen.getByText("No sold listings yet.")).toBeTruthy()
+  })
+
+  it("reports and blocks another profile from the existing controls", async () => {
+    const bodies: string[] = []
+    route((url, init) => {
+      if (typeof init?.body === "string") bodies.push(init.body)
+      if (url.includes("/safety/blocks") && init?.method === "POST") return json({ blocked: true, userId: profile.id })
+      if (url.includes("/safety/blocks") && init?.method === "DELETE") return json({ blocked: false, userId: profile.id })
+      if (url.includes("/safety/blocks")) return json([])
+      if (url.includes("/safety/reports")) return json({ id: "report-1", status: "OPEN" }, 201)
+      if (url.includes("/reviews")) return json([])
+      if (url.includes("/profile")) return json({ ...profile, bio: null, reviewCount: 0, soldCount: 0, ratingAverage: null })
+      if (url.includes("/listings")) return json([])
+      return json({ message: "unexpected" }, 500)
+    })
+    render(<Profile userId={profile.id} onNavigate={() => undefined} />)
+    expect(await screen.findByText("No bio yet.")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Report this profile" }))
+    expect(await screen.findByText("Report submitted.")).toBeTruthy()
+    expect(bodies.some((body) => body.includes('"targetType":"USER"') && body.includes(profile.id))).toBe(true)
+    fireEvent.click(screen.getByRole("button", { name: "Block this profile" }))
+    expect(await screen.findByText("Profile blocked. You cannot message this person.")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Unblock this profile" }))
+    expect(await screen.findByText("Profile unblocked.")).toBeTruthy()
   })
 
   it("shows unauthorized and load errors", async () => {

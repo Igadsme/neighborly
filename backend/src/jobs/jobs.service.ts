@@ -1,7 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
+import { assertNotBlocked } from '../common/blocks'
 import { publicUserSelect } from '../common/public-user.select'
-import { cleanList, cleanText } from '../common/text'
+import { cleanList, cleanText, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
 import { ApplyJobDto, CreateJobDto, ListJobsQuery, UpdateJobDto } from './dto'
 
@@ -83,10 +84,10 @@ export class JobsService {
     const created = await this.prisma.jobListing.create({
       data: {
         ownerId,
-        title: input.title.trim(),
-        company: input.company.trim(),
+        title: sanitizeText(input.title, 140),
+        company: sanitizeText(input.company, 140),
         logoKey: cleanText(input.logoKey),
-        description: input.description.trim(),
+        description: sanitizeText(input.description),
         responsibilities: cleanList(input.responsibilities) ?? [],
         employmentType: input.type,
         level: input.level.trim(),
@@ -141,6 +142,7 @@ export class JobsService {
     })
     if (!job) throw new NotFoundException('Job not found')
     if (job.ownerId === userId) throw new BadRequestException('You cannot apply to your own job')
+    await assertNotBlocked(this.prisma, userId, job.ownerId)
     const existing = await this.prisma.jobApplication.findUnique({
       where: { jobId_applicantId: { jobId, applicantId: userId } },
       select: applicationSelect

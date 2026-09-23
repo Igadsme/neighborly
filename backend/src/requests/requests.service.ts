@@ -1,6 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { OfferStatus, TransactionStatus } from '@prisma/client'
+import { assertNotBlocked } from '../common/blocks'
 import { publicUserSelect } from '../common/public-user.select'
+import { sanitizeOptional, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
 import { CounterOfferDto, CreateOfferDto, CreateRequestDto } from './dto'
 
@@ -15,14 +17,14 @@ export class RequestsService {
       data: {
         requesterId,
         categoryId: input.categoryId,
-        title: input.title.trim(),
-        description: input.description.trim(),
+        title: sanitizeText(input.title, 200),
+        description: sanitizeText(input.description),
         budgetCents: input.budgetCents,
         latitude: input.latitude,
         longitude: input.longitude,
         radiusMiles: input.radiusMiles ?? 10,
         deadline: input.deadline ? new Date(input.deadline) : undefined,
-        urgency: input.urgency?.trim(),
+        urgency: sanitizeOptional(input.urgency, 80),
         mode: input.mode,
         status: 'PUBLISHED'
       }
@@ -99,6 +101,7 @@ export class RequestsService {
     const request = await this.prisma.needRequest.findUnique({ where: { id: requestId } })
     if (!request || request.status !== 'PUBLISHED') throw new NotFoundException('Published request not found')
     if (request.requesterId === offererId) throw new BadRequestException('You cannot offer on your own request')
+    await assertNotBlocked(this.prisma, offererId, request.requesterId)
     if (input.listingIds?.length) {
       const listings = await this.prisma.listing.findMany({ where: { id: { in: input.listingIds }, sellerId: offererId, status: 'PUBLISHED' }, select: { id: true } })
       if (listings.length !== input.listingIds.length) throw new ForbiddenException('Offers may only include your published listings')
@@ -108,7 +111,7 @@ export class RequestsService {
         requestId,
         offererId,
         amountCents: input.amountCents,
-        message: input.message.trim(),
+        message: sanitizeText(input.message, 4000),
         items: input.listingIds?.length ? { create: input.listingIds.map(listingId => ({ listingId })) } : undefined
       },
       include: { items: true }
@@ -119,15 +122,18 @@ export class RequestsService {
     const offer = await this.prisma.requestOffer.findUnique({ where: { id: offerId }, include: { request: true } })
     if (!offer) throw new NotFoundException('Offer not found')
     if (offer.request.requesterId !== userId && offer.offererId !== userId) throw new ForbiddenException()
+    const otherId = userId === offer.offererId ? offer.request.requesterId : offer.offererId
+    await assertNotBlocked(this.prisma, userId, otherId)
     if (!negotiableOfferStatuses.includes(offer.status)) throw new BadRequestException('Offer is no longer negotiable')
     return this.prisma.$transaction([
       this.prisma.requestOffer.update({ where: { id: offerId }, data: { status: 'COUNTERED' } }),
-      this.prisma.counterOffer.create({ data: { offerId, fromUserId: userId, amountCents: input.amountCents, message: input.message.trim() } })
+      this.prisma.counterOffer.create({ data: { offerId, fromUserId: userId, amountCents: input.amountCents, message: sanitizeText(input.message, 4000) } })
     ])
   }
 
   async acceptOffer(requesterId: string, offerId: string, requestId?: string) {
     const offer = await this.loadRequesterOffer(requesterId, offerId, requestId)
+    await assertNotBlocked(this.prisma, requesterId, offer.offererId)
     if (!negotiableOfferStatuses.includes(offer.status)) throw new BadRequestException('Offer is no longer acceptable')
 
     return this.prisma.$transaction(async tx => {
@@ -161,6 +167,7 @@ export class RequestsService {
 
   async rejectOffer(requesterId: string, offerId: string, requestId?: string) {
     const offer = await this.loadRequesterOffer(requesterId, offerId, requestId)
+    await assertNotBlocked(this.prisma, requesterId, offer.offererId)
     if (!negotiableOfferStatuses.includes(offer.status)) throw new BadRequestException('Offer is no longer rejectable')
     return this.prisma.requestOffer.update({ where: { id: offerId }, data: { status: OfferStatus.REJECTED } })
   }

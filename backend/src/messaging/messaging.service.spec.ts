@@ -9,7 +9,8 @@ describe('MessagingService sendMessage', () => {
   const conversationId = 'conversation-1'
   const message = { id: 'message-1', conversationId, senderId: userId, body: 'On my way' }
   const prisma = {
-    conversationParticipant: { findUnique: jest.fn() },
+    conversationParticipant: { findUnique: jest.fn(), findMany: jest.fn() },
+    blockedUser: { findFirst: jest.fn() },
     $transaction: jest.fn()
   }
   const realtime = { publishMessage: jest.fn() }
@@ -28,6 +29,8 @@ describe('MessagingService sendMessage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    prisma.conversationParticipant.findMany.mockResolvedValue([])
+    prisma.blockedUser.findFirst.mockResolvedValue(null)
     prisma.$transaction.mockImplementation(async (work: (tx: {
       message: { create: () => Promise<typeof message> }
       conversation: { update: () => Promise<unknown> }
@@ -44,6 +47,16 @@ describe('MessagingService sendMessage', () => {
 
     expect(realtime.publishMessage).toHaveBeenCalledTimes(1)
     expect(realtime.publishMessage).toHaveBeenCalledWith(conversationId, message)
+  })
+
+  it('does not publish when either person has blocked the other', async () => {
+    prisma.conversationParticipant.findUnique.mockResolvedValue({ userId, conversationId })
+    prisma.conversationParticipant.findMany.mockResolvedValue([{ userId: 'user-2' }])
+    prisma.blockedUser.findFirst.mockResolvedValue({ id: 'block-1' })
+
+    await expect(service.sendMessage(userId, conversationId, 'hello')).rejects.toThrow('You cannot interact with this person')
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+    expect(realtime.publishMessage).not.toHaveBeenCalled()
   })
 
   it('does not publish when the sender is not a participant', async () => {
@@ -71,7 +84,8 @@ describe('MessagingService createConversation', () => {
     user: { findUnique: jest.fn() },
     listing: { findUnique: jest.fn() },
     conversation: { findFirst: jest.fn(), create: jest.fn() },
-    conversationParticipant: { findUnique: jest.fn() },
+    conversationParticipant: { findUnique: jest.fn(), findMany: jest.fn() },
+    blockedUser: { findFirst: jest.fn() },
     $transaction: jest.fn()
   }
   const conversationUpdate = jest.fn()
@@ -101,6 +115,8 @@ describe('MessagingService createConversation', () => {
     prisma.conversation.findFirst.mockResolvedValue(null)
     prisma.conversation.create.mockResolvedValue({ id: conversationId })
     prisma.conversationParticipant.findUnique.mockResolvedValue({ userId: callerId, conversationId })
+    prisma.conversationParticipant.findMany.mockResolvedValue([])
+    prisma.blockedUser.findFirst.mockResolvedValue(null)
     conversationUpdate.mockResolvedValue({ id: conversationId })
     prisma.$transaction.mockImplementation(async (work: (tx: {
       conversation: { findFirst: typeof prisma.conversation.findFirst; create: typeof prisma.conversation.create; update: typeof conversationUpdate }

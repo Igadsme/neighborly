@@ -32,6 +32,7 @@ function ratingBreakdown(reviews: ProfileReview[]) {
 export default function Profile({ onNavigate, userId }: ProfileProps) {
   const [activeTab, setActiveTab] = useState<'listings' | 'reviews' | 'sold'>('listings')
   const [profileNote, setProfileNote] = useState('')
+  const [blocked, setBlocked] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [profile, setProfile] = useState<PublicProfile | null>(null)
@@ -57,12 +58,47 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
     }
   }
 
+  const reportProfile = async () => {
+    if (!profile) return
+    setProfileNote('')
+    try {
+      await api.safety.report({ targetType: 'USER', targetId: profile.id, reason: 'OTHER' })
+      setProfileNote('Report submitted.')
+    } catch (cause: unknown) {
+      setProfileNote(readStatus(cause, 'Unable to submit this report.'))
+    }
+  }
+
+  const toggleBlock = async () => {
+    if (!userId) return
+    setProfileNote('')
+    try {
+      if (blocked) {
+        await api.safety.unblock(userId)
+        setBlocked(false)
+        setProfileNote('Profile unblocked.')
+      } else {
+        await api.safety.block(userId)
+        setBlocked(true)
+        setProfileNote('Profile blocked. You cannot message this person.')
+      }
+    } catch (cause: unknown) {
+      setProfileNote(readStatus(cause, 'Unable to update this block.'))
+    }
+  }
+
   useEffect(() => {
     let active = true
     setLoading(true)
     setError('')
     const load = async () => {
       const id = userId || (await api.auth.me()).id
+      if (userId) {
+        const blocks = await api.safety.blocks().catch(() => [])
+        if (active) setBlocked(blocks.some((row) => row.userId === userId))
+      } else if (active) {
+        setBlocked(false)
+      }
       const [nextProfile, nextReviews, published, sold] = await Promise.all([
         api.users.profile(id),
         api.users.reviews(id),
@@ -317,11 +353,19 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
         {/* Report */}
         <div className="text-center mt-8">
           <button
-            onClick={() => setProfileNote("Reporting isn't available yet.")}
+            onClick={() => void reportProfile()}
             className="text-xs font-medium transition-colors text-[#C5CCDA] hover:text-[#8A9AB5]"
           >
             Report this profile
           </button>
+          {userId && (
+            <button
+              onClick={() => void toggleBlock()}
+              className="block mx-auto mt-2 text-xs font-medium transition-colors text-[#C5CCDA] hover:text-[#8A9AB5]"
+            >
+              {blocked ? 'Unblock this profile' : 'Block this profile'}
+            </button>
+          )}
           {profileNote && <p className="text-xs text-[#A63D27] mt-2" role="alert">{profileNote}</p>}
         </div>
           </>
