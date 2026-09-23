@@ -20,6 +20,12 @@ export function mediaSrc(image: string | undefined, unsplashParams: string) {
   return `https://images.unsplash.com/${image}?${unsplashParams}`
 }
 
+function displayableImage(value: string) {
+  if (/^https?:\/\//i.test(value)) return value
+  if (/^photo-/i.test(value)) return value
+  return ""
+}
+
 export function memberSince(iso: string | undefined) {
   if (!iso) return "recently"
   const date = new Date(iso)
@@ -77,13 +83,14 @@ export function listingFromApi(listing: ApiListing, saved = false): Listing {
     isFree: listing.priceCents === 0,
     condition: listing.condition ?? "",
     category: listing.category?.name ?? "Marketplace",
+    categoryId: listing.categoryId ?? listing.category?.id,
     neighborhood: listing.neighborhood ?? "Nearby",
     city: listing.city ?? "",
     distance: "Nearby",
     postedAt: relativeTime(listing.createdAt),
     images:
       listing.images
-        ?.map((image) => image.url || image.key || image.objectKey || "")
+        ?.map((image) => displayableImage(image.url || image.key || image.objectKey || ""))
         .filter(Boolean) ?? [],
     description: listing.description,
     seller: {

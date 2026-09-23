@@ -2,7 +2,7 @@
 
 Base URL: `/api/v1`. Swagger UI: `/docs` (outside the global prefix).
 
-This document replaces the mixed "initial production contract" that listed planned routes as if they were live. **IMPLEMENTED** means a controller method exists under `backend/src`. **TARGET** means v1 follow-on work that is not in the tree. The typed client in `src/api/client.ts` mirrors auth, listings, requests, conversations, transactions, and reviews. It does not call housing, jobs, services, or community yet (`docs/FRONTEND_BACKEND_MAP.md`).
+This document replaces the mixed "initial production contract" that listed planned routes as if they were live. **IMPLEMENTED** means a controller method exists under `backend/src`. **TARGET** means v1 follow-on work that is not in the tree. The typed client in `src/api/client.ts` mirrors auth, listings, requests, conversations, transactions, reviews, housing, jobs, services, and community. Page wiring is in `docs/FRONTEND_BACKEND_MAP.md`. This specification is not a release-complete claim. Docker Compose, migrate, seed, and signed-in browser e2e are still blocked on this Mac.
 
 v1 excludes OpenAI, embeddings, and semantic search. Do not add those routes.
 
@@ -95,7 +95,7 @@ The Create Listing `<select>` uses a shorter hardcoded name list and resolves `c
 | Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
 | `GET` | `/listings` | No | Published listings by default. Query: `query`, `categoryId` (UUID), `sellerId` (UUID), `status` (`PUBLISHED` default, or `SOLD`), `limit`, `offset`. `SOLD` also requires `deletedAt` null. Includes `images`, `category`, `seller.profile`. Newest first. Latitude and longitude are not selected. |
-| `GET` | `/listings/:id` | No | Non-deleted listing that is not `DRAFT`, with images (sort order), category, seller profile. Drafts are 404. 404 `"Listing not found"`. |
+| `GET` | `/listings/:id` | No | Non-deleted listing that is not `DRAFT`, with images (sort order), category, seller profile. Drafts are 404. 404 `"Listing not found"`. Latitude, longitude, email, and `passwordHash` are not selected. |
 | `POST` | `/listings` | Yes | Creates `PUBLISHED`. Does not accept image keys. Does not write `PriceHistory`. |
 | `POST` | `/listings/drafts` | Yes | Same body as create. Stores `DRAFT`. Omitted from `GET /listings` and `GET /listings/:id`. |
 | `POST` | `/listings/:id/publish` | Yes | Owner only. `DRAFT` becomes `PUBLISHED`. Already published returns the row. Any other status is 409 `"Only a draft can be published"`. 403 if not owner. |
@@ -127,6 +127,8 @@ The Create Listing `<select>` uses a shorter hardcoded name list and resolves `c
 ```
 
 `title` is `@MinLength(3)` and `@MaxLength(140)`. `description` is `@MinLength(10)`. The same body is used for `POST /listings/drafts`. No new Prisma migration: `ListingStatus.DRAFT` already exists in `0001_init`. The Create Listing page sends category, title, description, `priceCents` when the dollar field is filled, condition, pickup, and delivery. It does not send photos, tags, shipping, neighborhood, city, or coordinates. The AI Review step stays on screen and does not call a model.
+
+Listing detail uses the routes above. It does not add endpoints. For a UUID id, the page calls `GET /listings/:id` and does not fill the main body from `src/data` fixtures. Similar cards call `GET /listings` with `categoryId` when the listing has one (`limit` 8). If that category has no other published row, the client calls `GET /listings?limit=8` and drops the current id. The seller block uses the public seller card on the listing (`id`, display name or first name, neighborhood). It does not render email, `passwordHash`, last name, or coordinates. `POST /listings/:id/favorite` still toggles save for a signed-in caller. A 401 on that toggle shows "Sign in to continue." There is no mark-sold, promote, or archive control on this screen, so `PATCH /listings/:id` and `DELETE /listings/:id` are not called from it. Negotiate, reserve, report, and share stay on the painted controls and do not call the API. The "Fast replies" badge stays painted. It is not a response-time field.
 
 Not implemented on this module: condition/price/distance/verified/free/delivery query params, image presign, price-drop feed, saved-search alerts.
 
@@ -185,7 +187,7 @@ All guarded. Caller must already be a `ConversationParticipant` or the service t
 
 `MessagingGateway` listens on namespace `/realtime`. `publishMessage` emits `message.created` to `conversation:{id}` after a participant sends a message. The gateway does not authenticate handshakes or join those rooms.
 
-Not implemented: create conversation, typing, attachments, read receipts per message.
+Not implemented: create conversation, typing, attachments, read receipts per message. Listing detail does not add `POST /conversations`. Sending a message from a live listing stays in the painted modal and does not persist a thread or open Messages as if the send succeeded.
 
 ### Transactions
 

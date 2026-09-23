@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Avatar, StarRating, Badge, Button, Icon, ListingCard } from '../components/ui'
 import { listings, type Listing } from '../data'
-import { api, readError } from '../api/client'
+import { api, ApiError, readError, readStatus } from '../api/client'
+import type { ApiListing } from '../api/types'
 import { isUuid, listingFromApi, mediaSrc } from '../lib/view'
 
 type Page = 'listing' | 'messages' | 'profile' | 'explore'
@@ -12,6 +13,23 @@ interface ListingDetailProps {
 }
 
 const safeSpots = ['Publix on Moreland Ave', 'Chase Bank ATM (Ponce)', 'Starbucks — Edgewood', 'APD Precinct 6 Lobby']
+
+async function loadRelated(currentId: string, categoryId?: string) {
+  let rows: ApiListing[] = []
+  if (categoryId) {
+    try {
+      const sameCategory = await api.listings.list({ categoryId, limit: 8 })
+      rows = sameCategory.filter((row) => row.id !== currentId)
+    } catch {
+      rows = []
+    }
+  }
+  if (rows.length === 0) {
+    const recent = await api.listings.list({ limit: 8 })
+    rows = recent.filter((row) => row.id !== currentId)
+  }
+  return rows.slice(0, 4).map((row) => listingFromApi(row))
+}
 
 export default function ListingDetail({ listingId, onNavigate }: ListingDetailProps) {
   const fixture = listingId ? listings.find((item) => item.id === listingId) : undefined
@@ -30,10 +48,17 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
   const [messageError, setMessageError] = useState('')
   const [reported, setReported] = useState(false)
   const [zoomed, setZoomed] = useState(false)
+  const [relatedRows, setRelatedRows] = useState<Listing[]>([])
+  const [relatedLoading, setRelatedLoading] = useState(fromApi)
+  const [relatedError, setRelatedError] = useState('')
 
   useEffect(() => {
+    if (fromApi) return
     if (fixture) setSaved(fixture.saved)
-  }, [fixture])
+    setRelatedLoading(false)
+    setRelatedError('')
+    setRelatedRows([])
+  }, [fixture, fromApi])
 
   useEffect(() => {
     if (!fromApi || !listingId) return
@@ -41,16 +66,36 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
     setLoading(true)
     setLoadError('')
     setApiListing(null)
-    api.listings
-      .get(listingId)
-      .then((row) => {
+    setRelatedRows([])
+    setRelatedError('')
+    setRelatedLoading(true)
+    setSaved(false)
+    setSaveError('')
+    setActiveImage(0)
+    setMessage('')
+    setMessageError('')
+    setMessageSent(false)
+    const savedIds = api.auth.hasSession()
+      ? api.listings
+          .favorites()
+          .then((rows) => new Set(rows.map((row) => row.listing.id)))
+          .catch(() => new Set<string>())
+      : Promise.resolve(new Set<string>())
+    Promise.all([api.listings.get(listingId), savedIds])
+      .then(([row, ids]) => {
         if (!active) return
-        const next = listingFromApi(row)
+        const next = listingFromApi(row, ids.has(row.id))
         setApiListing(next)
         setSaved(next.saved)
       })
       .catch((cause: unknown) => {
-        if (active) setLoadError(readError(cause, 'This listing could not be loaded.'))
+        if (!active) return
+        setRelatedLoading(false)
+        if (cause instanceof ApiError && cause.status === 404) {
+          setLoadError('Listing not found')
+          return
+        }
+        setLoadError(readStatus(cause, 'This listing could not be loaded.'))
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -60,10 +105,33 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
     }
   }, [fromApi, listingId])
 
+  useEffect(() => {
+    if (!fromApi || !apiListing) return
+    let active = true
+    setRelatedLoading(true)
+    setRelatedError('')
+    setRelatedRows([])
+    loadRelated(apiListing.id, apiListing.categoryId)
+      .then((rows) => {
+        if (active) setRelatedRows(rows)
+      })
+      .catch((cause: unknown) => {
+        if (active) setRelatedError(readError(cause, 'Similar listings could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setRelatedLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [fromApi, apiListing])
+
   const listing = fromApi ? apiListing : fixture ?? null
-  const relatedListings = fromApi || !listing
-    ? []
-    : listings.filter((item) => item.id !== listing.id).slice(0, 4)
+  const relatedListings = fromApi
+    ? relatedRows
+    : listing
+      ? listings.filter((item) => item.id !== listing.id).slice(0, 4)
+      : []
 
   const toggleSaved = async () => {
     if (!listing) return
@@ -76,7 +144,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
       const result = await api.listings.toggleFavorite(listing.id)
       setSaved(result.saved)
     } catch (cause: unknown) {
-      setSaveError(readError(cause, 'Saving this listing is unavailable.'))
+      setSaveError(readStatus(cause, 'Saving this listing is unavailable.'))
     }
   }
 
@@ -226,10 +294,10 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
               </div>
 
               <div className="flex flex-wrap items-center gap-4 text-sm text-[#8A9AB5]">
-                <span className="flex items-center gap-1"><Icon name="mapPin" size={13} className="text-[#E8694A]" />{listing.neighborhood}, Atlanta · {listing.distance}</span>
+                <span className="flex items-center gap-1"><Icon name="mapPin" size={13} className="text-[#E8694A]" />{[listing.neighborhood, listing.city].filter(Boolean).join(', ')} · {listing.distance}</span>
                 <span className="flex items-center gap-1"><Icon name="calendar" size={13} />Posted {listing.postedAt}</span>
-                <span className="flex items-center gap-1"><Icon name="eye" size={13} />{listing.views} views</span>
-                <span className="flex items-center gap-1"><Icon name="heart" size={13} />{listing.saves} saves</span>
+                <span className="flex items-center gap-1"><Icon name="eye" size={13} />{fromApi ? '—' : listing.views} views</span>
+                <span className="flex items-center gap-1"><Icon name="heart" size={13} />{fromApi ? '—' : listing.saves} saves</span>
               </div>
             </div>
 
@@ -340,6 +408,11 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
             {/* Similar listings */}
             <div>
               <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-4">Similar listings</h2>
+              {relatedError && <p className="text-sm text-[#C4512D] mb-3">{relatedError}</p>}
+              {relatedLoading && <p className="text-sm text-[#8A9AB5]">Loading similar listings…</p>}
+              {!relatedLoading && !relatedError && relatedListings.length === 0 && (
+                <p className="text-sm text-[#8A9AB5]">No similar listings yet.</p>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 {relatedListings.map(l => (
                   <ListingCard key={l.id} listing={l} onClick={() => onNavigate('listing', l.id)} compact />
@@ -413,20 +486,22 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                   <Avatar src={listing.seller.avatar} name={listing.seller.name} size="lg" verified={listing.seller.verified} />
                   <div>
                     <p className="font-semibold text-[#1B2A4A]">{listing.seller.name}</p>
-                    <p className="text-xs text-[#8A9AB5]">{listing.seller.neighborhood} · Member since {listing.seller.memberSince}</p>
+                    <p className="text-xs text-[#8A9AB5]">{listing.seller.neighborhood}{listing.seller.memberSince ? ` · Member since ${listing.seller.memberSince}` : ''}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <StarRating rating={listing.seller.rating} count={listing.seller.reviews} size="xs" />
+                      {listing.seller.rating > 0 && (
+                        <StarRating rating={listing.seller.rating} count={listing.seller.reviews} size="xs" />
+                      )}
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 mb-4">
                   <div className="bg-[#F5F4EF] rounded-xl p-2 text-center">
-                    <p className="font-bold text-[#1B2A4A] text-sm">{listing.seller.transactions}</p>
+                    <p className="font-bold text-[#1B2A4A] text-sm">{fromApi ? '—' : listing.seller.transactions}</p>
                     <p className="text-[9px] text-[#8A9AB5]">Sales</p>
                   </div>
                   <div className="bg-[#F5F4EF] rounded-xl p-2 text-center">
-                    <p className="font-bold text-[#1B2A4A] text-sm">{listing.seller.responseTime}</p>
+                    <p className="font-bold text-[#1B2A4A] text-sm">{fromApi || !listing.seller.responseTime ? '—' : listing.seller.responseTime}</p>
                     <p className="text-[9px] text-[#8A9AB5]">Response</p>
                   </div>
                   <div className="bg-[#F5F4EF] rounded-xl p-2 text-center">
@@ -441,7 +516,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                   <Badge variant="blue" size="sm">⚡ Fast replies</Badge>
                 </div>
 
-                <button onClick={() => onNavigate('profile')} className="w-full py-2 text-sm font-medium text-[#2D6A4F] border border-[#2D6A4F]/30 rounded-xl hover:bg-[#F0FBF3] transition-colors">
+                <button onClick={() => onNavigate('profile', isUuid(listing.seller.id) ? listing.seller.id : undefined)} className="w-full py-2 text-sm font-medium text-[#2D6A4F] border border-[#2D6A4F]/30 rounded-xl hover:bg-[#F0FBF3] transition-colors">
                   View full profile
                 </button>
               </div>
