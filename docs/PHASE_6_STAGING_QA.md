@@ -111,6 +111,8 @@ axe-core 4.10.3, WCAG 2 A/AA, on the signed-in shell over the landing page (the 
 
 ## Fixes in this branch
 
+Fix commit: `d8c464f`.
+
 | Item | Severity | Was | Fix |
 | --- | --- | --- | --- |
 | Restore after suspend | P1 | `RESTORE_USER` on the report that suspended someone returned 409 | Allowed when the report is `RESOLVED` and the account is still `SUSPENDED` |
