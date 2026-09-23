@@ -50,5 +50,6 @@ if [ "$rolled" -eq 0 ] && [ "${1:-}" = "" ]; then
   exit 1
 fi
 
-compose up -d --no-build --wait api web caddy
+compose up -d --no-build api web caddy
 echo "staging app tier restarted"
+echo "Check https://staging.neighborly.localhost:8444/api/v1/ready"

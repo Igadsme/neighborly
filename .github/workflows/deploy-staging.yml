@@ -60,9 +60,13 @@ jobs:
             https://staging.neighborly.localhost:8444/api/v1/categories \
             | grep -q Furniture
 
+      # `down -v` is safe on this ephemeral runner. Do not copy it onto a machine
+      # that also uses the dev Postgres volume. Operators use scripts/staging-down.sh.
       - name: Stop the runner stack and drop its volumes
         if: always()
-        run: docker compose --env-file .env.staging --profile staging down -v
+        run: |
+          sh scripts/staging-down.sh || true
+          docker compose --env-file .env.staging down -v
 
   push-images:
     name: Push images to GHCR
@@ -77,7 +81,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create a runner-only env file
+      - name: Build the staging images on the runner
         run: sh scripts/staging-up.sh
 
       - name: Log in to GHCR and push
@@ -94,6 +98,10 @@ jobs:
           docker push "ghcr.io/${owner}/neighborly-api:${tag}"
           docker push "ghcr.io/${owner}/neighborly-web:${tag}"
 
+      # `down -v` is safe on this ephemeral runner. Do not copy it onto a machine
+      # that also uses the dev Postgres volume. Operators use scripts/staging-down.sh.
       - name: Stop the runner stack and drop its volumes
         if: always()
-        run: docker compose --env-file .env.staging --profile staging down -v
+        run: |
+          sh scripts/staging-down.sh || true
+          docker compose --env-file .env.staging down -v
