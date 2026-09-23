@@ -120,9 +120,11 @@ Code items are what `cfd0db3` and `1f38563` contain. Local Mac boot is the live 
 
 Live commands, exit codes, and pass/fail rows are in [`docs/DOCKER_RELEASE_VERIFICATION.md`](DOCKER_RELEASE_VERIFICATION.md). The boxes below stay aligned with that document. They are not a release, and they are not a signed-in browser pass. The required commerce check is the scripted API loop in that doc (`node scripts/docker-release-e2e.mjs`), not Playwright. Prefer `pnpm prisma:deploy` over interactive `pnpm prisma:migrate`.
 
-- [ ] `.env` copied from `env.example` to `backend/.env` and the repo root (`DATABASE_URL`, `JWT_SECRET` of at least 32 characters, `CORS_ORIGIN`, `VITE_API_URL`)
-- [ ] `docker compose up -d` for Postgres (PostGIS 16) and Redis 7
-- [ ] `pnpm prisma:deploy` in `backend/` against that database
-- [ ] `pnpm prisma:seed`
-- [ ] Node 22 (`.mise.toml`) verify on the Mac: frontend `tsc`, Vitest, and `vite build`; backend `tsc`, Jest, and nest build
-- [ ] Two-user API loop against the live database (publish, offer, accept, message, complete, review)
+- [x] `.env` copied from `env.example` to `backend/.env` and the repo root (`DATABASE_URL`, `JWT_SECRET` of at least 32 characters, `CORS_ORIGIN`, `VITE_API_URL`)
+- [x] `docker compose up -d` for Postgres (PostGIS 16) and Redis 7
+- [x] `pnpm prisma:deploy` in `backend/` against that database
+- [x] `pnpm prisma:seed`
+- [x] Node 22 (`.mise.toml`) verify on the Mac: frontend `tsc`, Vitest, and `vite build`; backend `tsc`, Jest, and nest build
+- [x] Two-user API loop against the live database (publish, offer, accept, message, complete, review)
+
+The 2026-09-23 Mac run passed those six rows. The API listened on port 3001 because port 3000 was already taken by an unrelated process. A signed-in browser pass was not run, and the four vertical pages were not clicked. Details, warnings, and ids are in `docs/DOCKER_RELEASE_VERIFICATION.md`. **Release readiness: NOT claimed.**
