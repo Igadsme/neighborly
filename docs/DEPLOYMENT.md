@@ -140,17 +140,19 @@ services:
       - '9001:9001'
 ```
 
+The Compose file in the repo is the local dev database (`postgres`, `redis`) plus a `staging` profile. Dev `docker compose up -d` is unchanged. Staging is documented in section 8 and in `docs/PHASE_5_STAGING.md`.
+
 ## 4. CI/CD expectations
 
-- Run lint and unit tests on every PR
-- Run Prisma migration validation before deploy
-- Run database smoke checks and seed validation in staging environments
-- Apply infrastructure changes via IaC or environment-managed deployment scripts
-- Require a smoke test against the staging environment before production deploy
+- Run frontend and backend typecheck, tests, and build on every pull request (`.github/workflows/ci.yml`)
+- Apply Prisma migrations with `prisma migrate deploy` before the staging API listens
+- Run the staging seed and check `/health` and `/ready` before calling the stack up
+- Keep production deploy behind a product-owner approval. This repository does not deploy to production.
+- `.github/workflows/deploy-staging.yml` is manual (`workflow_dispatch`). It builds the Compose staging profile on the runner and smokes it. It pushes images to GHCR only when the repository variable `STAGING_PUSH_IMAGES` is `true`.
 
 ## 5. Production readiness checklist
 
-This checklist is not satisfied by Phase 4. Do not treat a green CI run as a production launch.
+This checklist is not satisfied by Phase 4 or Phase 5. Do not treat a green CI run or a local staging stack as a production launch.
 
 - Postgres backups scheduled and tested. Local Compose procedure: `scripts/backup-postgres.sh` and `scripts/restore-postgres.sh` (see below).
 - Redis persistence and failover configured. Compose Redis runs with AOF so local counters survive a restart. Redis is not the source of truth. A lost Redis only resets rate-limit counters.
@@ -190,9 +192,11 @@ Use a simple staging-to-production path:
 
 1. Local development with Docker Compose
 2. CI validation on pull requests
-3. Staging deployment with production-like environment variables
-4. Manual or automated approval gate for release
-5. Production deployment with rollback plan and database migration safety checks
+3. Staging on the Compose `staging` profile (section 8). This step is what Phase 5 delivered.
+4. Product-owner approval before any production change
+5. Production deployment with a rollback plan and migration safety checks
+
+Step 5 is not started. A green staging run is not a launch.
 
 ## 7. Observability
 
@@ -202,3 +206,26 @@ Use a simple staging-to-production path:
 - Health checks: `GET /api/v1/health` (liveness) and `GET /api/v1/ready` (Postgres, and Redis when `REDIS_URL` is set)
 
 This approach keeps the first release stable while leaving room for scaling and hardening as Neighborly expands its local marketplace and community platform.
+
+## 8. Staging
+
+Phase 5 runs staging on this machine. The record, the health results, and the product-owner blockers are in `docs/PHASE_5_STAGING.md`. Release readiness is not claimed.
+
+`scripts/staging-up.sh` starts the `staging` profile: API, frontend, PostGIS, Redis, MinIO, and Caddy. The template is `env.staging.example`. Copy it to `.env.staging`. That file is gitignored. The script fills an empty `JWT_SECRET` and does not print it. Do not commit a staging or production secret.
+
+| Surface | URL |
+| --- | --- |
+| App | `https://staging.neighborly.localhost:8444/` |
+| Health | `https://staging.neighborly.localhost:8444/api/v1/health` |
+| Ready | `https://staging.neighborly.localhost:8444/api/v1/ready` |
+| API on loopback | `http://127.0.0.1:3001/api/v1/` |
+
+HTTPS is Caddy's internal CA on port 8444. A public certificate needs a domain and DNS. Those were not purchased or changed. Until the product owner approves them, staging stays on loopback.
+
+`staging-migrate` applies the committed Prisma migrations, including `0004_trust_safety` and `0005_query_indexes`, then runs `backend/prisma/seed.ts`. The seed upserts fixture rows. It does not delete data. The shared seed password `neighborly-local-seed` is a local fixture. The migrate script refuses any database host other than `staging-postgres`.
+
+The dev database on port 5432 is a different volume. `scripts/backup-postgres.sh` dumps that dev database. `scripts/staging-backup.sh` dumps staging. `scripts/staging-rollback.sh` retags `neighborly-api:staging-previous` and `neighborly-web:staging-previous` and can restore a staging dump. Migrations are forward-only. Restoring a dump is the data rollback. `scripts/staging-down.sh` stops the staging containers and leaves the dev Postgres service running.
+
+`docker compose down -v` deletes the dev Postgres volume as well as the staging volumes. Do not run it on a machine that still needs the dev database. The GitHub Actions staging job uses `down -v` only on an ephemeral runner.
+
+GitHub Environment `staging` is the place for a future `STAGING_JWT_SECRET`. The current workflow does not read it. It generates a throwaway JWT for the smoke run. No production secret goes in that environment or in git.
