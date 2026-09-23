@@ -2,7 +2,7 @@
 
 Base URL: `/api/v1`. Swagger UI: `/docs` (outside the global prefix).
 
-This document replaces the mixed "initial production contract" that listed planned routes as if they were live. **IMPLEMENTED** means a controller method exists under `backend/src` at foundation commit `d0dab1c`. **TARGET** means v1 follow-on work that is not in the tree. The typed client in `src/api/client.ts` mirrors the implemented surface; pages do not call all of it (`docs/FRONTEND_BACKEND_MAP.md`).
+This document replaces the mixed "initial production contract" that listed planned routes as if they were live. **IMPLEMENTED** means a controller method exists under `backend/src`. **TARGET** means v1 follow-on work that is not in the tree. The typed client in `src/api/client.ts` mirrors the implemented surface; pages do not call all of it (`docs/FRONTEND_BACKEND_MAP.md`).
 
 v1 excludes OpenAI, embeddings, and semantic search. Do not add those routes.
 
@@ -125,10 +125,15 @@ Not implemented on this module: condition/price/distance/verified/free/delivery 
 
 | Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
-| `GET` | `/requests` | No | `PUBLISHED` and `deletedAt: null`. Includes category, requester profile, and `offers: { id, status }[]`. Newest first. Not limited to the caller. |
+| `GET` | `/requests` | No | `PUBLISHED` and `deletedAt: null`. Includes category, a public requester card, and `offers: { id, status }[]`. Newest first. Not limited to the caller. |
+| `GET` | `/requests/:id` | No | One published request. Same public requester card. Offers include `amountCents`, `message`, `status`, `items` (listing id, title, price, status), and the offerer's public card. 404 `"Request not found"`. |
 | `POST` | `/requests` | Yes | Creates `PUBLISHED`. Ignores any attempt to save `DRAFT` because status is hardcoded. |
 | `POST` | `/requests/:id/offers` | Yes | Offer on a published request. Offerer cannot be the requester (400). Optional `listingIds` must all be the offerer's published listings (403 otherwise). |
 | `POST` | `/requests/offers/:id/counter` | Yes | Requester or offerer only, and only while status is `PENDING` or `COUNTERED`. Sets the offer to `COUNTERED` and inserts a counter row. The handler returns the Prisma transaction array `[offer, counterOffer]`. |
+| `POST` | `/requests/:id/offers/:offerId/accept` | Yes | Requester only, and only while the offer is `PENDING` or `COUNTERED`. Sets `ACCEPTED`. Creates one conversation (requester and offerer), one transaction linked by `offerId` (`status: ACCEPTED`, roles `REQUESTER` and `OFFERER`), and the first milestone (`toStatus: ACCEPTED`). |
+| `POST` | `/requests/:id/offers/:offerId/reject` | Yes | Requester only, same negotiable statuses. Sets `REJECTED`. Does not create a conversation or transaction. |
+
+The public requester card is `id` plus profile `displayName`, `firstName`, `neighborhood`, and `city`. It does not include `passwordHash`, `email`, coordinates, account status, or verification flags. The same card is used for the offerer on `GET /requests/:id`.
 
 `POST /requests` body:
 
@@ -153,7 +158,7 @@ Not implemented on this module: condition/price/distance/verified/free/delivery 
 
 `POST /requests/offers/:id/counter` body: `message` (min length 2), optional `amountCents` ≥ 0.
 
-Not implemented: `GET /requests/:id`, `GET /requests/:id/matches`, accept, reject, withdraw, list offers for the current user. `RequestMatch` rows are never created. Matching is not semantic search and is not a hidden implemented feature.
+Not implemented: `GET /requests/:id/matches`, withdraw, list offers for the current user. `RequestMatch` rows are never created. Matching is not semantic search and is not a hidden implemented feature.
 
 ### Conversations
 
@@ -163,10 +168,10 @@ All guarded. Caller must already be a `ConversationParticipant` or the service t
 | --- | --- | --- |
 | `GET` | `/conversations` | Caller's conversations, `updatedAt` desc. Includes participants with profile and the latest message. |
 | `GET` | `/conversations/:id/messages` | Messages ascending by `createdAt`. |
-| `POST` | `/conversations/:id/messages` | Body `{ "body": "min length 1" }`. Persists the message. Does not emit on the socket. |
+| `POST` | `/conversations/:id/messages` | Body `{ "body": "min length 1" }`. Persists the message, then `publishMessage` emits `message.created` on `/realtime` room `conversation:{id}`. A non-participant is 403 and nothing is published. |
 | `PATCH` | `/conversations/:id/read` | Sets that participant's `lastReadAt`. |
 
-`MessagingGateway` listens on namespace `/realtime` and has `publishMessage`. Nothing calls it, and the gateway does not authenticate or join `conversation:{id}` rooms.
+`MessagingGateway` listens on namespace `/realtime`. `publishMessage` emits `message.created` to `conversation:{id}` after a participant sends a message. The gateway does not authenticate handshakes or join those rooms.
 
 Not implemented: create conversation, typing, attachments, read receipts per message.
 
@@ -193,7 +198,22 @@ Allowed edges (`backend/src/transactions/transaction-state.ts`):
 | `DISPUTED` | `REFUNDED`, `COMPLETED`, `CANCELLED` |
 | `COMPLETED`, `CANCELLED`, `REFUNDED`, `EXPIRED` | none |
 
-No route creates a transaction, so this state machine is unreachable from the UI until a row exists.
+Accepting an offer inserts the first transaction at `ACCEPTED` with one milestone. Later changes go through this state machine.
+
+### Reviews
+
+Guarded. `POST /reviews`
+
+```json
+{
+  "transactionId": "uuid",
+  "subjectId": "uuid",
+  "rating": 5,
+  "body": "at least 1 character"
+}
+```
+
+`rating` is an integer from 1 to 5. `body` is stored trimmed. The caller must be a `TransactionParticipant` (403 otherwise). Status must be `COMPLETED`, or the response is 400 `"Reviews are only allowed when the transaction is COMPLETED"`. Unknown transaction is 404 `"Transaction not found"`. There is no unique constraint on `(transactionId, authorId)` yet.
 
 ## TARGET
 
@@ -214,23 +234,20 @@ These routes are the remainder of the v1 contract. They are not implemented. Pat
 
 ### Requests
 
-- `GET /requests/:id` — request plus offers with `amountCents`, `message`, `status`, offerer profile, and `items`.
 - `GET /requests?mine=1` or equivalent — caller's requests only. The current list is public and global.
 - `POST /requests` draft mode and `PATCH /requests/:id` to cancel (`CANCELLED`) without deleting the row.
-- `POST /requests/:id/offers/:offerId/accept` and `.../reject` — set `ACCEPTED` or `REJECTED`. Accept is what may create the transaction (target).
 - Deterministic match rows in `RequestMatch` from category, mode, and radius. Score is a plain decimal the server writes. Not an embedding.
 
 ### Messaging
 
 - `POST /conversations` — participants, optional request or listing reference. Required before Messages can leave fixtures.
-- Persist then emit `message.created` on `/realtime` after the socket joins `conversation:{id}` with the same JWT.
+- Join `conversation:{id}` with the same JWT before a client can receive `message.created`. Send already persists, then emits.
 - Typing and attachments stay target. The composer camera button stays visual until attachments exist.
 
 ### Transactions, reviews, safety
 
-- Create transaction when an offer is accepted, with requester and offerer participants.
 - `POST /transactions/:id/appointments` — `startsAt`, `locationNote`. The Dashboard meetup cards bind here later.
-- `POST /reviews` — `{ transactionId, subjectId, rating, body }` for a `COMPLETED` transaction the author belongs to. One review per author per transaction (constraint still target).
+- One review per author per transaction (constraint still target). `POST /reviews` itself is implemented.
 - `GET /users/:id/reviews` — feeds the Profile reviews tab, which is fixture text today.
 - Reports, blocks, moderation actions, notification list, and mark-read. Buttons exist on Listing Detail and Profile and only flip local React state.
 
@@ -245,6 +262,9 @@ These routes are the remainder of the v1 contract. They are not implemented. Pat
 1. Register and onboarding write a user.
 2. `POST /listings` or `POST /requests` publishes immediately.
 3. Another user `POST /requests/:id/offers`.
-4. Either party `POST /requests/offers/:id/counter`.
+4. Either party `POST /requests/offers/:id/counter` while the offer is `PENDING` or `COUNTERED`.
+5. The requester `POST /requests/:id/offers/:offerId/accept` (or `reject`). Accept opens one conversation and one `ACCEPTED` transaction.
+6. A participant `PATCH /transactions/:id/status` along the legal edges until `COMPLETED`.
+7. A participant `POST /reviews` for that completed transaction.
 
-They cannot yet open a thread, accept, schedule, complete, or review. That sequence is target, and the screens for it already exist (`docs/UX_REQUEST_FLOW_STATES.md`).
+Scheduling an appointment is still target. The screens for this sequence already exist (`docs/UX_REQUEST_FLOW_STATES.md`).
