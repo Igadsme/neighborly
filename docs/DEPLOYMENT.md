@@ -8,7 +8,7 @@ The repository pins the intended local toolchain in `.mise.toml` (`node = "22"`,
 
 ## 2. Required environment variables
 
-Boot validation is `backend/src/common/config/env.validation.ts`. The committed template is `env.example`. Copy it to `backend/.env` and, for `VITE_API_URL`, to `.env` at the repo root. Do not commit those copies.
+Boot validation is `backend/src/common/config/env.validation.ts`. The committed local template is `env.example`. Staging uses `env.staging.example`. Production placeholders are `env.production.example` (Phase 7). Copying the production file unchanged fails boot on purpose. Copy a local template to `backend/.env` and, for `VITE_API_URL`, to `.env` at the repo root. Do not commit those copies. Do not commit a filled production env file.
 
 Required in every environment:
 
@@ -147,12 +147,13 @@ The Compose file in the repo is the local dev database (`postgres`, `redis`) plu
 - Run frontend and backend typecheck, tests, and build on every pull request (`.github/workflows/ci.yml`)
 - Apply Prisma migrations with `prisma migrate deploy` before the staging API listens
 - Run the staging seed and check `/health` and `/ready` before calling the stack up
-- Keep production deploy behind a product-owner approval. This repository does not deploy to production.
-- `.github/workflows/deploy-staging.yml` is manual (`workflow_dispatch`). It builds the Compose staging profile on the runner and smokes it. It pushes images to GHCR only when the repository variable `STAGING_PUSH_IMAGES` is `true`.
+- Keep production deploy behind a product-owner approval. This repository does not deploy to production. Phase 7 did not change that.
+- `.github/workflows/deploy-staging.yml` is manual (`workflow_dispatch`). It builds the Compose staging profile on the runner and smokes it. It pushes images to GHCR only when the repository variable `STAGING_PUSH_IMAGES` is `true`. Leave that variable unset.
+- `.github/workflows/deploy-production.yml` is manual (`workflow_dispatch`) and is a stub. It does not run on push or pull request. It refuses before any build, registry login, or remote command unless `PRODUCTION_DEPLOY_ENABLED` is the string `true`, and it still refuses then because no production target is configured. Image push is a separate job that runs only when `PRODUCTION_PUSH_IMAGES` is also `true`, and that job refuses without logging in to GHCR. Leave both variables unset. Phase 7 did not dispatch this workflow.
 
 ## 5. Production readiness checklist
 
-This checklist is not satisfied by Phase 4 or Phase 5. Do not treat a green CI run or a local staging stack as a production launch.
+This checklist is not satisfied by Phase 4, Phase 5, Phase 6, or the Phase 7 preparation package. The launch form is `docs/LAUNCH_CHECKLIST.md`. Every public row there is blocked on the product owner. Do not treat a green CI run, a local staging stack, or Phase 6 (P0/P1 = 0) as a production launch.
 
 - Postgres backups scheduled and tested. Local Compose procedure: `scripts/backup-postgres.sh` and `scripts/restore-postgres.sh` (see below).
 - Redis persistence and failover configured. Compose Redis runs with AOF so local counters survive a restart. Redis is not the source of truth. A lost Redis only resets rate-limit counters.
@@ -196,7 +197,7 @@ Use a simple staging-to-production path:
 4. Product-owner approval before any production change
 5. Production deployment with a rollback plan and migration safety checks
 
-Step 5 is not started. A green staging run is not a launch.
+Step 5 is written in `docs/PRODUCTION.md` and was not executed. Phase 7 is preparation only. **NOT LAUNCHED / NOT DEPLOYED.** A green staging run is not a launch.
 
 ## 7. Observability
 
@@ -229,3 +230,9 @@ The dev database on port 5432 is a different volume. `scripts/backup-postgres.sh
 `docker compose down -v` deletes the dev Postgres volume as well as the staging volumes. Do not run it on a machine that still needs the dev database. The GitHub Actions staging job uses `down -v` only on an ephemeral runner.
 
 GitHub Environment `staging` is the place for a future `STAGING_JWT_SECRET`. The current workflow does not read it. It generates a throwaway JWT for the smoke run. No production secret goes in that environment or in git.
+
+## 9. Production preparation
+
+Phase 7 added a preparation package and did not deploy it. The completion record is `docs/PHASE_7_PROD_PREP.md`. The intended public path is `docs/PRODUCTION.md`. The checklist is `docs/LAUNCH_CHECKLIST.md`. Incident and rollback steps for the Compose scripts that exist are in `docs/INCIDENT_ROLLBACK.md`.
+
+**NOT LAUNCHED / NOT DEPLOYED.** Staging Compose remains the verified path. Public DNS, a public certificate, and any paid host stay blocked until Product Owner Imani Gad approves them. `.github/workflows/deploy-production.yml` is a manual stub that refuses. It was not dispatched.
