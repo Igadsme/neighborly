@@ -1,154 +1,94 @@
 # Frontend-to-Backend Feature Map
 
-## 1. Page inventory and corresponding domain modules
+Page engine: `src/App.tsx` holds `page` and swaps screens. There is no URL per screen. Fixtures live in `src/data/index.ts` (`sellers`, `listings`, `jobs`, `services`, `housingListings`, `communityPosts`, `mapListings`, `conversations`).
 
-| Frontend page | Current purpose | Required backend module | Key data/actions |
-| --- | --- | --- | --- |
-| Landing | Marketing and sign in entry | `auth`, `users` | Sign up, sign in, onboarding state |
-| Onboarding | Account setup and neighborhood interests | `users`, `profiles`, `preferences` | Location, interests, notifications |
-| HomeFeed | Personalized local marketplace overview | `search`, `listings`, `community`, `notifications` | Feed, search discovery, saved items, community alerts |
-| Explore | Search and filter marketplace inventory | `search`, `listings`, `locations` | Query, filter, sort, map view |
-| Categories | Category landing and browsing | `categories`, `listings` | Category pages, metadata, trending filters |
-| MapDiscovery | Geographic marketplace browsing | `search`, `locations`, `map` | Map pins, radius search, nearby results |
-| ListingDetail | Detailed listing view and contact flow | `listings`, `offers`, `messaging`, `media` | Get listing, saved state, negotiate, ask seller |
-| CreateListing | New listing creation | `listings`, `media`, `pricing` | Media upload, category selection, price, publish |
-| Messages | Conversation center | `messaging`, `notifications` | Thread list, send/receive message, read receipts |
-| SavedItems | Saved listings and searches | `favorites`, `savedSearches`, `wishlist` | Wishlist, search persistence |
-| Profile | User identity and profile status | `users`, `profiles`, `trust` | Profile info, review summary, badges, verification |
-| Dashboard | User operations and stats | `transactions`, `offers`, `analytics` | Incoming offers, sales, transactions, settlements |
-| Housing | Housing-specific marketplace | `listings`, `housing`, `locations` | Apartments, rentals, roommates |
-| Services | Local services marketplace | `services`, `profiles` | Provider profiles, bookings, service offers |
-| Jobs | Local job marketplace | `jobs`, `applications` | Listings, applications, hiring workflow |
-| Community | Local events, posts, groups | `community`, `notifications` | Posts, events, missions, volunteer tasks |
+**IMPLEMENTED** means the page or client already calls an endpoint that exists. **TARGET** means the screen is Figma-complete and still local. Request-flow states for Nova are specified in [UX_REQUEST_FLOW_STATES.md](./UX_REQUEST_FLOW_STATES.md). Decisions that constrain wiring are in [DECISIONS.md](./DECISIONS.md).
 
-## 2. Current mock data sources
+v1 wiring does not add AI calls. The Create Listing AI Review step and landing scam-detection sentence stay visual.
 
-From `src/data/index.ts`:
+## IMPLEMENTED
 
-- `sellers`: user profiles, trust metrics, response times, neighborhoods
-- `listings`: marketplace items with tags, price, seller details, saved state, availability
-- `jobs`: role, company, compensation, schedule, remote status
-- `services`: local providers and category metadata
-- `housingListings`: tenant and rental inventory
-- `communityPosts`: events, posts, neighborhood discussions
-- `mapListings`: map-based pins and geographic context
-- `conversations`: message threads and status state
+### Shell
 
-Most of this metadata should map to normalized domain tables and API responses.
+| Location | Behavior | API |
+| --- | --- | --- |
+| `App` boot | "Loading Neighborly..." until session check finishes | `GET /users/me` when `neighborly.access_token` is set. Failure clears the token. |
+| `App` sign-out | Returns to `landing` | `api.auth.signOut` removes the token only. |
+| Signed-out gate | Any page other than `landing` and `onboarding` shows the existing house empty state with two buttons, both navigating to `landing` | None |
+| `Landing` sign-in dialog | Email and password, inline error, disabled while submitting | `POST /auth/login` |
+| `Onboarding` | Multi-step account setup. Email path persists. | `POST /auth/register`, then `PATCH /users/me/onboarding` |
+| `CreateListing` | Loads categories. Publish persists a listing. Step-5 alert and "Publishing..." already exist. | `GET /categories`, `POST /listings` |
+| `SavedItems` | Saved Listings and Saved Searches tabs load, error, and empty for real. | `GET /listings/favorites`, `GET /listings/saved-searches`, `POST /listings/:id/favorite` |
+| `ListingCard` heart | Calls the API unless the parent passes `onSavedChange` | `POST /listings/:id/favorite` |
 
-## 3. Existing functionality that appears operational but is currently visual-only
+`src/api/client.ts` also implements `requests.list`, `requests.create`, `requests.createOffer`, `requests.counterOffer`, `transactions.list`, `transactions.transition`, and `conversations.list|messages|send|markRead`. **No page calls them.** That is client-only coverage, not a wired screen.
 
-These states are UI-complete but not backend-backed:
+### Create Listing payload that actually leaves the browser
 
-- Save/bookmark toggle on listing cards
-- Search suggestions and filter state in Explore
-- Map location selection and radius search
-- Create listing wizard completion and save-draft behavior
-- Offer and negotiation actions on ListingDetail
-- Chat sending and read status in Messages
-- Dashboard metrics and incoming offer data
-- Community post interactions and event RSVP flows
-- User profile editing and verification actions
-- Favorite searches and local wishlists
+`categoryId`, `title` (AI-suggested title string if "Apply suggestion" was clicked, still just a string), `description`, `priceCents` from the dollar field, `condition`, `pickupAvailable`, `deliveryAvailable`.
 
-## 4. Required domain mapping
+Not sent: photos, tags, shipping, coordinates, the AI panels.
 
-### Identity and profile
+### Saved Items behaviors that are not the API
 
-- `Landing` + `Onboarding` -> `User`, `Profile`, `UserPreference`, `Verification`, `DeviceSession`
-- `Profile` -> `Profile`, `TrustPassport`, `Review`, `ModerationAction`
+- Collection chips and "New collection" are local. Every chip shows `savedListings.length`.
+- Compare bar is local (max 3). "Compare →" has no handler.
+- Price Alerts copies favorites and paints a synthetic "$100 off" / "↓ $100 off". That is not `PriceHistory`.
+- New-match block is static copy: "New-match alerts will appear here once saved-search notifications are enabled."
 
-### Marketplace and requests
+## TARGET
 
-- `Explore`, `Categories`, `HomeFeed`, `ListingDetail` -> `Listing`, `ListingImage`, `ListingCategory`, `ListingAttribute`, `Favorite`, `SavedSearch`, `PriceHistory`
-- `CreateListing` -> `Listing`, `ListingImage`, `ListingAvailability`, `ListingLocation`
-- `request-first flow` -> `NeedRequest`, `RequestOffer`, `CounterOffer`, `OfferItem`, `RequestMatch`, `MatchPreference`
+### Page inventory
 
-### Transactions and messaging
+| Page id | File | What the screen shows today | Fixtures | Target module when wired | Notes for Nova |
+| --- | --- | --- | --- | --- | --- |
+| `landing` | `Landing.tsx` | Marketing, search field, sign-in dialog, Preview bar | Inline feature copy | Auth is implemented | Search box is not hooked to `GET /listings`. Preview "Home feed" calls `signIn()` in React only. |
+| `onboarding` | `Onboarding.tsx` | Method, profile, neighborhood, interests, notifications | Step copy | Implemented | Google and Apple tiles are not providers. |
+| `home` | `HomeFeed.tsx` | Category chips, listing rails, services, community strip | `listings`, `services`, `communityPosts` | Listings, then community | Cards go to `listing` with no id. Heart uses `ListingCard` default and will fail on fixture ids (`l1`). |
+| `explore` | `Explore.tsx` | Query, filters, grid/list, suggestions | `listings` filtered in the browser | `GET /listings` plus target filters | "Save alert" toggles `alertSaved` locally. Map control navigates to `map`. |
+| `categories` | `Categories.tsx` | Category grid and a listing strip | `listings` plus inline category metadata | `GET /categories` then listings | Some tiles navigate to `housing`, `services`, `jobs`, `community`. |
+| `map` | `MapDiscovery.tsx` | Map-style discovery | `mapListings` | Target geo query | No Mapbox call. `MAPBOX_TOKEN` may be empty. |
+| `listing` | `ListingDetail.tsx` | Always `listings[0]` (West Elm sofa) | `listings` | `GET /listings/:id` | Save, offer amount, message modal, and report are `useState`. "Send offer" has no handler. Message "send" sets local success and routes to `messages`. |
+| `create` | `CreateListing.tsx` | Six-step wizard | Sample desk copy is the initial state | Request publish: `POST /requests`. Listing publish already calls `POST /listings`. | Composer states: [UX_REQUEST_FLOW_STATES.md](./UX_REQUEST_FLOW_STATES.md). |
+| `messages` | `Messages.tsx` | Two panes, filters, thread, offer card, safety banner | `conversations` | Conversations API once a thread can be created | Accept/Decline set local `offerStatus`. Counter is unwired. Send appends a local bubble unless the text mentions Venmo, Zelle, or PayPal. |
+| `saved` | `SavedItems.tsx` | Three tabs | API for the first two tabs | Price history and alert delivery are target | Keep the empty/error cards when extending. |
+| `profile` | `Profile.tsx` | Always `sellers[0]` (Marcus) | `sellers`, `listings`, inline `reviews` | `GET /users/:id/profile`, reviews list | Follow and report are local. Reviews tab is read-only. |
+| `dashboard` | `Dashboard.tsx` | Overview, My Listings, Offers, Activity | `listings` plus inline `offers`, `meetups`, activity | Requests, offers, transactions, reviews | Offer and review states: [UX_REQUEST_FLOW_STATES.md](./UX_REQUEST_FLOW_STATES.md). Stats are literals (`3`, `624`, `12`, `$1,925`). |
+| `housing` | `Housing.tsx` | Rental browsing | `housingListings` | Target `HousingListing` | Out of the request-flow slice. |
+| `services` | `Services.tsx` | Provider cards | `services` | Target service tables | Out of slice. |
+| `jobs` | `Jobs.tsx` | List/detail, apply, save | `jobs` | Target job tables | Apply and save are local arrays. |
+| `community` | `Community.tsx` | Posts and events | `communityPosts` | Target community tables | Out of slice. |
 
-- `Dashboard`, `Messages`, `ListingDetail` -> `Transaction`, `TransactionParticipant`, `Conversation`, `Message`, `MessageAttachment`, `Appointment`, `Payment`, `Payout`, `Dispute`
+`Navigation` (`src/components/Navigation.tsx`) highlights the current page id, pins location to a local Atlanta list, and shows `unreadMessages` from the prop (hardcoded `2` in `App`). Sign-out calls the prop. Global search is not a request.
 
-### Community and trust
+### Domain map (target bindings, existing screens only)
 
-- `Community`, `Profile`, `Dashboard` -> `CommunityPost`, `CommunityComment`, `CommunityEvent`, `CommunityReaction`, `TrustCircle`, `TrustPassport`, `Review`
+- `landing` + `onboarding` → `User`, `Profile`, `UserPreference`, `NotificationPreference`. Verification and device-session tables are target and have no screen of their own.
+- `explore`, `home`, `categories`, `listing` → `Listing` and `Category`. Favorites → `Favorite`. Explore's save-alert control → `SavedSearch` (endpoint exists; Explore does not call it).
+- `create` as a need → `NeedRequest` (`POST /requests`). `create` as a sale → `Listing` (already posted).
+- Offer cards on `dashboard` and `messages` → `RequestOffer`, `CounterOffer`, `OfferItem`.
+- `messages` bubbles → `Conversation`, `Message`.
+- Dashboard meetups and the Messages progress strip → `Transaction`, `TransactionMilestone`, `Appointment`.
+- Dashboard "Reviews to complete" and Profile reviews → `Review`.
+- `housing`, `services`, `jobs`, `community` → target tables listed in [DATABASE_DESIGN.md](./DATABASE_DESIGN.md). Leave fixtures in place.
 
-## 5. Frontend consistency issues to correct for real data
+### Controls that look done and are local
 
-The current UI is strong, but several behaviors need real-data alignment before production:
+- Explore suggestions, filters, sort, and view toggle.
+- Map pin selection and radius.
+- Listing detail negotiate, reserve, report, related-item clicks (`onClick={() => {}}` on related cards).
+- Messages filters do not include a real `transactions` predicate (`filter === 'transactions'` falls through to all).
+- Dashboard Accept, Counter, Decline, Edit, Pause, Promote, Mark sold, Adjust price.
+- Profile follow and report.
+- Jobs apply and save.
+- Community reactions and RSVP (fixture handlers in that page).
 
-- Search and filter should be server-driven, not client state only
-- Save states and favorites must persist per user
-- Messaging should be authenticated and live
-- Listing detail should pull from an actual listing id and seller record
-- Dashboard data should be derived from real transactions, not static arrays
-- Community activity should be scoped to neighborhoods and permissions
-- Verification badges and trust metrics must be computed from audited trust events
+### Wiring order for the request flow
 
-## 6. Proposed integration approach
+1. Point `create` publish at `POST /requests` using the state spec. Leave listing publish available only if the same wizard is still the sale path; do not add a second wizard.
+2. Point Dashboard Offers and the Messages offer card at real offer ids. Until `GET /requests/:id` exists, render loading then the empty or error state from the UX spec. Do not keep the Marcus/David/Priya fixture rows on an API-backed tab.
+3. Counter uses `POST /requests/offers/:id/counter`. Accept and Decline wait for target routes.
+4. Messages list uses `GET /conversations` only when rows exist. Do not synthesize threads.
+5. Reviews: open the existing modal from "Rate". Submit waits for `POST /reviews`.
 
-1. Keep the existing React screens and component library intact
-2. Replace mock data imports with API hooks/service layer calls
-3. Use a typed `api/client.ts` service for REST and WebSocket flows
-4. Normalize response DTOs to match the UI data shapes used by the current components
-5. Add optimistic UI patterns selectively for save, message send, and offer status changes
-6. Use server-side validation to ensure search, price, and location results remain consistent with permissions and policy
-
-## 7. Recommended API boundaries
-
-- `GET /api/v1/listings` – feed and search results
-- `GET /api/v1/listings/:id` – listing detail
-- `POST /api/v1/listings` – create listing
-- `POST /api/v1/requests` – create need request
-- `POST /api/v1/offers` – send offer
-- `GET /api/v1/messages/:conversationId` – message thread
-- `POST /api/v1/messages` – send message
-- `GET /api/v1/dashboard` – metrics and user analytics
-- `GET /api/v1/community/posts` – community feed
-- `GET /api/v1/users/:id/profile` – profile and passport
-
-Implemented conversation endpoints:
-
-- `GET /api/v1/conversations`
-- `GET /api/v1/conversations/:id/messages`
-- `POST /api/v1/conversations/:id/messages`
-- `PATCH /api/v1/conversations/:id/read`
-
-## 8. Implementation note
-
-These maps and interfaces should be used as the beginning of the production contract. The codebase already defines the front-end model sufficiently well to justify API contract design before broad code changes begin.
-
-## 9. Implemented foundation slice
-
-The extracted project now includes a backend foundation under `backend/` and a centralized typed client under `src/api/`.
-
-Implemented backend endpoints:
-
-- `GET /api/v1/health`
-- `GET /api/v1/ready`
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/login`
-- `GET /api/v1/users/me`
-- `PATCH /api/v1/users/me/onboarding`
-- `GET /api/v1/categories`
-- `GET /api/v1/listings`
-- `POST /api/v1/listings`
-- `GET /docs` for Swagger/OpenAPI
-
-Implemented infrastructure:
-
-- PostgreSQL/PostGIS and Redis services in `docker-compose.yml`
-- Prisma schema and migrations at `backend/prisma/migrations/0001_init` and `backend/prisma/migrations/0002_onboarding`
-- Environment validation in `backend/src/common/config/env.validation.ts`
-- Helmet, CORS, global validation, JWT bearer authorization, and Argon2 password hashing
-- Typed frontend request client in `src/api/client.ts` with centralized token handling and structured `ApiError`
-
-The onboarding and create-listing flows now call durable APIs. The remaining marketplace, saved-item, dashboard, community, housing, services, and jobs pages still render the original prototype fixtures until their corresponding vertical slices are connected. This is intentional: the existing visual source of truth is preserved while backend contracts are introduced incrementally.
-
-## 10. Current frontend integration status
-
-- `App` restores a persisted session through `GET /users/me` and signs out through the centralized API client.
-- `Landing` has a real email/password login dialog; unsupported social providers are explicitly labeled unavailable.
-- `Onboarding` creates an account, persists neighborhood/location, interests, capabilities, and notification preferences, and displays API errors.
-- `CreateListing` loads categories and publishes listing metadata through `POST /listings`; image objects are still local until the signed-upload slice is implemented.
-- Listing persistence endpoints now also support ownership-protected edits, archival, favorites, and saved searches. `ListingDetail` and `SavedItems` still require route/id and fixture-state replacement before those controls can be connected safely.
-- `SavedItems` now loads authenticated favorites and saved searches, shows loading/error/empty states, and persists favorite removal through `POST /listings/:id/favorite`. Price-drop and new-match sections remain explicitly unavailable until alert history endpoints exist.
+Client methods to reuse, not rewrite: `api.requests.create`, `api.requests.list`, `api.requests.counterOffer`, `api.conversations.*`, `api.transactions.list`, `api.transactions.transition`.
