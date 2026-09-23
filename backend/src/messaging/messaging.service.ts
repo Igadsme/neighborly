@@ -1,4 +1,5 @@
-import { ForbiddenException, Injectable } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { MessagingGateway } from './messaging.gateway'
 
@@ -34,6 +35,52 @@ export class MessagingService {
     return message
   }
 
+  async createConversation(userId: string, input: { participantId: string; body: string; listingId?: string }) {
+    const body = input.body.trim()
+    if (!body) throw new BadRequestException('Message body is required')
+    if (input.participantId === userId) throw new BadRequestException('You cannot message yourself')
+
+    const other = await this.prisma.user.findUnique({
+      where: { id: input.participantId },
+      select: { id: true, status: true, deletedAt: true }
+    })
+    if (!other || other.deletedAt || other.status === 'DELETED') throw new NotFoundException('User not found')
+    if (other.status !== 'ACTIVE') throw new BadRequestException('This person cannot receive messages')
+
+    if (input.listingId) {
+      const listing = await this.prisma.listing.findUnique({
+        where: { id: input.listingId },
+        select: { id: true, sellerId: true, status: true, deletedAt: true }
+      })
+      if (!listing || listing.deletedAt || listing.status === 'DELETED') throw new NotFoundException('Listing not found')
+      if (listing.status === 'DRAFT') throw new BadRequestException('This listing is not available')
+      if (listing.sellerId !== input.participantId) {
+        throw new ForbiddenException('You can only message the seller of this listing')
+      }
+    }
+
+    const where = pairwiseConversationWhere(userId, input.participantId)
+    const existing = await this.prisma.conversation.findFirst({ where, orderBy: { updatedAt: 'desc' } })
+    let reused = Boolean(existing)
+    const conversation = existing ?? await this.prisma.$transaction(async tx => {
+      const raced = await tx.conversation.findFirst({ where, orderBy: { updatedAt: 'desc' } })
+      if (raced) {
+        reused = true
+        return raced
+      }
+      return tx.conversation.create({
+        data: {
+          participants: {
+            create: [{ userId }, { userId: input.participantId }]
+          }
+        }
+      })
+    })
+
+    const message = await this.sendMessage(userId, conversation.id, body)
+    return { conversation: { id: conversation.id }, message, reused }
+  }
+
   async markRead(userId: string, conversationId: string) {
     await this.assertParticipant(userId, conversationId)
     return this.prisma.conversationParticipant.update({
@@ -48,5 +95,16 @@ export class MessagingService {
     })
     if (!participant) throw new ForbiddenException('You are not a participant in this conversation')
     return participant
+  }
+}
+
+/** A thread whose participants are exactly these two users. No listing column is required. */
+function pairwiseConversationWhere(userId: string, otherUserId: string): Prisma.ConversationWhereInput {
+  return {
+    AND: [
+      { participants: { some: { userId } } },
+      { participants: { some: { userId: otherUserId } } },
+      { participants: { every: { userId: { in: [userId, otherUserId] } } } }
+    ]
   }
 }

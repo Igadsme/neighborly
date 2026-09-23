@@ -47,6 +47,7 @@ Checked items below were read in `src/pages/Dashboard.tsx`, `src/pages/Messages.
 - [x] Thread list and bubbles stay the current two-pane layout
 - [x] When `GET /conversations` is empty, the list pane uses `EmptyState` (`No messages yet`, `Back to dashboard`)
 - [x] Send uses `POST /conversations/:id/messages` only when a conversation id from that list is selected
+- [x] Listing Detail “Message seller” on a UUID listing calls `POST /conversations` (`participantId`, `listingId`, trimmed body). “Message sent!” and the redirect render only after that call succeeds. 401 shows “Sign in to continue.” Other errors stay in the modal. A non-UUID listing still uses the local sent state. The call does not hit `/notifications`. This checkbox is not a release, and Docker/e2e in Section E were not run
 - [x] The payment-safety banner still appears for the Venmo/Zelle/PayPal check and does not send
 
 ### Reviews (`dashboard`)
@@ -73,7 +74,7 @@ These are outside the June docs PR. A checked line is in the tree at `1f38563` w
 - [x] `GET /requests/:id` includes offer amount, message, and a public offerer card. `GET /requests` is still every published request, not requester-scoped
 - [x] Accept and reject exist. Accept creates one conversation and one `ACCEPTED` transaction. Withdraw is not implemented. There is no appointment write route
 - [x] `POST /reviews` exists for a participant when the transaction is `COMPLETED`. `GET /users/:id/reviews` lists them for Profile. The Dashboard trust banner stays painted copy
-- [x] `/realtime` requires a JWT, and send emits `message.created`. Typing, attachments, and `POST /conversations` are not implemented
+- [x] `/realtime` requires a JWT, and send emits `message.created`. Typing and attachments are not implemented. `POST /conversations` is implemented and covered by the Messages checkbox above. This checkbox is not a release
 - [x] The nav message badge counts unread threads from `GET /conversations` (caller `lastReadAt` vs the latest message). Signed-out, zero unread, and 401 hide it. There is no `GET /notifications`. This checkbox is not a release, and Docker/e2e in Section E were not run
 - [x] Housing, jobs, services, and community PostgreSQL APIs exist (`cfd0db3`), including public list/get and the mutations those pages call (jobs apply/save, service quotes, community post/reaction/RSVP/claim). `pnpm prisma:seed` loads fixture-shaped rows. Remaining UI gaps are the unchecked list below
 
@@ -82,11 +83,11 @@ These are outside the June docs PR. A checked line is in the tree at `1f38563` w
 - Refresh tokens, MFA, device sessions
 - Draft requests and draft listings
 - Withdraw an offer
-- Create a conversation from a listing or the Messages plus button; typing; attachments
+- Messages plus button, typing, and attachments. Listing Detail message send for a UUID listing calls `POST /conversations` and reuses a pairwise thread. Fixture listing ids still use the local modal
 - Trust scores computed from reviews. The reviews list route exists; Dashboard still does not use it to hide a prompt
 - Lost-and-found and giveaway composers (`+ Post lost/found` and `+ Give something` have no form). Reply, Share, and lost-and-found Contact do not start a thread
 - Dashboard Pause, Promote, and Mark sold (the buttons render and have no route)
-- Landing marketing cards and the Categories featured strip (`listings` fixtures). Map, Profile, and Listing Detail primary content for UUID ids read the API. Non-UUID listing ids still use fixtures. Message, negotiate, reserve, report, and share on Listing Detail stay local
+- Landing marketing cards and the Categories featured strip (`listings` fixtures). Map, Profile, and Listing Detail primary content for UUID ids read the API. Non-UUID listing ids still use fixtures. Negotiate, reserve, report, and share on Listing Detail stay local. Message send on a UUID listing persists through `POST /conversations`; fixture listings still use the local modal
 - A notification list and notification mark-read. The nav message badge is no longer `unreadMessages={2}`; it counts unread threads from `GET /conversations`. That is not a notification feed, and it is not a release.
 - Image upload (S3 is env-only)
 - Price history writes and real price-drop alerts

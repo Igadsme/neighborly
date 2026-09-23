@@ -53,7 +53,7 @@ Marketplace create handlers set listing and request status to `PUBLISHED`. Housi
 - `ConversationParticipant` — composite id, `joinedAt`, `lastReadAt`.
 - `Message` — `body`, `senderId`, index `[conversationId, createdAt]`. No attachment or per-message receipt table.
 
-There is no API that inserts `Conversation` or `ConversationParticipant`.
+Offer accept and `POST /conversations` insert `Conversation` and `ConversationParticipant`. `POST /conversations` does not add a `listingId` column. It reuses a thread whose participants are exactly those two users, then writes `Message` the same way as `POST /conversations/:id/messages`.
 
 ### Transactions and reviews
 

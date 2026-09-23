@@ -45,6 +45,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
   const [messageOpen, setMessageOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [messageSent, setMessageSent] = useState(false)
+  const [messageSending, setMessageSending] = useState(false)
   const [messageError, setMessageError] = useState('')
   const [reported, setReported] = useState(false)
   const [zoomed, setZoomed] = useState(false)
@@ -133,6 +134,15 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
       ? listings.filter((item) => item.id !== listing.id).slice(0, 4)
       : []
 
+  useEffect(() => {
+    if (!messageSent) return
+    const timer = window.setTimeout(() => {
+      setMessageOpen(false)
+      onNavigate('messages')
+    }, 1200)
+    return () => window.clearTimeout(timer)
+  }, [messageSent, onNavigate])
+
   const toggleSaved = async () => {
     if (!listing) return
     if (!fromApi) {
@@ -148,14 +158,31 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
     }
   }
 
-  const handleSendMessage = () => {
-    if (!message.trim()) return
-    if (fromApi) {
-      setMessageError("Starting a conversation from a listing isn't available yet.")
+  const handleSendMessage = async () => {
+    const body = message.trim()
+    if (!body || !listing || messageSending) return
+    if (!fromApi) {
+      setMessageSent(true)
       return
     }
-    setMessageSent(true)
-    setTimeout(() => { setMessageOpen(false); onNavigate('messages') }, 1200)
+    if (!isUuid(listing.seller.id)) {
+      setMessageError("This seller can't be messaged yet.")
+      return
+    }
+    setMessageSending(true)
+    setMessageError('')
+    try {
+      await api.conversations.create({
+        participantId: listing.seller.id,
+        listingId: listing.id,
+        body,
+      })
+      setMessageSent(true)
+    } catch (cause: unknown) {
+      setMessageError(readStatus(cause, "This message couldn't be sent."))
+    } finally {
+      setMessageSending(false)
+    }
   }
 
   if (loading) {
@@ -598,7 +625,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                   className="w-full p-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] resize-none focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-all"
                 />
                 <div className="flex justify-end mt-3">
-                  <Button variant="primary" size="md" onClick={handleSendMessage} disabled={!message.trim()}>
+                  <Button variant="primary" size="md" onClick={() => { void handleSendMessage() }} disabled={!message.trim() || messageSending}>
                     <Icon name="send" size={14} />
                     Send message
                   </Button>
