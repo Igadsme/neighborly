@@ -1,5 +1,5 @@
 import { HttpException } from '@nestjs/common'
-import { enforceRateLimit, resetRateLimitsForTests } from './rate-limit'
+import { clientAddress, enforceRateLimit, resetRateLimitsForTests, setRateLimitClientForTests } from './rate-limit'
 
 describe('enforceRateLimit', () => {
   const previousEnforce = process.env.RATE_LIMIT_ENFORCE
@@ -25,6 +25,31 @@ describe('enforceRateLimit', () => {
     await expect(enforceRateLimit('authLogin', '203.0.113.8')).rejects.toBeInstanceOf(HttpException)
     await expect(enforceRateLimit('authLogin', '203.0.113.8')).rejects.toMatchObject({ status: 429, message: 'Too many requests' })
     await expect(enforceRateLimit('authLogin', '203.0.113.9')).resolves.toBeUndefined()
+  })
+
+  it('uses the in-process window when Redis throws', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+    setRateLimitClientForTests({
+      incr: async () => {
+        throw new Error('connection reset')
+      },
+      pexpire: async () => 0
+    })
+    await enforceRateLimit('authLogin', '203.0.113.8')
+    await enforceRateLimit('authLogin', '203.0.113.8')
+    await expect(enforceRateLimit('authLogin', '203.0.113.8')).rejects.toMatchObject({ status: 429 })
+    expect(warn.mock.calls.some(call => String(call[0]).includes('rate_limit.redis_fallback'))).toBe(true)
+    warn.mockRestore()
+  })
+
+  it('ignores X-Forwarded-For unless TRUST_PROXY=1', () => {
+    const previous = process.env.TRUST_PROXY
+    delete process.env.TRUST_PROXY
+    expect(clientAddress({ headers: { 'x-forwarded-for': '203.0.113.9' }, ip: '127.0.0.1' })).toBe('127.0.0.1')
+    process.env.TRUST_PROXY = '1'
+    expect(clientAddress({ headers: { 'x-forwarded-for': '203.0.113.9, 10.0.0.1' }, ip: '127.0.0.1' })).toBe('203.0.113.9')
+    if (previous === undefined) delete process.env.TRUST_PROXY
+    else process.env.TRUST_PROXY = previous
   })
 
   it('does not count when enforcement is off', async () => {

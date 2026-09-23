@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma, ReportTargetType } from '@prisma/client'
+import { audit } from '../common/logger'
 import { publicUserSelect } from '../common/public-user.select'
 import { sanitizeOptional, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
@@ -263,7 +264,13 @@ export class SafetyService {
       data: { status }
     })
     if (updated.count === 0) throw new NotFoundException('Report target not found')
-    return this.closeReport(actorId, report.id, kind, 'RESOLVED', note)
+    const closed = await this.closeReport(actorId, report.id, kind, 'RESOLVED', note)
+    audit(kind === 'SUSPEND_USER' ? 'moderation.suspend' : 'moderation.restore', {
+      actorId,
+      userId: ownerId,
+      reportId: report.id
+    })
+    return closed
   }
 
   private async ownerOf(targetType: ReportTargetType, targetId: string) {

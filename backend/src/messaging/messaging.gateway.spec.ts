@@ -27,7 +27,10 @@ function fakeSocket(options?: { auth?: Record<string, unknown>; authorization?: 
 describe('MessagingGateway auth', () => {
   const userId = 'user-real'
   const email = 'ada@example.com'
-  const prisma = { conversationParticipant: { findUnique: jest.fn() } }
+  const prisma = {
+    conversationParticipant: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn() }
+  }
   let gateway: MessagingGateway
   let jwt: JwtService
 
@@ -43,6 +46,7 @@ describe('MessagingGateway auth', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    prisma.user.findUnique.mockResolvedValue({ id: userId, email, status: 'ACTIVE', deletedAt: null })
   })
 
   function tokenFor(sub: string, claims: Record<string, unknown> = { email }) {
@@ -60,52 +64,66 @@ describe('MessagingGateway auth', () => {
     return use
   }
 
-  it('rejects a handshake without a token', () => {
+  async function runMiddleware(socket: ReturnType<typeof fakeSocket>) {
     const next = jest.fn()
-    const socket = fakeSocket()
     middleware()(socket as unknown as Socket, next)
+    await new Promise(resolve => setImmediate(resolve))
+    return next
+  }
+
+  it('rejects a handshake without a token', async () => {
+    const socket = fakeSocket()
+    const next = await runMiddleware(socket)
 
     expect(next).toHaveBeenCalledTimes(1)
     expect(next.mock.calls[0][0]).toBeInstanceOf(Error)
     expect(socket.data.userId).toBeUndefined()
   })
 
-  it('disconnects a connection that has no token', () => {
+  it('disconnects a connection that has no token', async () => {
     const socket = fakeSocket({ userId: 'forged-user' })
-    gateway.handleConnection(socket as unknown as Socket)
+    await gateway.handleConnection(socket as unknown as Socket)
 
     expect(socket.disconnect).toHaveBeenCalledWith(true)
     expect(socket.data.userId).toBeUndefined()
   })
 
-  it('accepts a valid access token and stores userId from sub', () => {
+  it('accepts a valid access token and stores userId from sub', async () => {
     const socket = fakeSocket({ auth: { token: tokenFor(userId), userId: 'forged-user' } })
-    gateway.handleConnection(socket as unknown as Socket)
+    await gateway.handleConnection(socket as unknown as Socket)
 
     expect(socket.disconnect).not.toHaveBeenCalled()
     expect(socket.data.userId).toBe(userId)
   })
 
-  it('accepts a bearer token on the handshake Authorization header', () => {
-    const next = jest.fn()
+  it('accepts a bearer token on the handshake Authorization header', async () => {
     const socket = fakeSocket({ authorization: `Bearer ${tokenFor(userId)}` })
-    middleware()(socket as unknown as Socket, next)
+    const next = await runMiddleware(socket)
 
     expect(next).toHaveBeenCalledWith()
     expect(socket.data.userId).toBe(userId)
   })
 
-  it('rejects a token that does not verify', () => {
+  it('rejects a token that does not verify', async () => {
     const socket = fakeSocket({ auth: { token: 'not-a-jwt' } })
-    gateway.handleConnection(socket as unknown as Socket)
+    await gateway.handleConnection(socket as unknown as Socket)
 
     expect(socket.disconnect).toHaveBeenCalledWith(true)
     expect(socket.data.userId).toBeUndefined()
   })
 
-  it('rejects a token that has no sub', () => {
+  it('rejects a token that has no sub', async () => {
     const socket = fakeSocket({ auth: { token: jwt.sign({ email }, { secret }) } })
-    gateway.handleConnection(socket as unknown as Socket)
+    await gateway.handleConnection(socket as unknown as Socket)
+
+    expect(socket.disconnect).toHaveBeenCalledWith(true)
+    expect(socket.data.userId).toBeUndefined()
+  })
+
+  it('disconnects a suspended account even when the access token still verifies', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: userId, email, status: 'SUSPENDED', deletedAt: null })
+    const socket = fakeSocket({ auth: { token: tokenFor(userId) } })
+    await gateway.handleConnection(socket as unknown as Socket)
 
     expect(socket.disconnect).toHaveBeenCalledWith(true)
     expect(socket.data.userId).toBeUndefined()

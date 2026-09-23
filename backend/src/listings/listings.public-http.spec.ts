@@ -216,6 +216,14 @@ describe('Public listing HTTP reads', () => {
         return projectSelect(listing, args.select)
       })
     },
+    user: {
+      findUnique: jest.fn(async (args: { where?: { id?: string } }) => ({
+        id: args?.where?.id ?? 'buyer-1',
+        email: 'buyer@example.com',
+        status: 'ACTIVE',
+        deletedAt: null
+      }))
+    },
     favorite: {
       findMany: jest.fn(async (args: { select?: SelectSpec; include?: SelectSpec }) => {
         queries.favorites = args as SelectSpec

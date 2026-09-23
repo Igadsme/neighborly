@@ -18,6 +18,36 @@ describe('envValidationSchema', () => {
     expect(value.S3_ENDPOINT).toBeUndefined()
   })
 
+  it('rejects a wildcard CORS origin', () => {
+    const { error } = envValidationSchema.validate({ ...bootEnv, CORS_ORIGIN: '*' }, { allowUnknown: true })
+    expect(error).toBeDefined()
+  })
+
+  it('requires Redis, an explicit proxy choice, and a non-placeholder JWT in production', () => {
+    const production = {
+      ...bootEnv,
+      NODE_ENV: 'production',
+      CORS_ORIGIN: 'https://app.example.com',
+      JWT_SECRET: 'prod-jwt-secret-value-7f3c9a1e2b4d6f80',
+      REDIS_URL: 'rediss://cache.example.com:6380',
+      TRUST_PROXY: '1'
+    }
+    expect(envValidationSchema.validate(production, { allowUnknown: true }).error).toBeUndefined()
+    expect(envValidationSchema.validate({ ...production, REDIS_URL: '' }, { allowUnknown: true }).error).toBeDefined()
+    expect(envValidationSchema.validate({ ...production, TRUST_PROXY: '' }, { allowUnknown: true }).error).toBeDefined()
+    expect(
+      envValidationSchema.validate(
+        { ...production, JWT_SECRET: 'replace-with-a-local-secret-at-least-32-chars' },
+        { allowUnknown: true }
+      ).error
+    ).toBeDefined()
+  })
+
+  it('rejects a partial S3 configuration', () => {
+    const { error } = envValidationSchema.validate({ ...bootEnv, S3_BUCKET: 'neighborly-media' }, { allowUnknown: true })
+    expect(error).toBeDefined()
+  })
+
   it('still accepts Redis and S3 when a client will use them', () => {
     const { error } = envValidationSchema.validate(
       {

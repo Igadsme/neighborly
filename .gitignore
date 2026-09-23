@@ -12,6 +12,9 @@ vite.config.*.timestamp-*
 *-debug.log*
 logs/
 *.log
+# Local database dumps from scripts/backup-postgres.sh. Never commit them.
+artifacts/backups/
+
 # Keep the Docker gate command output in the repo. Secrets stay out of these files.
 # The exception is narrower than `._*`, so AppleDouble forks stay ignored.
 !artifacts/docker-release-verification/*.log
