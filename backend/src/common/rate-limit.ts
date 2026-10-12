@@ -23,6 +23,7 @@ export const rateLimitPolicies = {
   listings: { env: 'RATE_LIMIT_LISTINGS', limit: 20, windowMs: 60 * 60 * 1000 },
   listingImages: { env: 'RATE_LIMIT_LISTING_IMAGES', limit: 30, windowMs: 60 * 60 * 1000 },
   offers: { env: 'RATE_LIMIT_OFFERS', limit: 30, windowMs: 60 * 60 * 1000 },
+  requests: { env: 'RATE_LIMIT_REQUESTS', limit: 20, windowMs: 60 * 60 * 1000 },
   reports: { env: 'RATE_LIMIT_REPORTS', limit: 10, windowMs: 60 * 60 * 1000 }
 } as const
 

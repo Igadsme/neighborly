@@ -1,15 +1,16 @@
-import { RequestsService } from './requests.service'
+import { OutboxWriter } from '../events/outbox-writer'
+import { RequestLifecycleService } from './request-lifecycle.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { createOfferFixture, createTestPrisma, INTEGRATION_IDS } from '../common/testing/integration-fixtures'
 
 describe('Request privacy projections against real PostgreSQL', () => {
   let prisma: PrismaService
-  let service: RequestsService
+  let service: RequestLifecycleService
 
   beforeAll(async () => {
     prisma = createTestPrisma()
     await prisma.$connect()
-    service = new RequestsService(prisma)
+    service = new RequestLifecycleService(prisma, new OutboxWriter(prisma))
   })
 
   afterAll(async () => {
@@ -19,7 +20,9 @@ describe('Request privacy projections against real PostgreSQL', () => {
   it('hides coordinates and requester identity from anonymous list and detail', async () => {
     await createOfferFixture(prisma)
 
-    const listed = await service.list()
+    // Filtered by this fixture's category: the shared database holds requests
+    // from every other suite, so an unfiltered first page is not ours.
+    const listed = (await service.list({ categoryId: INTEGRATION_IDS.category, limit: 100 })).items
     const published = listed.find(row => row.id === INTEGRATION_IDS.request)
     expect(published).toBeDefined()
     expect(published).not.toHaveProperty('latitude')
@@ -32,20 +35,21 @@ describe('Request privacy projections against real PostgreSQL', () => {
     expect(detail).not.toHaveProperty('latitude')
     expect(detail).not.toHaveProperty('longitude')
     expect(detail).not.toHaveProperty('requesterId')
-    expect(detail.offers[0].offerer.profile?.firstName).toBe('Off')
+    // Offers moved off the public projection entirely: embedding them would
+    // show every competing provider's price to any anonymous reader.
+    expect(detail).not.toHaveProperty('offers')
   })
 
   it('exposes coordinates only to the verified requester', async () => {
     await createOfferFixture(prisma)
 
-    const ownerView = (await service.get(INTEGRATION_IDS.request, INTEGRATION_IDS.requester)) as unknown as {
-      latitude?: unknown
-      longitude?: unknown
-      requesterId?: string
-    }
-    expect(ownerView.latitude).toBeTruthy()
-    expect(ownerView.longitude).toBeTruthy()
-    expect(ownerView.requesterId).toBe(INTEGRATION_IDS.requester)
+    const ownerView = await service.getForOwner(INTEGRATION_IDS.requester, INTEGRATION_IDS.request)
+    // Even the owner reads a coarse location; the exact coordinates are used
+    // for radius filtering and are never serialized to a client.
+    expect(ownerView).not.toHaveProperty('latitude')
+    expect(ownerView).not.toHaveProperty('longitude')
+    expect(ownerView.approximateLocation).toBeTruthy()
+    expect(ownerView.coordinatesShared).toBe(true)
 
     const strangerView = await service.get(INTEGRATION_IDS.request, INTEGRATION_IDS.outsider)
     expect(strangerView).not.toHaveProperty('latitude')

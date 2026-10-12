@@ -87,6 +87,7 @@ export const envValidationSchema = Joi.object({
   RATE_LIMIT_LISTINGS: rateLimit,
   RATE_LIMIT_LISTING_IMAGES: rateLimit,
   RATE_LIMIT_OFFERS: rateLimit,
+  RATE_LIMIT_REQUESTS: rateLimit,
   RATE_LIMIT_REPORTS: rateLimit,
   SLOW_QUERY_LOG: Joi.string().valid('0', '1').optional().allow(''),
   SLOW_QUERY_MS: Joi.number().integer().min(1).optional()

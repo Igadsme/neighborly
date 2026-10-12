@@ -22,7 +22,13 @@ import ResetPassword from "./pages/account/ResetPassword"
 import VerifyEmail from "./pages/account/VerifyEmail"
 import CreateListingFlow from "./pages/marketplace/CreateListingFlow"
 import MyListings from "./pages/marketplace/MyListings"
-import { api, onSessionExpired } from "./api/client"
+import MyRequests from "./pages/requests/MyRequests"
+import RequestDetail from "./pages/requests/RequestDetail"
+import RequestFeed from "./pages/requests/RequestFeed"
+import RequestForm from "./pages/requests/RequestForm"
+import { api, onSessionExpired, readStatus } from "./api/client"
+import { Alert } from "./components/account-ui"
+import type { ApiRequestSummary } from "./api/types"
 import { unreadConversations } from "./lib/activity"
 
 type Page =
@@ -48,12 +54,73 @@ type Page =
   | "verify-email"
   | "my-listings"
   | "create-marketplace"
+  | "requests"
+  | "my-requests"
+  | "request-create"
+  | "request-edit"
+  | "request-detail"
+
+/**
+ * Loads the request being edited. Kept out of App so the edit screen only
+ * fetches when that route is actually opened.
+ */
+function EditRequestRoute({
+  requestId,
+  categories,
+  onNavigate,
+}: {
+  requestId: string | null
+  categories: Array<{ id: string; name: string }>
+  onNavigate: (page: string, id?: string) => void
+}) {
+  const [request, setRequest] = useState<ApiRequestSummary | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!requestId) return
+    api.requests
+      .get(requestId)
+      .then(row => setRequest(row as unknown as ApiRequestSummary))
+      .catch(cause => setError(readStatus(cause, "That request could not be loaded.")))
+  }, [requestId])
+
+  if (error) {
+    return (
+      <main className="mx-auto w-full max-w-2xl px-6 py-16 space-y-4">
+        <Alert tone="error">{error}</Alert>
+        <button
+          type="button"
+          className="rounded-xl border border-[#D8DED8] px-4 py-2 text-sm"
+          onClick={() => onNavigate("my-requests")}
+        >
+          Back to my requests
+        </button>
+      </main>
+    )
+  }
+  if (!request) {
+    return (
+      <main className="mx-auto w-full max-w-2xl px-6 py-16">
+        <Alert tone="info">Loading request…</Alert>
+      </main>
+    )
+  }
+  return (
+    <RequestForm
+      existing={request}
+      categories={categories}
+      onNavigate={onNavigate}
+      onDone={updated => onNavigate("request-detail", updated.id)}
+    />
+  )
+}
 
 export default function App() {
   const [page, setPage] = useState<Page>("landing")
   const [listingId, setListingId] = useState<string | null>(null)
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [profileUserId, setProfileUserId] = useState<string | null>(null)
+  const [requestId, setRequestId] = useState<string | null>(null)
   const [isSignedIn, setIsSignedIn] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
   const [viewerId, setViewerId] = useState<string | null>(null)
@@ -71,6 +138,9 @@ export default function App() {
     if (p === "listing") setListingId(id ?? null)
     if (p === "messages") setConversationId(id ?? null)
     if (p === "profile") setProfileUserId(id ?? null)
+    // Request routes reuse the id slot, so a deep link to a request keeps
+    // its own addressable id.
+    if (p === "request-detail" || p === "request-edit") setRequestId(id ?? null)
     setPage(p as Page)
     window.scrollTo({ top: 0, behavior: "instant" })
   }, [])
@@ -261,6 +331,29 @@ export default function App() {
           />
         )}
 
+        {page === "requests" && isSignedIn && <RequestFeed onNavigate={navigate} />}
+
+        {page === "my-requests" && isSignedIn && <MyRequests onNavigate={navigate} />}
+
+        {page === "request-create" && isSignedIn && (
+          <RequestForm
+            categories={categories}
+            onNavigate={navigate}
+            onDone={created => {
+              setNotice(`"${created.title}" was posted.`)
+              navigate("request-detail", created.id)
+            }}
+          />
+        )}
+
+        {page === "request-edit" && isSignedIn && (
+          <EditRequestRoute requestId={requestId} categories={categories} onNavigate={navigate} />
+        )}
+
+        {page === "request-detail" && isSignedIn && (
+          <RequestDetail requestId={requestId ?? ""} viewerId={viewerId} onNavigate={navigate} />
+        )}
+
         {page === "my-listings" && isSignedIn && (
           <MyListings onNavigate={navigate} />
         )}
@@ -348,6 +441,10 @@ export default function App() {
           page !== "reset-password" &&
           page !== "verify-email" &&
           page !== "my-listings" &&
+          page !== "my-requests" &&
+          page !== "requests" &&
+          page !== "request-create" &&
+          page !== "request-detail" &&
           page !== "create-marketplace" && (
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">

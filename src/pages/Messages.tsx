@@ -47,7 +47,7 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
       const [threads, txs, summaries] = await Promise.all([
         api.conversations.list(),
         api.transactions.list(),
-        api.requests.list(),
+        api.requests.list({ limit: 50 }).then(page => page.items),
       ])
       const details = await Promise.all(
         summaries.filter((request) => request.offers.length > 0).map((request) => api.requests.get(request.id)),

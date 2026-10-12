@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common'
 import { TransactionStatus, OfferStatus } from '@prisma/client'
+import { OutboxWriter } from '../events/outbox-writer'
 import { RequestsService } from './requests.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { createOfferFixture, createTestPrisma, INTEGRATION_IDS } from '../common/testing/integration-fixtures'
@@ -11,7 +12,7 @@ describe('Offer acceptance against real PostgreSQL', () => {
   beforeAll(async () => {
     prisma = createTestPrisma()
     await prisma.$connect()
-    service = new RequestsService(prisma)
+    service = new RequestsService(prisma, new OutboxWriter(prisma))
   })
 
   afterAll(async () => {

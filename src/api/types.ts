@@ -75,6 +75,59 @@ export interface ServiceCreateInput {
   availability: string
 }
 
+export type RequestStatus =
+  | "DRAFT"
+  | "PUBLISHED"
+  | "PAUSED"
+  | "FULFILLED"
+  | "CLOSED"
+  | "EXPIRED"
+  | "CANCELLED"
+
+/** Paginated request feed. `total` is the global count, not the page size. */
+export interface RequestPage {
+  items: ApiRequestSummary[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface RequestQuery {
+  query?: string
+  categoryId?: string
+  status?: RequestStatus
+  mode?: string
+  urgency?: string
+  minBudgetCents?: number
+  maxBudgetCents?: number
+  city?: string
+  neighborhood?: string
+  latitude?: number
+  longitude?: number
+  radiusMiles?: number
+  openOnly?: boolean
+  sort?: "newest" | "oldest" | "deadline" | "budget_asc" | "budget_desc" | "relevance"
+  limit?: number
+  offset?: number
+}
+
+export interface RequestStatusEvent {
+  fromStatus?: RequestStatus | null
+  toStatus: RequestStatus
+  note?: string | null
+  createdAt: string
+}
+
+/** A ranked, explainable match between a request and a listing. */
+export interface RequestMatch {
+  listingId: string
+  /** 0-100. */
+  score: number
+  /** Human-readable reasons, so the UI can justify the ranking. */
+  reasons: string[]
+  listing: ApiListing
+}
+
 /** Paginated marketplace page. `total` is the global count, not the page size. */
 export interface ListingPage {
   items: ApiListing[]
@@ -270,11 +323,24 @@ export interface PublicUserCard {
 }
 
 export interface ApiRequestSummary {
+  categoryId?: string
+  minBudgetCents?: number | null
+  budgetFlexible?: boolean
+  hasCoordinates?: boolean
+  approximateLocation?: { lat: number; lng: number } | null
+  coordinatesShared?: boolean
+  neighborhood?: string | null
+  city?: string | null
+  deadline?: string | null
+  urgency?: string | null
+  radiusMiles?: number
+  statusChangedAt?: string
+  fulfilledAt?: string | null
   id: string
   title: string
   description: string
   budgetCents?: number | null
-  status: string
+  status?: RequestStatus
   mode: ExchangeMode | string
   createdAt: string
   requester: PublicUserCard

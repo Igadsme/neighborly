@@ -4,6 +4,8 @@ import { Test } from '@nestjs/testing'
 import { AuthGuard } from '../../auth/auth.guard'
 import { PrismaService } from '../../prisma/prisma.service'
 import { stubStorage } from './stub-storage'
+import { OutboxWriter } from '../../events/outbox-writer'
+import { RequestLifecycleService } from '../../requests/request-lifecycle.service'
 
 export const testJwtSecret = 'test-jwt-secret-must-be-32-characters'
 
@@ -30,6 +32,24 @@ export function withAccountLookup(prisma: object, fallback: { id: string; email:
   }
 }
 
+/**
+ * RequestLifecycleService is required by RequestsController. Suites that
+ * boot that controller need it resolved, so it is provided automatically
+ * with the same Prisma double the rest of the module uses.
+ */
+function requestLifecycleProviders() {
+  return [
+    {
+      provide: RequestLifecycleService,
+      useFactory: (prisma: object) => new RequestLifecycleService(prisma as never, outboxDouble() as never)
+    }
+  ]
+}
+
+function outboxDouble() {
+  return { record: async () => undefined }
+}
+
 export async function bootApi(options: {
   controller: Type
   service: Type
@@ -47,8 +67,13 @@ export async function bootApi(options: {
     providers: [
       options.service,
       ...(options.extraProviders ?? []),
+      // The requests controller takes the lifecycle service alongside the
+      // offer service; suites that boot it get a shared instance.
+      ...requestLifecycleProviders(),
       // Listing services depend on object storage; these suites never upload.
       stubStorage().provider,
+      // Request services write domain events through the outbox.
+      { provide: OutboxWriter, useValue: { record: jest.fn().mockResolvedValue(undefined) } },
       AuthGuard,
       { provide: PrismaService, useValue: withAccountLookup(options.prisma, { id: userId, email }) }
     ]

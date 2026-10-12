@@ -24,6 +24,8 @@ enum ListingStatus {
 enum RequestStatus {
   DRAFT
   PUBLISHED
+  PAUSED
+  FULFILLED
   CLOSED
   EXPIRED
   CANCELLED
@@ -296,30 +298,64 @@ model SavedSearch {
 }
 
 model NeedRequest {
-  id          String         @id @default(uuid()) @db.Uuid
-  requesterId String         @db.Uuid
-  categoryId  String         @db.Uuid
-  title       String
-  description String
-  budgetCents Int?
-  latitude    Decimal?       @db.Decimal(9, 6)
-  longitude   Decimal?       @db.Decimal(9, 6)
-  radiusMiles Int            @default(10)
-  deadline    DateTime?
-  urgency     String?
-  mode        ExchangeMode
-  status      RequestStatus  @default(DRAFT)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  deletedAt   DateTime?
-  requester   User           @relation(fields: [requesterId], references: [id])
-  category    Category       @relation(fields: [categoryId], references: [id])
-  offers      RequestOffer[]
-  matches     RequestMatch[]
+  id              String               @id @default(uuid()) @db.Uuid
+  requesterId     String               @db.Uuid
+  categoryId      String               @db.Uuid
+  title           String
+  description     String
+  /// Single budget figure kept for compatibility with the existing UI. When
+  /// budgetFlexible is true the engine also accepts minBudgetCents.
+  budgetCents     Int?
+  minBudgetCents  Int?
+  budgetFlexible  Boolean              @default(true)
+  /// Structured requirements (dimensions, quantity, condition floor, ...)
+  /// stored as JSON so a new field does not need a migration.
+  requirements    Json?
+  latitude        Decimal?             @db.Decimal(9, 6)
+  longitude       Decimal?             @db.Decimal(9, 6)
+  neighborhood    String?
+  city            String?
+  radiusMiles     Int                  @default(10)
+  deadline        DateTime?
+  urgency         String?
+  mode            ExchangeMode
+  status          RequestStatus        @default(DRAFT)
+  statusChangedAt DateTime             @default(now())
+  fulfilledAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  deletedAt       DateTime?
+  requester       User                 @relation(fields: [requesterId], references: [id])
+  category        Category             @relation(fields: [categoryId], references: [id])
+  offers          RequestOffer[]
+  matches         RequestMatch[]
+  statusEvents    RequestStatusEvent[]
 
   @@index([requesterId, status, createdAt])
   @@index([categoryId, status])
   @@index([status, createdAt])
+  // Milestone 5 public discovery feeds: deadline ordering, budget filter,
+  // coordinate radius, and keyword search.
+  @@index([status, deadline])
+  @@index([status, budgetCents])
+  @@index([latitude, longitude])
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+/// Append-only status history, so an audit can see how a request reached
+/// its current state and who moved it.
+model RequestStatusEvent {
+  id         String         @id @default(uuid()) @db.Uuid
+  requestId  String         @db.Uuid
+  fromStatus RequestStatus?
+  toStatus   RequestStatus
+  actorId    String?        @db.Uuid
+  note       String?
+  createdAt  DateTime       @default(now())
+  request    NeedRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
 }
 
 model RequestOffer {
@@ -363,15 +399,45 @@ model CounterOffer {
 }
 
 model RequestMatch {
-  id        String      @id @default(uuid()) @db.Uuid
-  requestId String      @db.Uuid
-  listingId String      @db.Uuid
-  score     Decimal     @db.Decimal(5, 2)
-  createdAt DateTime    @default(now())
-  request   NeedRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  listing   Listing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  id         String      @id @default(uuid()) @db.Uuid
+  requestId  String      @db.Uuid
+  listingId  String      @db.Uuid
+  score      Decimal     @db.Decimal(5, 2)
+  /// Why this listing matched, as human-readable reasons. Stored so the UI
+  /// can explain a ranking instead of showing a bare number. The empty
+  /// default only exists so the migration is applicable to a database that
+  /// already has rows; every writer supplies real reasons.
+  reasons    Json        @default("{}")
+  rank       Int?
+  computedAt DateTime    @default(now())
+  createdAt  DateTime    @default(now())
+  request    NeedRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  listing    Listing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@unique([requestId, listingId])
+  @@index([requestId, score])
+  @@index([requestId, rank])
+}
+
+/// Transactional outbox for domain events. Rows are written in the same
+/// transaction as the state change, so an event can never be lost by a
+/// crash between the commit and a publish attempt. `dedupeKey` makes
+/// consumer retries idempotent.
+model DomainEventOutbox {
+  id          String    @id @default(uuid()) @db.Uuid
+  type        String
+  payload     Json
+  actorId     String?   @db.Uuid
+  dedupeKey   String?   @unique
+  status      String    @default("PENDING")
+  attempts    Int       @default(0)
+  availableAt DateTime  @default(now())
+  processedAt DateTime?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([status, availableAt])
+  @@index([createdAt])
 }
 
 model Conversation {

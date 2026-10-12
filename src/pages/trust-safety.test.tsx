@@ -55,7 +55,8 @@ describe("Message report control", () => {
         if (url.endsWith("/users/me")) return json({ id: meId, email: "ada@example.com" })
         if (url.endsWith("/conversations")) return json([conversation])
         if (url.includes("/transactions")) return json([])
-        if (url.endsWith("/requests")) return json([])
+        // The feed is paginated and queried, so match on the path prefix.
+        if (/\/requests(\?|$)/.test(url)) return json({ items: [], total: 0, limit: 24, offset: 0 })
         if (url.includes("/messages")) return json(conversation.messages)
         if (url.includes("/read")) return json({ ok: true })
         if (url.includes("/safety/reports")) return json({ id: "report-1", status: "OPEN" }, 201)

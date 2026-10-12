@@ -38,6 +38,11 @@ import type {
   ListingInput,
   ListingPage,
   ListingQueryParams,
+  RequestMatch,
+  RequestPage,
+  RequestQuery,
+  RequestStatus,
+  RequestStatusEvent,
   StoredImage,
   HousingCreateInput,
   JobCreateInput,
@@ -512,17 +517,76 @@ export const api = {
       >("/categories"),
   },
   requests: {
-    list: () => request<ApiRequestSummary[]>("/requests"),
-    offers: (scope: "received" | "sent" | "all" = "received") =>
-      request<ApiScopedOffer[]>(`/requests/offers?scope=${scope}`),
+    /** Server-side filtering, sorting, and pagination. */
+    list: (query: RequestQuery = {}) => {
+      const params = new URLSearchParams()
+      Object.entries(query).forEach(([key, value]) => {
+        if (value === undefined || value === "" || value === null) return
+        params.set(key, String(value))
+      })
+      const text = params.toString()
+      return request<RequestPage>(`/requests${text ? `?${text}` : ""}`)
+    },
+    mine: (query: { status?: string; limit?: number; offset?: number } = {}) => {
+      const params = new URLSearchParams()
+      Object.entries(query).forEach(([key, value]) => {
+        if (value === undefined || value === "" || value === null) return
+        params.set(key, String(value))
+      })
+      const text = params.toString()
+      return request<ApiRequestSummary[]>(`/requests/mine${text ? `?${text}` : ""}`)
+    },
     get: (id: string) => request<ApiRequestDetail>(`/requests/${id}`),
+    statusHistory: (id: string) =>
+      request<RequestStatusEvent[]>(`/requests/${id}/status-history`),
     create: (input: NeedRequestInput) =>
-      request<unknown>("/requests", {
+      request<ApiRequestSummary>("/requests", {
         method: "POST",
         body: JSON.stringify(input),
       }),
+    saveDraft: (input: Partial<NeedRequestInput>) =>
+      request<ApiRequestSummary>("/requests/drafts", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    update: (id: string, input: Partial<NeedRequestInput>) =>
+      request<ApiRequestSummary>(`/requests/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    /**
+     * One endpoint for every legal status move. The API's state machine
+     * decides what is allowed, so the client never invents a transition.
+     */
+    transition: (id: string, status: RequestStatus, note?: string) =>
+      request<ApiRequestSummary>(`/requests/${id}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status, note }),
+      }),
+    publish: (id: string) => request<ApiRequestSummary>(`/requests/${id}/publish`, { method: "POST" }),
+    pause: (id: string) => request<ApiRequestSummary>(`/requests/${id}/pause`, { method: "POST" }),
+    resume: (id: string) => request<ApiRequestSummary>(`/requests/${id}/resume`, { method: "POST" }),
+    fulfill: (id: string) => request<ApiRequestSummary>(`/requests/${id}/fulfill`, { method: "POST" }),
+    cancel: (id: string) => request<ApiRequestSummary>(`/requests/${id}/cancel`, { method: "POST" }),
+
+    /** Ranked, explainable matches for the caller's own request. */
+    matches: (id: string, limit = 20) =>
+      request<RequestMatch[]>(`/requests/${id}/matches?limit=${limit}`),
+
+    offers: (scope: "received" | "sent" | "all" = "received") =>
+      request<ApiScopedOffer[]>(`/requests/offers?scope=${scope}`),
+    offersForRequest: (id: string) =>
+      request<ApiScopedOffer[]>(`/requests/${id}/offers`),
+    getOffer: (offerId: string) => request<ApiScopedOffer>(`/requests/offers/${offerId}`),
+    editOffer: (offerId: string, input: Partial<OfferInput>) =>
+      request<ApiScopedOffer>(`/requests/offers/${offerId}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    withdrawOffer: (offerId: string) =>
+      request<ApiScopedOffer>(`/requests/offers/${offerId}/withdraw`, { method: "POST" }),
     createOffer: (requestId: string, input: OfferInput) =>
-      request<unknown>(`/requests/${requestId}/offers`, {
+      request<ApiScopedOffer>(`/requests/${requestId}/offers`, {
         method: "POST",
         body: JSON.stringify(input),
       }),
@@ -530,7 +594,7 @@ export const api = {
       offerId: string,
       input: { amountCents?: number; message: string },
     ) =>
-      request<unknown>(`/requests/offers/${offerId}/counter`, {
+      request<ApiScopedOffer>(`/requests/offers/${offerId}/counter`, {
         method: "POST",
         body: JSON.stringify(input),
       }),
@@ -540,7 +604,7 @@ export const api = {
         { method: "POST" },
       ),
     rejectOffer: (requestId: string, offerId: string) =>
-      request<unknown>(`/requests/${requestId}/offers/${offerId}/reject`, {
+      request<ApiScopedOffer>(`/requests/${requestId}/offers/${offerId}/reject`, {
         method: "POST",
       }),
   },

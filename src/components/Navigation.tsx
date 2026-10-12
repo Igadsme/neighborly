@@ -24,6 +24,11 @@ type Page =
   | "verify-email"
   | "my-listings"
   | "create-marketplace"
+  | "requests"
+  | "my-requests"
+  | "request-create"
+  | "request-edit"
+  | "request-detail"
 
 interface NavProps {
   currentPage: Page
@@ -253,6 +258,12 @@ export default function Navigation({
                         className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#8A9AB5] transition-colors"
                       >
                         My listings
+                      </button>
+                      <button
+                        onClick={() => onNavigate("my-requests")}
+                        className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#8A9AB5] transition-colors"
+                      >
+                        My requests
                       </button>
                       <button
                         onClick={onSignOut}

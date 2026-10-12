@@ -17,11 +17,13 @@ import { HousingModule } from './housing/housing.module'
 import { JobsModule } from './jobs/jobs.module'
 import { ServicesModule } from './services/services.module'
 import { StorageModule } from './storage/storage.module'
+import { EventsModule } from './events/events.module'
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, cache: true, validationSchema: envValidationSchema }),
     PrismaModule,
+    EventsModule,
     HealthModule,
     AuthModule,
     ListingsModule,

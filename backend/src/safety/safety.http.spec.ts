@@ -10,6 +10,8 @@ import { PrismaService } from '../prisma/prisma.service'
 import { ListingsController } from '../listings/listings.controller'
 import { ListingsService } from '../listings/listings.service'
 import { stubStorage } from '../common/testing/stub-storage'
+import { OutboxWriter } from '../events/outbox-writer'
+import { RequestLifecycleService } from '../requests/request-lifecycle.service'
 import { MessagingController } from '../messaging/messaging.controller'
 import { MessagingGateway } from '../messaging/messaging.gateway'
 import { MessagingService } from '../messaging/messaging.service'
@@ -268,6 +270,11 @@ describe('Abuse limits on auth, messaging, listings, and offers', () => {
     const booted = await boot([RequestsController], [
       RequestsService,
       AuthGuard,
+      { provide: OutboxWriter, useValue: { record: async () => undefined } },
+      {
+        provide: RequestLifecycleService,
+        useFactory: (prisma: object) => new RequestLifecycleService(prisma as never, { record: async () => undefined } as never)
+      },
       {
         provide: PrismaService,
         useValue: {

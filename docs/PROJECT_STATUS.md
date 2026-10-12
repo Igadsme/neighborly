@@ -1,5 +1,7 @@
 # Project Status
 
+**12 Oct 2026 — Milestone 5 (I need request & matching engine).** Request lifecycle with a declared state machine, server-side request discovery, a deterministic explainable matching engine, expanded offer management, atomic acceptance that also fulfils the request, and the typed domain-event contract plus transactional outbox that Milestone 6 consumes. `docs/MILESTONE_5_REQUEST_MATCHING.md`.
+
 **12 Oct 2026 — Milestone 3 (authentication & user accounts).** Registration hardening, email verification, password recovery, refresh-token rotation with reuse detection, session management, account settings, email change, anonymizing account deletion, and suspension enforcement across REST and realtime landed on `milestone3-authentication-user-accounts`. Requirements, evidence, and verification runs: `docs/MILESTONE_3_AUTHENTICATION.md`. Email delivery has **no provider configured** (`docs/EMAIL_DELIVERY.md`); avatar upload is not available.
 
 **12 Oct 2026 — Milestone 2 (database, security, data integrity).** Atomic offer acceptance, transaction concurrency safety, request privacy, a guarded migration adding unique `Transaction.offerId`, a production category bootstrap, auth/WebSocket hardening, and isolated PostgreSQL integration tests landed on `milestone2-database-security-integrity`. Requirements, evidence, and verification runs: `docs/MILESTONE_2_DATABASE_SECURITY_INTEGRITY.md`.
