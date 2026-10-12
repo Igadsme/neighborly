@@ -1,5 +1,6 @@
 #!/bin/sh
-# Apply committed Prisma migrations and the idempotent local seed.
+# Apply committed Prisma migrations, bootstrap production category reference
+# data, then the idempotent local seed.
 # Refuses any database host other than the staging Compose service.
 set -eu
 
@@ -15,4 +16,7 @@ esac
 cd /app
 # Call the binaries directly. NODE_ENV=production would hide devDependencies from `pnpm exec`.
 node ./node_modules/prisma/build/index.js migrate deploy
+# Reference data every environment needs: listings and requests cannot be
+# created without categories. Idempotent upsert, no demo records.
+node ./node_modules/tsx/dist/cli.mjs prisma/bootstrap.ts
 node ./node_modules/tsx/dist/cli.mjs prisma/seed.ts

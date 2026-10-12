@@ -43,9 +43,13 @@ cd backend
 pnpm install
 pnpm prisma:generate
 pnpm prisma:migrate
-pnpm prisma:seed
+pnpm prisma:bootstrap  # production category reference data, idempotent, no demo rows
+pnpm prisma:seed       # local demo fixtures only; never run in production
 pnpm start:dev
 ```
+
+Backend tests: `pnpm test` (hermetic unit suite) and `../scripts/run-integration-tests.sh`
+(real PostgreSQL in a disposable container). See `docs/MILESTONE_2_DATABASE_SECURITY_INTEGRITY.md`.
 
 The API listens on port 3000. Health is `GET http://localhost:3000/api/v1/health`. Swagger is `http://localhost:3000/docs`.
 

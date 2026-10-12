@@ -30,6 +30,51 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  # Real-PostgreSQL integration tests. A disposable PostgreSQL 16 service
+  # container stands in for production Postgres; the suite refuses any
+  # non-loopback database host, so this job can never reach a shared or
+  # production database. The integration specs are excluded from `pnpm test`.
+  integration:
+    name: Integration (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55432/neighborly_m2
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: neighborly_m2
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      # Applying the whole migration chain from an empty database is the
+      # check that migrations stay safe to deploy.
+      - run: pnpm exec prisma migrate deploy
+      - run: pnpm exec jest --config jest.integration.config.cjs --runInBand
+        env:
+          NEIGHBORLY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55432/neighborly_m2
+
   backend:
     name: Backend
     runs-on: ubuntu-latest
