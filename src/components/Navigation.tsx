@@ -22,6 +22,8 @@ type Page =
   | "forgot-password"
   | "reset-password"
   | "verify-email"
+  | "my-listings"
+  | "create-marketplace"
 
 interface NavProps {
   currentPage: Page
@@ -245,6 +247,12 @@ export default function Navigation({
                         className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#8A9AB5] transition-colors"
                       >
                         Account settings
+                      </button>
+                      <button
+                        onClick={() => onNavigate("my-listings")}
+                        className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#8A9AB5] transition-colors"
+                      >
+                        My listings
                       </button>
                       <button
                         onClick={onSignOut}

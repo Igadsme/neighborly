@@ -242,6 +242,19 @@ model Listing {
   @@index([status, createdAt])
   @@index([sellerId, status])
   @@index([city, neighborhood])
+  // Milestone 4 discovery indexes. Each matches a query the listing
+  // controller actually issues, so the planner has a range scan available.
+  @@index([status, createdAt, id])
+  @@index([status, categoryId, createdAt, id])
+  @@index([latitude, longitude])
+  @@index([city, status])
+  @@index([neighborhood, status])
+  @@index([priceCents])
+  // Trigram indexes make `contains` substring search an index lookup
+  // instead of a sequential scan. See migration 0008.
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([neighborhood(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 model ListingImage {
@@ -249,6 +262,10 @@ model ListingImage {
   listingId String   @db.Uuid
   objectKey String
   sortOrder Int      @default(0)
+  // Recorded at upload time so the client can reserve layout space before
+  // the image loads. Nullable: rows written before Milestone 4 have no value.
+  width     Int?
+  height    Int?
   createdAt DateTime @default(now())
   listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
 

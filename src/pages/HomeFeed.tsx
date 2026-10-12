@@ -59,8 +59,9 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
     let active = true
     api.listings
       .list({ limit: 24 })
-      .then((rows) => {
+      .then((page) => {
         if (!active) return
+        const rows = page.items
         const cards = rows.map((row) => listingFromApi(row))
         const dayAgo = Date.now() - 24 * 60 * 60 * 1000
         const fresh = new Set(

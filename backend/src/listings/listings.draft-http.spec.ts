@@ -70,7 +70,13 @@ describe('Listing draft HTTP', () => {
       body: JSON.stringify(listingBody)
     })
     expect(response.status).toBe(201)
-    expect(created?.data).toMatchObject({ sellerId: 'user-1', status: 'PUBLISHED', priceCents: 48000, condition: 'Good' })
+    expect(created?.data).toMatchObject({
+      sellerId: 'user-1',
+      status: 'PUBLISHED',
+      priceCents: 48000,
+      // The form label "Good" is normalized to the stored enum value.
+      condition: 'good'
+    })
     expect((await response.json()) as { status: string }).toMatchObject({ status: 'PUBLISHED' })
 
     stored = null

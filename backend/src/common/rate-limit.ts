@@ -21,6 +21,7 @@ export const rateLimitPolicies = {
   authResetPassword: { env: 'RATE_LIMIT_AUTH_RESET_PASSWORD', limit: 10, windowMs: 15 * 60 * 1000 },
   messaging: { env: 'RATE_LIMIT_MESSAGING', limit: 30, windowMs: 60 * 1000 },
   listings: { env: 'RATE_LIMIT_LISTINGS', limit: 20, windowMs: 60 * 60 * 1000 },
+  listingImages: { env: 'RATE_LIMIT_LISTING_IMAGES', limit: 30, windowMs: 60 * 60 * 1000 },
   offers: { env: 'RATE_LIMIT_OFFERS', limit: 30, windowMs: 60 * 60 * 1000 },
   reports: { env: 'RATE_LIMIT_REPORTS', limit: 10, windowMs: 60 * 60 * 1000 }
 } as const

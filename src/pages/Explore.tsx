@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ListingCard, Chip, Badge, Button, Icon, Toggle } from '../components/ui'
 import type { Listing } from '../data'
 import { api, readError, readStatus } from '../api/client'
+import type { ListingQueryParams } from '../api/types'
 import { listingFromApi, mediaSrc } from '../lib/view'
 
 type Page = 'listing' | 'map'
@@ -10,7 +11,7 @@ interface ExploreProps {
   onNavigate: (p: Page, id?: string) => void
 }
 
-const categories = ['All', 'Furniture', 'Electronics', 'Vehicles', 'Housing', 'Services', 'Free', 'Jobs', 'Pets', 'Clothing']
+
 const conditions = ['Any', 'New', 'Like New', 'Good', 'Fair', 'For Parts']
 const sortOptions = [
   { value: 'relevance', label: 'Most relevant' },
@@ -43,21 +44,60 @@ export default function Explore({ onNavigate }: ExploreProps) {
   const [alertError, setAlertError] = useState('')
   const [savingAlert, setSavingAlert] = useState(false)
   const [results, setResults] = useState<Listing[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [searchNonce, setSearchNonce] = useState(0)
+
+  const [categoryOptions, setCategoryOptions] = useState<Array<{ id: string; name: string }>>([])
+  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [offset, setOffset] = useState(0)
+
+  useEffect(() => {
+    api.categories
+      .list()
+      .then(rows => setCategoryOptions(rows))
+      .catch(() => setCategoryOptions([]))
+  }, [])
+
+  // Radius filtering needs an origin. It is only sent once the member has
+  // granted permission or typed a location; without one the query is global.
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      position =>
+        setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+      () => undefined,
+      { timeout: 5000 }
+    )
+  }, [])
+
+  const selectedCategoryId = categoryOptions.find(option => option.name === category)?.id
+  const pageSize = 24
+  const parsedMax = maxPrice ? Number(maxPrice) : undefined
+  const parsedMin = minPrice ? Number(minPrice) : undefined
 
   useEffect(() => {
     let active = true
     setLoading(true)
     setLoadError('')
     api.listings
-      .list({
+      .search({
         query: searchNonce === 0 ? undefined : query.trim() || undefined,
-        limit: 48,
+        ...(selectedCategoryId ? { categoryId: selectedCategoryId } : {}),
+        ...(Number.isFinite(parsedMin) ? { minPriceCents: Math.round(parsedMin! * 100) } : {}),
+        ...(Number.isFinite(parsedMax) ? { maxPriceCents: Math.round(parsedMax! * 100) } : {}),
+        // Free only is expressed as a zero ceiling rather than a client filter.
+        ...(freeOnly ? { maxPriceCents: 0 } : {}),
+        ...(location && distance < 500 ? { ...location, radiusMiles: distance } : {}),
+        sort: sort as ListingQueryParams["sort"],
+        limit: pageSize,
+        offset,
       })
-      .then((rows) => {
-        if (active) setResults(rows.map((row) => listingFromApi(row)))
+      .then((page) => {
+        if (!active) return
+        setResults(page.items.map((row) => listingFromApi(row)))
+        setTotal(page.total)
       })
       .catch((cause: unknown) => {
         if (active) setLoadError(readError(cause, 'Listings could not be loaded.'))
@@ -68,9 +108,9 @@ export default function Explore({ onNavigate }: ExploreProps) {
     return () => {
       active = false
     }
-    // Intentionally keyed on searchNonce (the search-submit counter), not on
-    // `query`, so typing does not refetch on every keystroke.
-  }, [searchNonce]) // eslint-disable-line react-hooks/exhaustive-deps
+    // Keyed on the submit counter and the committed filters, never on the raw
+    // text inputs, so typing does not refetch on every keystroke.
+  }, [searchNonce, selectedCategoryId, minPrice, maxPrice, freeOnly, distance, sort, offset, location]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveAlert = async () => {
     if (alertSaved) {
@@ -112,14 +152,17 @@ export default function Explore({ onNavigate }: ExploreProps) {
   if (freeOnly) activeFilters.push('Free only')
   if (deliveryOnly) activeFilters.push('Delivery available')
 
+  // Price, category, and radius are applied by the database so the results are
+  // global rather than filtered after one page was fetched. Only the toggles
+  // the API does not model stay on the client.
   const filteredListings = results.filter(l => {
-    if (freeOnly && !l.isFree) return false
     if (deliveryOnly && !l.deliveryAvailable) return false
     if (verifiedOnly && !l.seller.verified) return false
-    if (maxPrice && l.price && l.price > parseInt(maxPrice)) return false
-    if (category !== 'All' && !l.category.toLowerCase().includes(category.toLowerCase())) return false
     return true
   })
+
+  const page = Math.floor(offset / pageSize) + 1
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-24 md:pb-0">
@@ -172,7 +215,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
 
           {/* Category pills */}
           <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-            {categories.map(cat => (
+            {['All', ...categoryOptions.map(option => option.name)].map(cat => (
               <Chip key={cat} active={category === cat} onClick={() => setCategory(cat)}>{cat}</Chip>
             ))}
           </div>
@@ -282,7 +325,11 @@ export default function Explore({ onNavigate }: ExploreProps) {
               <div>
                 {searched && (
                   <p className="text-sm text-[#5C6E8A]">
-                    <span className="font-bold text-[#1B2A4A]">{filteredListings.length} results</span>
+                    {/* `total` is the global match count from the server, not the
+                        size of the page on screen. */}
+                    <span className="font-bold text-[#1B2A4A]">
+                      {total || filteredListings.length} results
+                    </span>
                     {query && <span> for &quot;<span className="text-[#2D6A4F] font-medium">{query}</span>&quot;</span>}
                   </p>
                 )}
@@ -388,10 +435,26 @@ export default function Explore({ onNavigate }: ExploreProps) {
                 <h3 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">No results found</h3>
                 <p className="text-[#8A9AB5] max-w-sm mx-auto mb-6">Try adjusting your filters or searching in a wider radius. We can alert you when something matching your search is posted.</p>
                 <div className="flex items-center justify-center gap-3">
-                  <Button variant="primary" size="sm" onClick={() => { setFreeOnly(false); setVerifiedOnly(false); setMaxPrice('') }}>Clear filters</Button>
-                  <Button variant="outline" size="sm">Set up alert</Button>
+                  <Button variant="primary" size="sm" onClick={() => { setFreeOnly(false); setVerifiedOnly(false); setMaxPrice(''); setMinPrice(''); setCategory('All'); setOffset(0) }}>Clear filters</Button>
+                  <Button variant="outline" size="sm" onClick={() => void saveAlert()}>Save this search</Button>
                 </div>
               </div>
+            )}
+
+            {/* Paging is server-side, so moving a page changes the query
+                rather than slicing what is already on screen. */}
+            {pageCount > 1 && !loading && (
+              <nav aria-label="Search results pages" className="mt-6 flex items-center justify-center gap-3">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setOffset(Math.max(0, offset - pageSize))}>
+                  Previous
+                </Button>
+                <span className="text-sm text-[#5C6E8A]">
+                  Page {page} of {pageCount}
+                </span>
+                <Button variant="outline" size="sm" disabled={page >= pageCount} onClick={() => setOffset(offset + pageSize)}>
+                  Next
+                </Button>
+              </nav>
             )}
           </div>
         </div>

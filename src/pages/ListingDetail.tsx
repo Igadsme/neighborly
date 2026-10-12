@@ -19,14 +19,14 @@ async function loadRelated(currentId: string, categoryId?: string) {
   if (categoryId) {
     try {
       const sameCategory = await api.listings.list({ categoryId, limit: 8 })
-      rows = sameCategory.filter((row) => row.id !== currentId)
+      rows = sameCategory.items.filter((row) => row.id !== currentId)
     } catch {
       rows = []
     }
   }
   if (rows.length === 0) {
     const recent = await api.listings.list({ limit: 8 })
-    rows = recent.filter((row) => row.id !== currentId)
+    rows = recent.items.filter((row) => row.id !== currentId)
   }
   return rows.slice(0, 4).map((row) => listingFromApi(row))
 }

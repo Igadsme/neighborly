@@ -2,6 +2,7 @@ import { PayloadTooLargeException, UnsupportedMediaTypeException } from '@nestjs
 import type { NextFunction, Request, Response } from 'express'
 
 const DEFAULT_TYPES = 'image/jpeg,image/png,image/webp'
+const LISTING_IMAGE_UPLOAD = /^\/api\/v1\/listings\/[0-9a-f-]{36}\/images$/i
 const DEFAULT_MAX_MB = 5
 
 export function allowedImageTypes(raw = process.env.ALLOWED_IMAGE_TYPES) {
@@ -26,13 +27,21 @@ export function assertImageUpload(file: { mimetype?: string; size?: number }) {
   }
 }
 
-export function rejectMultipart(req: Request, res: Response, next: NextFunction) {
+/**
+ * Multipart is accepted only for the listing image upload route. Every other
+ * route still refuses it, so the JSON body parser limits and the upload
+ * path limits cannot be bypassed by posting a file to an unrelated endpoint.
+ */
+export function allowMultipartForListingImages(req: Request, res: Response, next: NextFunction) {
   const header = req.headers['content-type']
   const type = Array.isArray(header) ? header.join(';') : header
-  if (type?.toLowerCase().includes('multipart/form-data')) {
+  if (!type?.toLowerCase().includes('multipart/form-data')) return next()
+
+  const path = (req.originalUrl ?? req.url ?? '').split('?')[0]
+  if (req.method !== 'POST' || !LISTING_IMAGE_UPLOAD.test(path)) {
     res.status(415).json({
       statusCode: 415,
-      message: 'File uploads are not accepted',
+      message: 'File uploads are only accepted for listing images',
       error: 'Unsupported Media Type'
     })
     return

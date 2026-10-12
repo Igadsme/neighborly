@@ -31,13 +31,17 @@ import type {
   GiveawayInput,
   LostFoundInput,
   NeighborhoodCount,
-  ServiceCreateInput,
   CreateConversationResult,
   CurrentUser,
   HousingQuery,
   JobQuery,
   ListingInput,
-  ListingQuery,
+  ListingPage,
+  ListingQueryParams,
+  StoredImage,
+  HousingCreateInput,
+  JobCreateInput,
+  ServiceCreateInput,
   NeedRequestInput,
   OfferInput,
   ProfileReview,
@@ -206,6 +210,54 @@ export function readError(cause: unknown, fallback: string) {
 export function readStatus(cause: unknown, fallback: string) {
   if (cause instanceof ApiError && cause.status === 401) return "Sign in to continue."
   return readError(cause, fallback)
+}
+
+/**
+ * XHR rather than fetch: only XHR exposes upload progress events, and the
+ * requirement is a real progress bar rather than a simulated one.
+ */
+function uploadWithProgress<T>(
+  path: string,
+  file: File,
+  onProgress?: (fraction: number) => void
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData()
+    form.append("file", file)
+
+    const xhr = new XMLHttpRequest()
+    xhr.open("POST", `${API_URL}${path}`)
+    xhr.withCredentials = true
+    const token = window.localStorage.getItem(ACCESS_TOKEN_KEY)
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`)
+    const csrf = readCookie(CSRF_COOKIE)
+    if (csrf) xhr.setRequestHeader(CSRF_HEADER, csrf)
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = event => {
+        if (event.lengthComputable && event.total > 0) onProgress(event.loaded / event.total)
+      }
+    }
+
+    xhr.onload = () => {
+      const payload = (() => {
+        try {
+          return JSON.parse(xhr.responseText) as { message?: string | string[] }
+        } catch {
+          return null
+        }
+      })()
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(1)
+        resolve(payload as T)
+        return
+      }
+      reject(new ApiError(readMessage(payload?.message, xhr.status), xhr.status))
+    }
+    xhr.onerror = () => reject(new ApiError("Upload failed. Check your connection and try again.", 0))
+    xhr.onabort = () => reject(new ApiError("Upload was cancelled.", 0))
+    xhr.send(form)
+  })
 }
 
 function queryString(query: object) {
@@ -379,50 +431,79 @@ export const api = {
       }),
   },
   listings: {
-    list: (query: ListingQuery = {}) => {
+    /**
+     * Server-side filtering, sorting, and pagination. Every filter is a query
+     * parameter so results are global rather than filtered after the page is
+     * fetched.
+     */
+    search: (query: ListingQueryParams = {}) => {
       const params = new URLSearchParams()
-      Object.entries(query).forEach(
-        ([key, value]) => value !== undefined && params.set(key, String(value)),
-      )
-      return request<ApiListing[]>(`/listings${params.size ? `?${params}` : ""}`)
+      Object.entries(query).forEach(([key, value]) => {
+        if (value === undefined || value === "" || value === null) return
+        params.set(key, String(value))
+      })
+      const text = params.toString()
+      return request<ListingPage>(`/listings${text ? `?${text}` : ""}`)
     },
+    list: (query: ListingQueryParams = {}) => api.listings.search(query),
+    get: (id: string) => request<ApiListing>(`/listings/${id}`),
+    /** Owner view: includes drafts the public route deliberately hides. */
+    manage: (id: string) => request<ApiListing>(`/listings/${id}/manage`),
     create: (input: ListingInput) =>
       request<ApiListing>("/listings", {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    saveDraft: (input: ListingInput) =>
+    saveDraft: (input: Partial<ListingInput>) =>
       request<ApiListing>("/listings/drafts", {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    publish: (id: string) =>
-      request<ApiListing>(`/listings/${id}/publish`, { method: "POST" }),
-    pause: (id: string) =>
-      request<ApiListing>(`/listings/${id}/pause`, { method: "POST" }),
-    markSold: (id: string) =>
-      request<ApiListing>(`/listings/${id}/sold`, { method: "POST" }),
-    mine: () => request<ApiListing[]>("/listings/mine"),
-    neighborhoods: () => request<NeighborhoodCount[]>("/listings/neighborhoods"),
-    get: (id: string) => request<ApiListing>(`/listings/${id}`),
+    publish: (id: string) => request<ApiListing>(`/listings/${id}/publish`, { method: "POST" }),
+    pause: (id: string) => request<ApiListing>(`/listings/${id}/pause`, { method: "POST" }),
+    markSold: (id: string) => request<ApiListing>(`/listings/${id}/sold`, { method: "POST" }),
+    restore: (id: string) => request<ApiListing>(`/listings/${id}/restore`, { method: "POST" }),
     update: (id: string, input: Partial<ListingInput>) =>
-      request<unknown>(`/listings/${id}`, {
+      request<ApiListing>(`/listings/${id}`, {
         method: "PATCH",
         body: JSON.stringify(input),
       }),
-    archive: (id: string) =>
-      request<unknown>(`/listings/${id}`, { method: "DELETE" }),
-    toggleFavorite: (id: string) =>
-      request<{ saved: boolean }>(`/listings/${id}/favorite`, {
+    archive: (id: string) => request<ApiListing>(`/listings/${id}`, { method: "DELETE" }),
+    remove: (id: string) =>
+      request<{ id: string; deleted: boolean }>(`/listings/${id}/permanent`, { method: "DELETE" }),
+    mine: (status?: string) =>
+      request<ApiListing[]>(`/listings/mine${status ? `?status=${status}` : ""}`),
+    neighborhoods: () => request<NeighborhoodCount[]>("/listings/neighborhoods"),
+    storageStatus: () => request<{ configured: boolean }>("/listings/storage-status"),
+
+    /** Multipart upload with real progress, so the bar is not a fake. */
+    uploadImage: (listingId: string, file: File, onProgress?: (fraction: number) => void) =>
+      uploadWithProgress(`/listings/${listingId}/images`, file, onProgress),
+    listImages: (id: string) => request<StoredImage[]>(`/listings/${id}/manage`),
+    removeImage: (listingId: string, imageId: string) =>
+      request<StoredImage[]>(`/listings/${listingId}/images/${imageId}`, { method: "DELETE" }),
+    reorderImages: (listingId: string, imageIds: string[]) =>
+      request<StoredImage[]>(`/listings/${listingId}/images/reorder`, {
         method: "POST",
+        body: JSON.stringify({ imageIds }),
       }),
+
+    toggleFavorite: (id: string) =>
+      request<{ saved: boolean }>(`/listings/${id}/favorite`, { method: "POST" }),
     favorites: () => request<ApiFavorite[]>("/listings/favorites"),
     savedSearches: () => request<ApiSavedSearch[]>("/listings/saved-searches"),
     saveSearch: (query: string, filters: Record<string, unknown>) =>
-      request<unknown>("/listings/saved-searches", {
+      request<ApiSavedSearch>("/listings/saved-searches", {
         method: "POST",
         body: JSON.stringify({ query, filters }),
       }),
+    updateSavedSearch: (id: string, input: { query?: string; filters?: Record<string, unknown> }) =>
+      request<ApiSavedSearch>(`/listings/saved-searches/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    deleteSavedSearch: (id: string) =>
+      request<void>(`/listings/saved-searches/${id}`, { method: "DELETE" }),
   },
   categories: {
     list: () =>
@@ -500,6 +581,9 @@ export const api = {
   housing: {
     list: (query: HousingQuery = {}) =>
       request<ApiHousing[]>(`/housing${queryString(query)}`),
+    create: (input: HousingCreateInput) =>
+      request<ApiHousing>("/housing", { method: "POST", body: JSON.stringify(input) }),
+    get: (id: string) => request<ApiHousing>(`/housing/${id}`),
   },
   jobs: {
     list: (query: JobQuery = {}) => request<ApiJob[]>(`/jobs${queryString(query)}`),
@@ -512,17 +596,18 @@ export const api = {
       }),
     toggleSave: (id: string) =>
       request<{ saved: boolean }>(`/jobs/${id}/save`, { method: "POST" }),
+    create: (input: JobCreateInput) =>
+      request<ApiJob>("/jobs", { method: "POST", body: JSON.stringify(input) }),
+    get: (id: string) => request<ApiJob>(`/jobs/${id}`),
   },
   services: {
     list: (query: ServiceQuery = {}) =>
       request<ApiServiceListing[]>(`/services${queryString(query)}`),
+    create: (input: ServiceCreateInput) =>
+      request<ApiServiceListing>("/services", { method: "POST", body: JSON.stringify(input) }),
+    get: (id: string) => request<ApiServiceListing>(`/services/${id}`),
     requestQuote: (id: string, input: ServiceQuoteInput) =>
       request<ApiServiceQuote>(`/services/${id}/quotes`, {
-        method: "POST",
-        body: JSON.stringify(input),
-      }),
-    create: (input: ServiceCreateInput) =>
-      request<ApiServiceListing>("/services", {
         method: "POST",
         body: JSON.stringify(input),
       }),

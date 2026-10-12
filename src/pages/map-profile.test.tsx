@@ -85,7 +85,7 @@ describe("Map screen", () => {
     route((url, init) => {
       if (init?.method === "POST") return json({ message: "Unauthorized" }, 401)
       expect(url).toContain("/listings?limit=100")
-      return json([published, freebie])
+      return json({ items: [published, freebie], total: 2, limit: 100, offset: 0 })
     })
     render(<MapDiscovery onNavigate={onNavigate} />)
     expect(screen.getByText("Loading listings…")).toBeTruthy()
@@ -112,7 +112,7 @@ describe("Map screen", () => {
   })
 
   it("shows an empty list and an unauthorized error under the map", async () => {
-    route(() => json([]))
+    route(() => json({ items: [], total: 0, limit: 100, offset: 0 }))
     const { unmount } = render(<MapDiscovery onNavigate={() => undefined} />)
     expect(await screen.findByText("No listings nearby.")).toBeTruthy()
     expect(screen.getByText("Ponce de Leon Ave")).toBeTruthy()
@@ -154,8 +154,14 @@ describe("Profile screen", () => {
         )
       }
       if (url.includes("/profile")) return json(options?.empty ? { ...profile, bio: null, reviewCount: 0, soldCount: 0, ratingAverage: null, emailVerified: false } : profile)
-      if (url.includes("status=SOLD")) return json(options?.empty ? [] : [sold])
-      if (url.includes("/listings")) return json(options?.empty ? [] : [published])
+      if (url.includes("status=SOLD")) {
+        const soldRows = options?.empty ? [] : [sold]
+        return json({ items: soldRows, total: soldRows.length, limit: 24, offset: 0 })
+      }
+      if (url.includes("/listings")) {
+        const rows = options?.empty ? [] : [published]
+        return json({ items: rows, total: rows.length, limit: 24, offset: 0 })
+      }
       return json({ message: "unexpected" }, 500)
     })
     return calls
@@ -214,7 +220,7 @@ describe("Profile screen", () => {
       if (url.includes("/safety/reports")) return json({ id: "report-1", status: "OPEN" }, 201)
       if (url.includes("/reviews")) return json([])
       if (url.includes("/profile")) return json({ ...profile, bio: null, reviewCount: 0, soldCount: 0, ratingAverage: null })
-      if (url.includes("/listings")) return json([])
+      if (url.includes("/listings")) return json({ items: [], total: 0, limit: 24, offset: 0 })
       return json({ message: "unexpected" }, 500)
     })
     render(<Profile userId={profile.id} onNavigate={() => undefined} />)

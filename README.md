@@ -48,9 +48,11 @@ pnpm prisma:seed       # local demo fixtures only; never run in production
 pnpm start:dev
 ```
 
-Backend tests: `pnpm test` (hermetic unit suite) and `../scripts/run-integration-tests.sh`
-(real PostgreSQL in a disposable container).
+Backend tests: `pnpm test` (hermetic unit suite), `../scripts/run-integration-tests.sh`
+(real PostgreSQL in a disposable container), and `../scripts/run-storage-tests.sh`
+(real PostgreSQL plus a real S3-compatible object store).
 
+Marketplace (Milestone 4): `docs/MILESTONE_4_MARKETPLACE.md`. Listing images: `docs/STORAGE.md`.
 Account lifecycle (Milestone 3): `docs/MILESTONE_3_AUTHENTICATION.md`.
 Email delivery: `docs/EMAIL_DELIVERY.md` — no provider is configured, messages go to the `EmailOutbox` table.
 Account deletion: `docs/ACCOUNT_DELETION.md`.

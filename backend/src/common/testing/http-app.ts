@@ -3,6 +3,7 @@ import { JwtModule, JwtService } from '@nestjs/jwt'
 import { Test } from '@nestjs/testing'
 import { AuthGuard } from '../../auth/auth.guard'
 import { PrismaService } from '../../prisma/prisma.service'
+import { stubStorage } from './stub-storage'
 
 export const testJwtSecret = 'test-jwt-secret-must-be-32-characters'
 
@@ -46,6 +47,8 @@ export async function bootApi(options: {
     providers: [
       options.service,
       ...(options.extraProviders ?? []),
+      // Listing services depend on object storage; these suites never upload.
+      stubStorage().provider,
       AuthGuard,
       { provide: PrismaService, useValue: withAccountLookup(options.prisma, { id: userId, email }) }
     ]

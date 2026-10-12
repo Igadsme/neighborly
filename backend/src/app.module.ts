@@ -16,6 +16,7 @@ import { SafetyModule } from './safety/safety.module'
 import { HousingModule } from './housing/housing.module'
 import { JobsModule } from './jobs/jobs.module'
 import { ServicesModule } from './services/services.module'
+import { StorageModule } from './storage/storage.module'
 
 @Module({
   imports: [
@@ -34,7 +35,8 @@ import { ServicesModule } from './services/services.module'
     JobsModule,
     ServicesModule,
     CommunityModule,
-    SafetyModule
+    SafetyModule,
+    StorageModule
   ]
 })
 export class AppModule {}

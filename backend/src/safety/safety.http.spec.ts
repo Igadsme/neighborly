@@ -9,6 +9,7 @@ import { testJwtSecret } from '../common/testing/http-app'
 import { PrismaService } from '../prisma/prisma.service'
 import { ListingsController } from '../listings/listings.controller'
 import { ListingsService } from '../listings/listings.service'
+import { stubStorage } from '../common/testing/stub-storage'
 import { MessagingController } from '../messaging/messaging.controller'
 import { MessagingGateway } from '../messaging/messaging.gateway'
 import { MessagingService } from '../messaging/messaging.service'
@@ -227,6 +228,7 @@ describe('Abuse limits on auth, messaging, listings, and offers', () => {
   it('returns 429 on the second listing create', async () => {
     const booted = await boot([ListingsController], [
       ListingsService,
+      stubStorage().provider,
       AuthGuard,
       {
         provide: PrismaService,

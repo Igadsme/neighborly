@@ -20,6 +20,8 @@ import AccountSettings from "./pages/account/AccountSettings"
 import ForgotPassword from "./pages/account/ForgotPassword"
 import ResetPassword from "./pages/account/ResetPassword"
 import VerifyEmail from "./pages/account/VerifyEmail"
+import CreateListingFlow from "./pages/marketplace/CreateListingFlow"
+import MyListings from "./pages/marketplace/MyListings"
 import { api, onSessionExpired } from "./api/client"
 import { unreadConversations } from "./lib/activity"
 
@@ -44,6 +46,8 @@ type Page =
   | "forgot-password"
   | "reset-password"
   | "verify-email"
+  | "my-listings"
+  | "create-marketplace"
 
 export default function App() {
   const [page, setPage] = useState<Page>("landing")
@@ -54,10 +58,14 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true)
   const [viewerId, setViewerId] = useState<string | null>(null)
   const [unreadMessages, setUnreadMessages] = useState(0)
+  const [notice, setNotice] = useState("")
   // Single-use deep-link tokens. They are read from the URL once, handed
   // to the relevant screen, and stripped from the address bar so they are
   // not left in history or in a shared link.
   const [accountToken, setAccountToken] = useState<string | null>(null)
+  // Marketplace screens need the category list and a place to land after a
+  // successful create, so they are loaded once here rather than per screen.
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; slug: string }>>([])
 
   const navigate = useCallback((p: string, id?: string) => {
     if (p === "listing") setListingId(id ?? null)
@@ -91,6 +99,13 @@ export default function App() {
     setIsSignedIn(false)
     navigate("landing")
   }
+
+  useEffect(() => {
+    api.categories
+      .list()
+      .then(rows => setCategories(rows))
+      .catch(() => setCategories([]))
+  }, [])
 
   useEffect(() => {
     consumeDeepLink()
@@ -195,9 +210,22 @@ export default function App() {
       )}
 
       {/* Page content */}
-      <main
-        className={isSignedIn && !isMapPage && page !== "onboarding" ? "" : ""}
-      >
+      <main className={isSignedIn && !isMapPage && page !== "onboarding" ? "" : ""}>
+        {notice && (
+          <div role="status" className="mx-auto max-w-4xl px-6 pt-4">
+            <div className="rounded-xl border border-[#B9D8C7] bg-[#EEF6F1] px-4 py-3 text-sm text-[#1E4A36]">
+              {notice}
+              <button
+                type="button"
+                className="ml-3 underline"
+                onClick={() => setNotice("")}
+                aria-label="Dismiss message"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
         {page === "landing" && (
           <Landing onNavigate={navigate} onSignIn={signIn} />
         )}
@@ -229,6 +257,22 @@ export default function App() {
             onResend={() => {
               setAccountToken(null)
               navigate("home")
+            }}
+          />
+        )}
+
+        {page === "my-listings" && isSignedIn && (
+          <MyListings onNavigate={navigate} />
+        )}
+
+        {page === "create-marketplace" && isSignedIn && (
+          <CreateListingFlow
+            categories={categories}
+            initialCategoryId={categories[0]?.id}
+            onNavigate={navigate}
+            onDone={created => {
+              setNotice(`"${created.title}" was created.`)
+              navigate("listing", created.id)
             }}
           />
         )}
@@ -302,7 +346,9 @@ export default function App() {
           page !== "onboarding" &&
           page !== "forgot-password" &&
           page !== "reset-password" &&
-          page !== "verify-email" && (
+          page !== "verify-email" &&
+          page !== "my-listings" &&
+          page !== "create-marketplace" && (
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">
               <div className="text-5xl mb-4">🏡</div>

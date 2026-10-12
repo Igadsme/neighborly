@@ -163,8 +163,8 @@ export default function Categories({ onNavigate }: CategoriesProps) {
     let active = true
     api.listings
       .list({ status: 'PUBLISHED', limit: 6 })
-      .then((rows) => {
-        if (active) setFeatured(rows.slice(0, 6).map((row) => listingFromApi(row)))
+      .then((page) => {
+        if (active) setFeatured(page.items.map((row) => listingFromApi(row)))
       })
       .catch((cause: unknown) => {
         if (active) setFeaturedError(readStatus(cause, 'Listings could not be loaded.'))

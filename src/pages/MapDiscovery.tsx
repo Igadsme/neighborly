@@ -71,9 +71,9 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
     setError('')
     api.listings
       .list({ limit: 100 })
-      .then((rows) => {
+      .then((page) => {
         if (!active) return
-        const next = rows.map(toPin)
+        const next = page.items.map(toPin)
         setPins(next)
         setSelectedPin((current) => (current && next.some((pin) => pin.id === current) ? current : next[0]?.id ?? null))
       })

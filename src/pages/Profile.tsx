@@ -108,8 +108,8 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
       if (!active) return
       setProfile(nextProfile)
       setReviews(nextReviews)
-      setActiveListings(published)
-      setSoldListings(sold)
+      setActiveListings(published.items ?? [])
+      setSoldListings(sold.items ?? [])
     }
     load()
       .catch((cause) => {

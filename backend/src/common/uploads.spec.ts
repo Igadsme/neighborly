@@ -1,6 +1,6 @@
 import { PayloadTooLargeException, UnsupportedMediaTypeException } from '@nestjs/common'
 import type { NextFunction, Request, Response } from 'express'
-import { assertImageUpload, rejectMultipart } from './uploads'
+import { allowMultipartForListingImages, assertImageUpload } from './uploads'
 
 describe('upload restrictions', () => {
   const previousSize = process.env.MAX_UPLOAD_SIZE_MB
@@ -25,12 +25,54 @@ describe('upload restrictions', () => {
     const json = jest.fn()
     const res = { status: jest.fn(() => ({ json })) } as unknown as Response
     const next = jest.fn() as NextFunction
-    rejectMultipart({ headers: { 'content-type': 'multipart/form-data; boundary=abc' } } as Request, res, next)
-    expect(next).not.toHaveBeenCalled()
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 415, message: 'File uploads are not accepted' }))
+    // Multipart is now accepted, but only on the listing image route.
+    allowMultipartForListingImages(
+      {
+        method: 'POST',
+        originalUrl: '/api/v1/listings/11111111-1111-4111-8111-111111111111/images',
+        headers: { 'content-type': 'multipart/form-data; boundary=abc' }
+      } as Request,
+      res,
+      next
+    )
+    expect(next).toHaveBeenCalled()
+    expect(json).not.toHaveBeenCalled()
+
+    const denied = jest.fn() as NextFunction
+    const deniedJson = jest.fn()
+    allowMultipartForListingImages(
+      {
+        method: 'POST',
+        originalUrl: '/api/v1/listings/11111111-1111-4111-8111-111111111111/favorite',
+        headers: { 'content-type': 'multipart/form-data; boundary=abc' }
+      } as Request,
+      { status: jest.fn(() => ({ json: deniedJson })) } as unknown as Response,
+      denied
+    )
+    expect(denied).not.toHaveBeenCalled()
+    expect(deniedJson).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 415, message: 'File uploads are only accepted for listing images' })
+    )
+
+    // A GET to the upload path is still refused.
+    const getDenied = jest.fn() as NextFunction
+    allowMultipartForListingImages(
+      {
+        method: 'GET',
+        originalUrl: '/api/v1/listings/11111111-1111-4111-8111-111111111111/images',
+        headers: { 'content-type': 'multipart/form-data' }
+      } as Request,
+      { status: jest.fn(() => ({ json: jest.fn() })) } as unknown as Response,
+      getDenied
+    )
+    expect(getDenied).not.toHaveBeenCalled()
 
     const pass = jest.fn()
-    rejectMultipart({ headers: { 'content-type': 'application/json' } } as Request, res, pass)
+    allowMultipartForListingImages(
+      { method: 'POST', originalUrl: '/api/v1/listings', headers: { 'content-type': 'application/json' } } as Request,
+      res,
+      pass
+    )
     expect(pass).toHaveBeenCalled()
   })
 })

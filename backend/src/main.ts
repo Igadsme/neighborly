@@ -8,12 +8,12 @@ import { AppModule } from './app.module'
 import { corsOrigins, helmetOptions, jsonBodyLimit, swaggerEnabled, trustProxyEnabled } from './common/http-security'
 import { LoggingExceptionFilter } from './common/logging.filter'
 import { requestContextMiddleware } from './common/request-context'
-import { rejectMultipart } from './common/uploads'
+import { allowMultipartForListingImages } from './common/uploads'
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false })
   app.use(requestContextMiddleware)
-  app.use(rejectMultipart)
+  app.use(allowMultipartForListingImages)
   app.use(json({ limit: jsonBodyLimit }))
   app.use(urlencoded({ extended: false, limit: jsonBodyLimit }))
   app.use(helmet(helmetOptions()))

@@ -78,6 +78,91 @@ jobs:
         env:
           NEIGHBORLY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55432/neighborly_m2
 
+  # Real object storage. Storage specs are excluded from the integration job
+  # because they need both PostgreSQL and a live S3-compatible service.
+  storage-integration:
+    name: Storage integration (S3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55436/neighborly_m4
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: neighborly_m4
+        ports:
+          - 55436:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      - run: pnpm exec prisma migrate deploy
+      - name: Start a disposable S3-compatible store
+        run: |
+          set -euo pipefail
+          # The GitHub runner can pull MinIO from Docker Hub, so the
+          # production-representative image is used here.
+          docker run -d --name neighborly-m4-s3 \
+            -e MINIO_ROOT_USER=neighborly-m4-local \
+            -e MINIO_ROOT_PASSWORD=neighborly-m4-local-only \
+            -p 127.0.0.1:59000:9000 \
+            minio/minio:latest server /data
+          for _ in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:59000/minio/health/live >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:59000/minio/health/live
+      - name: Run the storage suites
+        env:
+          NEIGHBORLY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55436/neighborly_m4
+          NEIGHBORLY_TEST_S3_ENDPOINT: http://127.0.0.1:59000
+          NEIGHBORLY_TEST_S3_BUCKET: neighborly-m4-media
+          NEIGHBORLY_TEST_S3_ACCESS_KEY: neighborly-m4-local
+          NEIGHBORLY_TEST_S3_SECRET_KEY: neighborly-m4-local-only
+        run: |
+          set -euo pipefail
+          S3_BUCKET_NAME=neighborly-m4-media \
+          S3_ENDPOINT_URL=http://127.0.0.1:59000 \
+          S3_ACCESS_KEY_ID=neighborly-m4-local \
+          S3_SECRET_ACCESS_KEY=neighborly-m4-local-only \
+            node -e '
+          const { S3Client, CreateBucketCommand } = require("@aws-sdk/client-s3")
+          const client = new S3Client({
+            region: "us-east-1",
+            endpoint: process.env.S3_ENDPOINT_URL,
+            forcePathStyle: true,
+            credentials: {
+              accessKeyId: process.env.S3_ACCESS_KEY_ID,
+              secretAccessKey: process.env.S3_SECRET_ACCESS_KEY
+            }
+          })
+          client.send(new CreateBucketCommand({ Bucket: process.env.S3_BUCKET_NAME }))
+            .then(() => process.stdout.write("bucket ready\n"))
+            .catch(error => {
+              if (error.name === "BucketAlreadyOwnedByYou") process.stdout.write("bucket ready\n")
+              else { process.stderr.write(String(error) + "\n"); process.exit(1) }
+            })
+          '
+          pnpm exec jest --config jest.storage.config.cjs --runInBand --testPathPattern storage
+
   backend:
     name: Backend
     runs-on: ubuntu-latest

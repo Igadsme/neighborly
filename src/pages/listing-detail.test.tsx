@@ -119,10 +119,13 @@ function listingRoutes(options: {
       return json(options.favoriteResult ?? { saved: true }, options.favoriteStatus ?? 200)
     }
     if (url.includes("/favorites")) return json(options.favorites ?? [])
-    if (url.includes("/listings?")) {
+    if (url.includes("/listings?") || url.endsWith("/listings")) {
       if (options.listFails) return Promise.reject(new Error("offline"))
-      if (url.includes("categoryId=")) return json(options.category ?? [detail, related])
-      return json(options.recent ?? [detail, related])
+      const rows: unknown[] =
+        url.includes("categoryId=")
+          ? ((options.category ?? [detail, related]) as unknown[])
+          : ((options.recent ?? [detail, related]) as unknown[])
+      return json({ items: rows, total: rows.length, limit: 8, offset: 0 })
     }
     if (url.includes(`/listings/${listingId}`)) {
       return json(options.detail ?? detail, options.detailStatus ?? 200)

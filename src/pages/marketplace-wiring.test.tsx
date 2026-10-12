@@ -122,7 +122,7 @@ function publishedListing(id: string, title: string) {
 describe("Categories", () => {
   it("shows published counts for categories the API knows", async () => {
     route((url) => {
-      if (url.includes("/listings")) return json([])
+      if (url.includes("/listings")) return json({ items: [], total: 0, limit: 24, offset: 0 })
       expect(url).toContain("/categories")
       return json([
         { id: categoryId, name: "Housing", slug: "housing", listingCount: 4 },
@@ -168,7 +168,13 @@ describe("Categories", () => {
         url,
         auth: headers instanceof Headers ? headers.get("Authorization") : null,
       })
-      if (url.includes("/listings")) return json(rows)
+      if (url.includes("/listings")) {
+        // The server does the paging, so the mock honors the requested limit
+        // rather than relying on the page to slice client-side.
+        const limit = Number(new URL(url, "http://x").searchParams.get("limit") ?? rows.length)
+        const offset = Number(new URL(url, "http://x").searchParams.get("offset") ?? 0)
+        return json({ items: rows.slice(offset, offset + limit), total: rows.length, limit, offset })
+      }
       return json([{ id: categoryId, name: "Housing", slug: "housing", listingCount: 4 }])
     })
     render(<Categories onNavigate={navigate} />)
@@ -189,7 +195,7 @@ describe("Categories", () => {
 
   it("shows an empty featured strip when no published listings come back", async () => {
     route((url) => {
-      if (url.includes("/listings")) return json([])
+      if (url.includes("/listings")) return json({ items: [], total: 0, limit: 24, offset: 0 })
       return json([{ id: categoryId, name: "Vehicles", slug: "vehicles", listingCount: 1 }])
     })
     render(<Categories onNavigate={() => undefined} />)

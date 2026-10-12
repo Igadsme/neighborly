@@ -5,6 +5,7 @@ import { AuthGuard } from '../auth/auth.guard'
 import { PrismaService } from '../prisma/prisma.service'
 import { ListingsController } from './listings.controller'
 import { ListingsService } from './listings.service'
+import { stubStorage } from '../common/testing/stub-storage'
 
 const secret = 'test-jwt-secret-must-be-32-characters'
 
@@ -205,6 +206,7 @@ describe('Public listing HTTP reads', () => {
   const queries: { list?: SelectSpec; get?: SelectSpec; favorites?: SelectSpec } = {}
   const prisma = {
     listing: {
+      count: jest.fn(async () => 1),
       findMany: jest.fn(async (args: { select?: SelectSpec }) => {
         queries.list = args as SelectSpec
         if (!args.select) return [listing]
@@ -243,7 +245,7 @@ describe('Public listing HTTP reads', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [JwtModule.register({})],
       controllers: [ListingsController],
-      providers: [ListingsService, AuthGuard, { provide: PrismaService, useValue: prisma }]
+      providers: [ListingsService, AuthGuard, stubStorage().provider, { provide: PrismaService, useValue: prisma }]
     }).compile()
 
     app = moduleRef.createNestApplication({ forceCloseConnections: true })
@@ -260,13 +262,15 @@ describe('Public listing HTTP reads', () => {
     await app.close()
   })
 
-  it('GET /api/v1/listings returns the public seller card only', async () => {
+  it('GET /api/v1/listings returns a paginated page of public seller cards', async () => {
     const response = await fetch(`${baseUrl}/api/v1/listings`)
     expect(response.status).toBe(200)
-    const body = (await response.json()) as unknown[]
+    const body = (await response.json()) as { items: unknown[]; total: number; limit: number; offset: number }
 
-    expect(body).toHaveLength(1)
-    expectPublicListing(body[0])
+    // The envelope is what lets the client paginate without a second count.
+    expect(body.items).toHaveLength(1)
+    expect(body).toMatchObject({ total: 1, limit: 24, offset: 0 })
+    expectPublicListing(body.items[0])
     expect(queries.list).toBeDefined()
   })
 

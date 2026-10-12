@@ -38,6 +38,81 @@ export interface AccountPrivacyInput {
   community?: boolean
 }
 
+/** Vertical creation payloads. These match the existing backend DTOs exactly:
+ *  a specialized listing must be created through its own contract. */
+export interface HousingCreateInput {
+  title: string
+  description: string
+  type: "Apartment" | "House" | "Room" | "Studio" | "Condo" | "Sublet"
+  listingType: "rent" | "sale" | "room" | "swap"
+  priceCents: number
+  priceUnit?: string
+  beds: number
+  baths: number
+  neighborhood: string
+  city?: string
+  state?: string
+  latitude?: number
+  longitude?: number
+}
+
+export interface JobCreateInput {
+  title: string
+  company: string
+  description: string
+  type?: "Full-time" | "Part-time" | "Freelance" | "Internship"
+  workplace?: "Remote" | "Hybrid" | "On-site"
+  neighborhood?: string
+}
+
+export interface ServiceCreateInput {
+  title: string
+  businessName: string
+  description: string
+  category: string
+  startingPriceCents: number
+  location: string
+  availability: string
+}
+
+/** Paginated marketplace page. `total` is the global count, not the page size. */
+export interface ListingPage {
+  items: ApiListing[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface ListingQueryParams {
+  query?: string
+  categoryId?: string
+  sellerId?: string
+  status?: "PUBLISHED" | "SOLD"
+  minPriceCents?: number
+  maxPriceCents?: number
+  city?: string
+  neighborhood?: string
+  latitude?: number
+  longitude?: number
+  radiusMiles?: number
+  sort?: "newest" | "oldest" | "price_asc" | "price_desc" | "relevance"
+  limit?: number
+  offset?: number
+}
+
+export interface ListingImageRecord {
+  id: string
+  objectKey: string
+  sortOrder: number
+  width?: number | null
+  height?: number | null
+}
+
+export interface StoredImage extends ListingImageRecord {
+  /** Same-origin API URL that streams the object. Never an S3 credential. */
+  url: string
+}
+
 export interface ActiveSession {
   id: string
   userAgent: string | null
@@ -126,13 +201,16 @@ export interface ApiListing {
   description: string
   priceCents?: number | null
   condition?: string | null
+  hasCoordinates?: boolean
+  approximateLocation?: { lat: number; lng: number } | null
+  distanceMiles?: number | null
   neighborhood?: string | null
   city?: string | null
   pickupAvailable?: boolean
   deliveryAvailable?: boolean
   shippingAvailable?: boolean
   categoryId?: string
-  images?: Array<{ url?: string | null; key?: string | null; objectKey?: string | null }>
+  images?: StoredImage[]
   category?: { id?: string; name?: string | null; slug?: string | null } | null
   seller?: {
     id: string
