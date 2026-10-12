@@ -13,6 +13,267 @@ enum UserStatus {
   DELETED
 }
 
+/// Lifecycle of one borrow request. Item-level availability lives on the
+/// listing and on BorrowReservation, never here.
+enum BorrowRequestStatus {
+  REQUESTED
+  APPROVED
+  DECLINED
+  PICKUP_SCHEDULED
+  CHECKED_OUT
+  RETURN_REQUESTED
+  RETURNED
+  COMPLETED
+  OVERDUE
+  CANCELLED
+  DISPUTED
+}
+
+enum BorrowReservationStatus {
+  ACTIVE
+  RELEASED
+}
+
+enum BorrowHandoffKind {
+  PICKUP
+  RETURN
+}
+
+enum BorrowConditionPhase {
+  BEFORE
+  AFTER
+}
+
+enum BorrowExtensionStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+}
+
+enum BorrowDisputeReason {
+  DAMAGE
+  MISSING_ITEM
+  LATE_RETURN
+  OTHER
+}
+
+enum BorrowDisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum BorrowAvailabilityKind {
+  UNAVAILABLE
+  AVAILABLE
+}
+
+model BorrowRequest {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  listingId          String                  @db.Uuid
+  lenderId           String                  @db.Uuid
+  borrowerId         String                  @db.Uuid
+  status             BorrowRequestStatus     @default(REQUESTED)
+  /// Half-open interval [startAt, endAt). endAt is the moment it is due back.
+  startAt            DateTime
+  endAt              DateTime
+  message            String?
+  /// The due date as first agreed, so an extension never rewrites history.
+  originalEndAt      DateTime
+  depositCents       Int?
+  approvedAt         DateTime?
+  checkedOutAt       DateTime?
+  returnedAt         DateTime?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  /// Set when an overdue sweep first saw this request overdue, so the
+  /// notification fires exactly once no matter how often the sweep runs.
+  overdueNotifiedAt  DateTime?
+  pickupInstructions String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  listing            Listing                 @relation(fields: [listingId], references: [id])
+  lender             User                    @relation("BorrowLender", fields: [lenderId], references: [id])
+  borrower           User                    @relation("BorrowBorrower", fields: [borrowerId], references: [id])
+  reservation        BorrowReservation?
+  handoffs           BorrowHandoff[]
+  conditionReports   BorrowConditionReport[]
+  extensions         BorrowExtension[]
+  disputes           BorrowDispute[]
+  events             BorrowStatusEvent[]
+
+  @@index([listingId, status])
+  @@index([borrowerId, status, createdAt])
+  @@index([lenderId, status, createdAt])
+  // The overdue sweep walks only live requests whose due date has passed.
+  @@index([status, endAt])
+}
+
+/// A confirmed booking of one item for a half-open interval. A cancelled or
+/// expired request releases its reservation rather than deleting it, so the
+/// booking history stays auditable.
+model BorrowReservation {
+  id              String                  @id @default(uuid()) @db.Uuid
+  listingId       String                  @db.Uuid
+  borrowRequestId String                  @unique @db.Uuid
+  startAt         DateTime
+  endAt           DateTime
+  status          BorrowReservationStatus @default(ACTIVE)
+  /// Set when the booking stops blocking the item. NULL means it still blocks.
+  releasedAt      DateTime?
+  createdAt       DateTime                @default(now())
+  listing         Listing                 @relation(fields: [listingId], references: [id])
+  borrowRequest   BorrowRequest           @relation(fields: [borrowRequestId], references: [id])
+
+  @@index([listingId, status, startAt])
+}
+
+/// A period the lender has marked open or blocked. An UNAVAILABLE window
+/// overrides a reservation check; an AVAILABLE window is informational and
+/// never overrides an existing booking.
+model BorrowAvailabilityWindow {
+  id        String                 @id @default(uuid()) @db.Uuid
+  listingId String                 @db.Uuid
+  kind      BorrowAvailabilityKind
+  startsAt  DateTime
+  endsAt    DateTime
+  note      String?
+  createdAt DateTime               @default(now())
+  listing   Listing                @relation(fields: [listingId], references: [id])
+
+  @@index([listingId, startsAt])
+}
+
+/// A two-sided confirmation. A handoff is complete only when both parties
+/// have confirmed, so one side cannot unilaterally move the item.
+model BorrowHandoff {
+  id                  String                 @id @default(uuid()) @db.Uuid
+  borrowRequestId     String                 @db.Uuid
+  kind                BorrowHandoffKind
+  /// Where and when. Private to the two participants.
+  scheduledAt         DateTime?
+  locationNote        String?
+  borrowerConfirmedAt DateTime?
+  lenderConfirmedAt   DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  createdAt           DateTime               @default(now())
+  borrowRequest       BorrowRequest          @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+  conditionReport     BorrowConditionReport?
+
+  @@unique([borrowRequestId, kind])
+  @@index([kind, scheduledAt])
+}
+
+/// Condition recorded at handoff. Immutable once written: a report is a
+/// statement of what someone observed at a moment, not an editable field.
+model BorrowConditionReport {
+  id              String                  @id @default(uuid()) @db.Uuid
+  borrowRequestId String                  @db.Uuid
+  handoffId       String?                 @unique @db.Uuid
+  phase           BorrowConditionPhase
+  condition       String
+  notes           String?
+  reportedById    String                  @db.Uuid
+  createdAt       DateTime                @default(now())
+  borrowRequest   BorrowRequest           @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+  handoff         BorrowHandoff?          @relation(fields: [handoffId], references: [id])
+  reportedBy      User                    @relation(fields: [reportedById], references: [id])
+  photos          BorrowDisputeEvidence[]
+
+  @@index([borrowRequestId, phase])
+}
+
+model BorrowExtension {
+  id              String                @id @default(uuid()) @db.Uuid
+  borrowRequestId String                @db.Uuid
+  requestedById   String                @db.Uuid
+  status          BorrowExtensionStatus @default(REQUESTED)
+  /// The due date being asked for.
+  requestedEndAt  DateTime
+  /// The due date in force before this extension, kept for the audit trail.
+  previousEndAt   DateTime
+  decidedAt       DateTime?
+  decidedById     String?               @db.Uuid
+  reason          String?
+  createdAt       DateTime              @default(now())
+  borrowRequest   BorrowRequest         @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+  requestedBy     User                  @relation("BorrowExtensionRequester", fields: [requestedById], references: [id])
+  decidedBy       User?                 @relation("BorrowExtensionDecider", fields: [decidedById], references: [id])
+
+  @@index([borrowRequestId, status])
+}
+
+/// Append-only. A dispute must never be able to lose its own history.
+model BorrowDispute {
+  id              String                  @id @default(uuid()) @db.Uuid
+  borrowRequestId String                  @db.Uuid
+  openedById      String                  @db.Uuid
+  reason          BorrowDisputeReason
+  status          BorrowDisputeStatus     @default(OPEN)
+  summary         String
+  resolution      String?
+  resolvedAt      DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  borrowRequest   BorrowRequest           @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+  openedBy        User                    @relation(fields: [openedById], references: [id])
+  evidence        BorrowDisputeEvidence[]
+  events          BorrowDisputeEvent[]
+
+  @@index([borrowRequestId, status])
+  @@index([status, createdAt])
+}
+
+/// Evidence attached to a dispute or a condition report. Only a participant
+/// or a moderator can read it, and nothing here is deletable by one party.
+model BorrowDisputeEvidence {
+  id                String                 @id @default(uuid()) @db.Uuid
+  disputeId         String?                @db.Uuid
+  conditionReportId String?                @db.Uuid
+  listingId         String                 @db.Uuid
+  uploadedById      String                 @db.Uuid
+  objectKey         String
+  contentType       String
+  sizeBytes         Int
+  note              String?
+  createdAt         DateTime               @default(now())
+  dispute           BorrowDispute?         @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  conditionReport   BorrowConditionReport? @relation(fields: [conditionReportId], references: [id], onDelete: Cascade)
+  listing           Listing                @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  uploadedBy        User                   @relation(fields: [uploadedById], references: [id])
+
+  @@index([disputeId, createdAt])
+  @@index([conditionReportId])
+}
+
+model BorrowDisputeEvent {
+  id         String               @id @default(uuid()) @db.Uuid
+  disputeId  String               @db.Uuid
+  actorId    String?              @db.Uuid
+  fromStatus BorrowDisputeStatus?
+  toStatus   BorrowDisputeStatus
+  note       String?
+  createdAt  DateTime             @default(now())
+  dispute    BorrowDispute        @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+
+  @@index([disputeId, createdAt])
+}
+
+model BorrowStatusEvent {
+  id              String               @id @default(uuid()) @db.Uuid
+  borrowRequestId String               @db.Uuid
+  fromStatus      BorrowRequestStatus?
+  toStatus        BorrowRequestStatus
+  actorId         String?              @db.Uuid
+  note            String?
+  createdAt       DateTime             @default(now())
+  borrowRequest   BorrowRequest        @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+
+  @@index([borrowRequestId, createdAt])
+}
+
 enum ListingStatus {
   DRAFT
   PUBLISHED
@@ -111,54 +372,63 @@ enum ModerationActionKind {
 }
 
 model User {
-  id                     String                    @id @default(uuid()) @db.Uuid
-  email                  String                    @unique
-  passwordHash           String
-  status                 UserStatus                @default(ACTIVE)
-  createdAt              DateTime                  @default(now())
-  updatedAt              DateTime                  @updatedAt
-  deletedAt              DateTime?
-  emailVerifiedAt        DateTime?
-  pendingEmail           String?
-  pendingEmailAt         DateTime?
-  deletionRequestedAt    DateTime?
-  sessions               RefreshSession[]
-  emailTokens            EmailVerificationToken[]
-  passwordTokens         PasswordResetToken[]
-  profile                Profile?
-  listings               Listing[]
-  requests               NeedRequest[]
-  offers                 RequestOffer[]            @relation("Offerer")
-  favorites              Favorite[]
-  savedSearches          SavedSearch[]
-  preference             UserPreference?
-  notificationPreference NotificationPreference?
-  conversations          ConversationParticipant[]
-  sentMessages           Message[]                 @relation("MessageSender")
-  reviewsGiven           Review[]                  @relation("ReviewAuthor")
-  reviewsReceived        Review[]                  @relation("ReviewSubject")
-  transactionMembers     TransactionParticipant[]
-  housingListings        HousingListing[]
-  jobListings            JobListing[]
-  jobApplications        JobApplication[]
-  jobSaves               JobSave[]
-  serviceListings        ServiceListing[]
-  serviceQuotes          ServiceQuote[]
-  communityPosts         CommunityPost[]
-  communityReactions     CommunityReaction[]
-  communityComments      CommunityComment[]
-  communityEvents        CommunityEvent[]
-  eventRsvps             CommunityEventRsvp[]
-  lostFoundItems         LostFoundItem[]
-  giveaways              Giveaway[]                @relation("GiveawayAuthor")
-  claimedGiveaways       Giveaway[]                @relation("GiveawayClaimer")
-  staffRoles             StaffRoleAssignment[]
-  blocksGiven            BlockedUser[]             @relation("BlocksGiven")
-  blocksReceived         BlockedUser[]             @relation("BlocksReceived")
-  reportsFiled           Report[]                  @relation("ReportsFiled")
-  moderationActions      ModerationAction[]
-  notifications          Notification[]
-  savedSearchAlerts      SavedSearchAlert[]
+  id                        String                    @id @default(uuid()) @db.Uuid
+  email                     String                    @unique
+  passwordHash              String
+  status                    UserStatus                @default(ACTIVE)
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+  deletedAt                 DateTime?
+  emailVerifiedAt           DateTime?
+  pendingEmail              String?
+  pendingEmailAt            DateTime?
+  deletionRequestedAt       DateTime?
+  sessions                  RefreshSession[]
+  emailTokens               EmailVerificationToken[]
+  passwordTokens            PasswordResetToken[]
+  profile                   Profile?
+  listings                  Listing[]
+  requests                  NeedRequest[]
+  offers                    RequestOffer[]            @relation("Offerer")
+  favorites                 Favorite[]
+  savedSearches             SavedSearch[]
+  preference                UserPreference?
+  notificationPreference    NotificationPreference?
+  conversations             ConversationParticipant[]
+  sentMessages              Message[]                 @relation("MessageSender")
+  reviewsGiven              Review[]                  @relation("ReviewAuthor")
+  reviewsReceived           Review[]                  @relation("ReviewSubject")
+  transactionMembers        TransactionParticipant[]
+  housingListings           HousingListing[]
+  jobListings               JobListing[]
+  jobApplications           JobApplication[]
+  jobSaves                  JobSave[]
+  serviceListings           ServiceListing[]
+  serviceQuotes             ServiceQuote[]
+  communityPosts            CommunityPost[]
+  communityReactions        CommunityReaction[]
+  communityComments         CommunityComment[]
+  communityEvents           CommunityEvent[]
+  eventRsvps                CommunityEventRsvp[]
+  lostFoundItems            LostFoundItem[]
+  giveaways                 Giveaway[]                @relation("GiveawayAuthor")
+  claimedGiveaways          Giveaway[]                @relation("GiveawayClaimer")
+  staffRoles                StaffRoleAssignment[]
+  blocksGiven               BlockedUser[]             @relation("BlocksGiven")
+  blocksReceived            BlockedUser[]             @relation("BlocksReceived")
+  reportsFiled              Report[]                  @relation("ReportsFiled")
+  moderationActions         ModerationAction[]
+  notifications             Notification[]
+  savedSearchAlerts         SavedSearchAlert[]
+  // Milestone 7 borrowing relations. Named where one model points at the
+  // same table twice.
+  borrowedItems             BorrowRequest[]           @relation("BorrowBorrower")
+  lentItems                 BorrowRequest[]           @relation("BorrowLender")
+  borrowExtensionsRequested BorrowExtension[]         @relation("BorrowExtensionRequester")
+  borrowExtensionsDecided   BorrowExtension[]         @relation("BorrowExtensionDecider")
+  borrowConditionReports    BorrowConditionReport[]
+  borrowDisputesOpened      BorrowDispute[]
+  borrowEvidenceUploaded    BorrowDisputeEvidence[]
 }
 
 model Profile {
@@ -221,33 +491,48 @@ model Category {
 }
 
 model Listing {
-  id                String             @id @default(uuid()) @db.Uuid
-  sellerId          String             @db.Uuid
-  categoryId        String             @db.Uuid
-  title             String
-  description       String
-  priceCents        Int?
-  condition         String?
-  status            ListingStatus      @default(DRAFT)
-  neighborhood      String?
-  city              String?
-  latitude          Decimal?           @db.Decimal(9, 6)
-  longitude         Decimal?           @db.Decimal(9, 6)
-  radiusMiles       Int?
-  pickupAvailable   Boolean            @default(true)
-  deliveryAvailable Boolean            @default(false)
-  shippingAvailable Boolean            @default(false)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  deletedAt         DateTime?
-  seller            User               @relation(fields: [sellerId], references: [id])
-  category          Category           @relation(fields: [categoryId], references: [id])
-  images            ListingImage[]
-  favorites         Favorite[]
-  offerItems        OfferItem[]
-  matches           RequestMatch[]
-  priceHistory      PriceHistory[]
-  savedSearchAlerts SavedSearchAlert[]
+  id                  String                     @id @default(uuid()) @db.Uuid
+  sellerId            String                     @db.Uuid
+  categoryId          String                     @db.Uuid
+  title               String
+  description         String
+  priceCents          Int?
+  condition           String?
+  status              ListingStatus              @default(DRAFT)
+  neighborhood        String?
+  city                String?
+  latitude            Decimal?                   @db.Decimal(9, 6)
+  longitude           Decimal?                   @db.Decimal(9, 6)
+  radiusMiles         Int?
+  pickupAvailable     Boolean                    @default(true)
+  deliveryAvailable   Boolean                    @default(false)
+  shippingAvailable   Boolean                    @default(false)
+  // Milestone 7 borrowing. A listing is a marketplace item first and a
+  // borrowable item second; the flag keeps both without a second model.
+  borrowable          Boolean                    @default(false)
+  /// Hard ceiling on how long this item may be out, enforced server side.
+  maxBorrowDays       Int?
+  /// Hours of notice the lender wants before a pickup.
+  minNoticeHours      Int                        @default(12)
+  /// Handed to the borrower with the item. Never contains an address.
+  usageInstructions   String?
+  /// Stated for transparency only. No payment is ever processed here.
+  depositCents        Int?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  deletedAt           DateTime?
+  seller              User                       @relation(fields: [sellerId], references: [id])
+  category            Category                   @relation(fields: [categoryId], references: [id])
+  images              ListingImage[]
+  favorites           Favorite[]
+  offerItems          OfferItem[]
+  matches             RequestMatch[]
+  priceHistory        PriceHistory[]
+  savedSearchAlerts   SavedSearchAlert[]
+  borrowRequests      BorrowRequest[]
+  borrowReservations  BorrowReservation[]
+  availabilityWindows BorrowAvailabilityWindow[]
+  disputeEvidence     BorrowDisputeEvidence[]
 
   @@index([status, categoryId, createdAt])
   @@index([status, createdAt])
@@ -266,6 +551,9 @@ model Listing {
   @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([description(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([neighborhood(ops: raw("gin_trgm_ops"))], type: Gin)
+  // The borrow marketplace searches only borrowable, published items.
+  @@index([borrowable, status, categoryId, createdAt])
+  @@index([borrowable, sellerId, status])
 }
 
 model ListingImage {

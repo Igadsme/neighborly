@@ -26,7 +26,24 @@ const PREFERENCE_BY_TYPE: Record<string, keyof PreferenceFlags> = {
   saved_search_match: 'savedSearches',
   request_updated: 'requestUpdates',
   request_fulfilled: 'requestUpdates',
-  transaction_updated: 'requestUpdates'
+  transaction_updated: 'requestUpdates',
+  // Borrowing reuses the request-update preference: a borrower who does not
+  // want to hear about their requests does not want to hear about a loan
+  // either, and inventing a new category would silently opt them in.
+  borrow_requested: 'requestUpdates',
+  borrow_approved: 'requestUpdates',
+  borrow_declined: 'requestUpdates',
+  borrow_cancelled: 'requestUpdates',
+  borrow_pickup_scheduled: 'requestUpdates',
+  borrow_handoff_confirmed: 'requestUpdates',
+  borrow_return_requested: 'requestUpdates',
+  borrow_returned: 'requestUpdates',
+  borrow_completed: 'requestUpdates',
+  borrow_overdue: 'requestUpdates',
+  borrow_extension_requested: 'requestUpdates',
+  borrow_extension_decided: 'requestUpdates',
+  borrow_dispute_opened: 'requestUpdates',
+  borrow_dispute_updated: 'requestUpdates'
 }
 
 export interface PreferenceFlags {
@@ -224,6 +241,194 @@ export class NotificationWorker {
             title: `Exchange moved to ${String(payload.to)}`,
             link: `/transactions/${payload.transactionId}`,
             dedupe: [eventId, userId]
+          }))
+
+      // ---------------------------------------------------- borrowing
+      //
+      // Every borrow event names both parties, so the recipient is chosen by
+      // role rather than by convention: the lender hears about requests and
+      // approvals, the borrower hears about the rest, and neither is ever
+      // told about their own action.
+      case DOMAIN_EVENTS.borrowRequested:
+        return [
+          {
+            userId: String(payload.lenderId ?? ''),
+            type: 'borrow_requested',
+            title: `New borrow request for "${payload.listingTitle ?? 'your item'}"`,
+            body: 'A neighbor would like to borrow it.',
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.borrowApproved:
+        return [
+          {
+            userId: String(payload.borrowerId ?? ''),
+            type: 'borrow_approved',
+            title: `Your borrow request was approved`,
+            body: 'Arrange a pickup time with the lender.',
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.borrowDeclined:
+        return [
+          {
+            userId: String(payload.borrowerId ?? ''),
+            type: 'borrow_declined',
+            title: 'Your borrow request was declined',
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.borrowCancelled:
+        return [
+          {
+            userId: String(payload.borrowerId ?? ''),
+            type: 'borrow_cancelled',
+            title: 'A borrow request was cancelled',
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId]
+          },
+          {
+            userId: String(payload.lenderId ?? ''),
+            type: 'borrow_cancelled',
+            title: 'A borrow request was cancelled',
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId, 'lender']
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.borrowPickupScheduled:
+        return [
+          {
+            userId: String(payload.borrowerId ?? ''),
+            type: 'borrow_pickup_scheduled',
+            title: 'A pickup was scheduled',
+            // No location note: an event is addressed to a recipient, and
+            // the pickup point is only for the two participants.
+            body: `Expected ${String(payload.scheduledAt ?? '').slice(0, 16).replace('T', ' ')}`,
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId]
+          },
+          {
+            userId: String(payload.lenderId ?? ''),
+            type: 'borrow_pickup_scheduled',
+            title: 'A pickup was scheduled',
+            body: `Expected ${String(payload.scheduledAt ?? '').slice(0, 16).replace('T', ' ')}`,
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId, 'lender']
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.borrowHandoffConfirmed:
+        return [
+          {
+            userId: String(payload.borrowerId === actorId ? payload.lenderId : payload.borrowerId ?? ''),
+            type: 'borrow_handoff_confirmed',
+            title: 'The item was handed over',
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.borrowReturnRequested:
+        return [
+          {
+            userId: String(payload.lenderId ?? ''),
+            type: 'borrow_return_requested',
+            title: 'The borrower says they are returning it',
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.borrowReturned:
+        return [
+          {
+            userId: String(payload.borrowerId === actorId ? payload.lenderId : payload.borrowerId ?? ''),
+            type: 'borrow_returned',
+            title: 'The item was returned',
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.borrowCompleted:
+        return [
+          {
+            userId: String(payload.borrowerId === actorId ? payload.lenderId : payload.borrowerId ?? ''),
+            type: 'borrow_completed',
+            title: 'A borrowing is complete',
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.borrowOverdue:
+        // Both parties are told: the borrower needs the nudge, the lender
+        // needs to know the item is out late.
+        return [payload.borrowerId, payload.lenderId]
+          .map((id, index) => ({
+            userId: String(id ?? ''),
+            type: 'borrow_overdue',
+            title: 'A borrowed item is overdue',
+            body: `It was due ${String(payload.endAt ?? '').slice(0, 10)}`,
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId, String(index)]
+          }))
+          .filter(intent => intent.userId)
+
+      case DOMAIN_EVENTS.borrowExtensionRequested:
+        return [
+          {
+            userId: String(payload.lenderId ?? ''),
+            type: 'borrow_extension_requested',
+            title: 'A borrower asked for more time',
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.borrowExtensionDecided:
+        return [
+          {
+            userId: String(payload.borrowerId ?? ''),
+            type: 'borrow_extension_decided',
+            title:
+              String(payload.status) === 'APPROVED'
+                ? 'Your extension was approved'
+                : 'Your extension was declined',
+            body: `New due date ${String(payload.requestedEndAt ?? '').slice(0, 10)}`,
+            link: `/borrow/requests/${payload.borrowRequestId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.borrowDisputeOpened:
+        return [payload.lenderId, payload.borrowerId]
+          .filter(id => id && id !== actorId)
+          .map((id, index) => ({
+            userId: String(id),
+            type: 'borrow_dispute_opened',
+            title: 'A dispute was opened on this borrowing',
+            body: String(payload.reason ?? '').toLowerCase().replace('_', ' '),
+            link: `/borrow/disputes/${payload.disputeId}`,
+            dedupe: [eventId, String(index)]
+          }))
+
+      case DOMAIN_EVENTS.borrowDisputeUpdated:
+        return [payload.lenderId, payload.borrowerId]
+          .filter(id => id && id !== actorId)
+          .map((id, index) => ({
+            userId: String(id),
+            type: 'borrow_dispute_updated',
+            title: `Dispute is now ${String(payload.status ?? '').toLowerCase().replace('_', ' ')}`,
+            link: `/borrow/disputes/${payload.disputeId}`,
+            dedupe: [eventId, String(index)]
           }))
 
       case DOMAIN_EVENTS.matchFound:

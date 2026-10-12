@@ -18,6 +18,7 @@ import { JobsModule } from './jobs/jobs.module'
 import { ServicesModule } from './services/services.module'
 import { StorageModule } from './storage/storage.module'
 import { EventsModule } from './events/events.module'
+import { BorrowModule } from './borrow/borrow.module'
 import { NotificationsModule } from './notifications/notifications.module'
 
 @Module({
@@ -25,6 +26,7 @@ import { NotificationsModule } from './notifications/notifications.module'
     ConfigModule.forRoot({ isGlobal: true, cache: true, validationSchema: envValidationSchema }),
     PrismaModule,
     EventsModule,
+    BorrowModule,
     HealthModule,
     AuthModule,
     ListingsModule,

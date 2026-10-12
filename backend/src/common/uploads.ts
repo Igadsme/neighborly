@@ -3,6 +3,12 @@ import type { NextFunction, Request, Response } from 'express'
 
 const DEFAULT_TYPES = 'image/jpeg,image/png,image/webp'
 const LISTING_IMAGE_UPLOAD = /^\/api\/v1\/listings\/[0-9a-f-]{36}\/images$/i
+/**
+ * Milestone 7 adds exactly one more multipart route, for dispute evidence.
+ * It is matched narrowly on purpose: a broad rule such as "anything under
+ * /borrow" would let a file be posted to endpoints that expect JSON.
+ */
+const BORROW_EVIDENCE_UPLOAD = /^\/api\/v1\/borrow\/disputes\/[0-9a-f-]{36}\/evidence$/i
 const DEFAULT_MAX_MB = 5
 
 export function allowedImageTypes(raw = process.env.ALLOWED_IMAGE_TYPES) {
@@ -28,7 +34,7 @@ export function assertImageUpload(file: { mimetype?: string; size?: number }) {
 }
 
 /**
- * Multipart is accepted only for the listing image upload route. Every other
+ * Multipart is accepted only on the two declared upload routes. Every other
  * route still refuses it, so the JSON body parser limits and the upload
  * path limits cannot be bypassed by posting a file to an unrelated endpoint.
  */
@@ -38,10 +44,12 @@ export function allowMultipartForListingImages(req: Request, res: Response, next
   if (!type?.toLowerCase().includes('multipart/form-data')) return next()
 
   const path = (req.originalUrl ?? req.url ?? '').split('?')[0]
-  if (req.method !== 'POST' || !LISTING_IMAGE_UPLOAD.test(path)) {
+  const allowed =
+    req.method === 'POST' && (LISTING_IMAGE_UPLOAD.test(path) || BORROW_EVIDENCE_UPLOAD.test(path))
+  if (!allowed) {
     res.status(415).json({
       statusCode: 415,
-      message: 'File uploads are only accepted for listing images',
+      message: 'File uploads are only accepted for listing images and dispute evidence',
       error: 'Unsupported Media Type'
     })
     return

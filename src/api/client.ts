@@ -38,6 +38,16 @@ import type {
   ListingInput,
   ListingPage,
   ListingQueryParams,
+  BorrowAvailability,
+  PublicUserCard,
+  BorrowDispute,
+  BorrowExtension,
+  BorrowItemPage,
+  BorrowItemQuery,
+  BorrowableItem,
+  BorrowableItemInput,
+  BorrowRequest,
+  BorrowRequestInput,
   NotificationPage,
   NotificationPreferences,
   RequestMatch,
@@ -513,6 +523,139 @@ export const api = {
       }),
     deleteSavedSearch: (id: string) =>
       request<void>(`/listings/saved-searches/${id}`, { method: "DELETE" }),
+  },
+  borrow: {
+    listItems: (query: BorrowItemQuery = {}) => {
+      const params = new URLSearchParams()
+      Object.entries(query).forEach(([key, value]) => {
+        if (value === undefined || value === "" || value === null) return
+        params.set(key, String(value))
+      })
+      const text = params.toString()
+      return request<BorrowItemPage>(`/borrow/items${text ? `?${text}` : ""}`)
+    },
+    item: (listingId: string) => request<BorrowableItem>(`/borrow/items/${listingId}`),
+    myItems: () => request<BorrowableItem[]>("/borrow/items/mine"),
+    createItem: (input: BorrowableItemInput) =>
+      request<BorrowableItem>("/borrow/items", { method: "POST", body: JSON.stringify(input) }),
+    updateItem: (listingId: string, input: Partial<BorrowableItemInput>) =>
+      request<BorrowableItem>(`/borrow/items/${listingId}`, {
+        method: "PATCH",
+        body: JSON.stringify(input)
+      }),
+    publish: (listingId: string) =>
+      request<BorrowableItem>(`/borrow/items/${listingId}/publish`, { method: "POST" }),
+    unpublish: (listingId: string) =>
+      request<BorrowableItem>(`/borrow/items/${listingId}/unpublish`, { method: "POST" }),
+    archive: (listingId: string) =>
+      request<BorrowableItem>(`/borrow/items/${listingId}/archive`, { method: "POST" }),
+
+    availability: (listingId: string) =>
+      request<BorrowAvailability>(`/borrow/items/${listingId}/availability`),
+    addWindow: (listingId: string, input: { kind: string; startsAt: string; endsAt: string; note?: string }) =>
+      request<unknown>(`/borrow/items/${listingId}/availability`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    removeWindow: (listingId: string, windowId: string) =>
+      request<unknown>(`/borrow/items/${listingId}/availability/${windowId}`, { method: "DELETE" }),
+
+    listRequests: (query: { scope?: "borrowed" | "lent" | "all"; status?: string; overdueOnly?: boolean } = {}) => {
+      const params = new URLSearchParams()
+      Object.entries(query).forEach(([key, value]) => {
+        if (value === undefined || value === "" || value === null) return
+        params.set(key, String(value))
+      })
+      const text = params.toString()
+      return request<BorrowRequest[]>(`/borrow/requests${text ? `?${text}` : ""}`)
+    },
+    request: (requestId: string) => request<BorrowRequest>(`/borrow/requests/${requestId}`),
+    createRequest: (listingId: string, input: BorrowRequestInput) =>
+      request<BorrowRequest>(`/borrow/items/${listingId}/requests`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    updateRequest: (requestId: string, input: Partial<BorrowRequestInput>) =>
+      request<BorrowRequest>(`/borrow/requests/${requestId}`, {
+        method: "PATCH",
+        body: JSON.stringify(input)
+      }),
+    approve: (requestId: string, note?: string) =>
+      request<BorrowRequest>(`/borrow/requests/${requestId}/approve`, {
+        method: "POST",
+        body: JSON.stringify({ note })
+      }),
+    decline: (requestId: string, note?: string) =>
+      request<BorrowRequest>(`/borrow/requests/${requestId}/decline`, {
+        method: "POST",
+        body: JSON.stringify({ note })
+      }),
+    cancel: (requestId: string) =>
+      request<BorrowRequest>(`/borrow/requests/${requestId}/cancel`, { method: "POST" }),
+
+    schedulePickup: (requestId: string, input: { scheduledAt: string; locationNote?: string }) =>
+      request<unknown>(`/borrow/requests/${requestId}/pickup`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    confirmPickup: (requestId: string, input: { condition?: string; notes?: string } = {}) =>
+      request<{ completed: boolean; awaiting?: string }>(`/borrow/requests/${requestId}/pickup/confirm`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    cancelPickup: (requestId: string) =>
+      request<unknown>(`/borrow/requests/${requestId}/pickup/cancel`, { method: "POST" }),
+
+    requestReturn: (requestId: string, scheduledAt?: string) =>
+      request<BorrowRequest>(`/borrow/requests/${requestId}/return`, {
+        method: "POST",
+        body: JSON.stringify({ scheduledAt })
+      }),
+    confirmReturn: (requestId: string, input: { condition?: string; notes?: string } = {}) =>
+      request<{ completed: boolean; awaiting?: string }>(`/borrow/requests/${requestId}/return/confirm`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    complete: (requestId: string) =>
+      request<BorrowRequest>(`/borrow/requests/${requestId}/complete`, { method: "POST" }),
+    recordCondition: (requestId: string, input: { phase: string; condition: string; notes?: string }) =>
+      request<unknown>(`/borrow/requests/${requestId}/condition`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+
+    requestExtension: (requestId: string, input: { requestedEndAt: string; reason?: string }) =>
+      request<BorrowExtension>(`/borrow/requests/${requestId}/extensions`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    approveExtension: (extensionId: string, note?: string) =>
+      request<BorrowExtension>(`/borrow/extensions/${extensionId}/approve`, {
+        method: "POST",
+        body: JSON.stringify({ note })
+      }),
+    rejectExtension: (extensionId: string, note?: string) =>
+      request<BorrowExtension>(`/borrow/extensions/${extensionId}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ note })
+      }),
+
+    listDisputes: () => request<BorrowDispute[]>("/borrow/disputes"),
+    dispute: (disputeId: string) =>
+      request<BorrowDispute & { events: Array<{ toStatus: string; createdAt: string }> }>(
+        `/borrow/disputes/${disputeId}`
+      ),
+    openDispute: (requestId: string, input: { reason: string; summary: string }) =>
+      request<BorrowDispute>(`/borrow/requests/${requestId}/disputes`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    listEvidence: (disputeId: string) =>
+      request<Array<{ id: string; note?: string | null; contentType: string; createdAt: string; uploadedBy: PublicUserCard }>>(
+        `/borrow/disputes/${disputeId}/evidence`
+      ),
+    uploadEvidenceUrl: (disputeId: string, evidenceId: string) =>
+      `/api/v1/borrow/evidence/${evidenceId}/file`,
   },
   notifications: {
     list: (query: { unreadOnly?: boolean; limit?: number; offset?: number } = {}) => {

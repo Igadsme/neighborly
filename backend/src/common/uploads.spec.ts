@@ -24,7 +24,7 @@ describe('upload restrictions', () => {
   it('rejects multipart bodies because no upload route is mounted', () => {
     const json = jest.fn()
     const res = { status: jest.fn(() => ({ json })) } as unknown as Response
-    const next = jest.fn() as NextFunction
+    const next = jest.fn()
     // Multipart is now accepted, but only on the listing image route.
     allowMultipartForListingImages(
       {
@@ -51,7 +51,10 @@ describe('upload restrictions', () => {
     )
     expect(denied).not.toHaveBeenCalled()
     expect(deniedJson).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 415, message: 'File uploads are only accepted for listing images' })
+      expect.objectContaining({
+        statusCode: 415,
+        message: 'File uploads are only accepted for listing images and dispute evidence'
+      })
     )
 
     // A GET to the upload path is still refused.
@@ -74,5 +77,53 @@ describe('upload restrictions', () => {
       pass
     )
     expect(pass).toHaveBeenCalled()
+  })
+})
+
+describe('multipart is allowed on exactly two routes', () => {
+  const next = jest.fn()
+  function attempt(method: string, originalUrl: string) {
+    const json = jest.fn()
+    allowMultipartForListingImages(
+      { method, originalUrl, headers: { 'content-type': 'multipart/form-data; boundary=abc' } } as Request,
+      { status: jest.fn(() => ({ json })) } as unknown as Response,
+      next as unknown as NextFunction
+    )
+    return { nextCalled: next.mock.calls.length > 0, json }
+  }
+
+  beforeEach(() => next.mockClear())
+
+  it('accepts a dispute evidence upload', () => {
+    const { nextCalled } = attempt(
+      'POST',
+      '/api/v1/borrow/disputes/11111111-1111-4111-8111-111111111111/evidence'
+    )
+    expect(nextCalled).toBe(true)
+  })
+
+  it('refuses a file posted to an unrelated borrow route', () => {
+    const { nextCalled, json } = attempt(
+      'POST',
+      '/api/v1/borrow/requests/11111111-1111-4111-8111-111111111111/approve'
+    )
+    expect(nextCalled).toBe(false)
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 415 }))
+  })
+
+  it('refuses an evidence upload whose id is not a uuid', () => {
+    // A broad prefix match would let any string reach the file handler.
+    const { nextCalled, json } = attempt('POST', '/api/v1/borrow/disputes/not-a-uuid/evidence')
+    expect(nextCalled).toBe(false)
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 415 }))
+  })
+
+  it('refuses an evidence read, since only the upload route accepts a file', () => {
+    const { nextCalled, json } = attempt(
+      'GET',
+      '/api/v1/borrow/disputes/11111111-1111-4111-8111-111111111111/evidence'
+    )
+    expect(nextCalled).toBe(false)
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 415 }))
   })
 })

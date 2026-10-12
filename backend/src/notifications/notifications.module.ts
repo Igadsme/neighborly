@@ -1,4 +1,6 @@
 import { Injectable, Logger, Module, OnModuleInit } from '@nestjs/common'
+import { BorrowModule } from '../borrow/borrow.module'
+import { BorrowService } from '../borrow/borrow.service'
 import { MessagingGateway } from '../messaging/messaging.gateway'
 import { MessagingModule } from '../messaging/messaging.module'
 import { NotificationWorker } from './notification-worker'
@@ -24,11 +26,14 @@ export class NotificationDispatcher implements OnModuleInit {
   private lastSavedSearchRun = 0
   private readonly savedSearchIntervalMs = Number(process.env.SAVED_SEARCH_POLL_MS ?? 60_000)
   private readonly pollMs = Number(process.env.NOTIFICATION_POLL_MS ?? 5000)
+  private lastOverdueRun = 0
+  private readonly overdueIntervalMs = Number(process.env.BORROW_OVERDUE_POLL_MS ?? 300_000)
 
   constructor(
     private readonly worker: NotificationWorker,
     private readonly savedSearch: SavedSearchAlertWorker,
-    private readonly gateway: MessagingGateway
+    private readonly gateway: MessagingGateway,
+    private readonly borrow: BorrowService
   ) {}
 
   onModuleInit() {
@@ -73,7 +78,29 @@ export class NotificationDispatcher implements OnModuleInit {
         this.logger.error('saved-search evaluation failed', error as Error)
       }
     }
+    // The overdue sweep is slower than the outbox drain because it changes
+    // nothing when nothing is due. Its correctness comes from the conditional
+    // claim inside the service, not from how often it runs, so a restart in
+    // the middle of a sweep is safe.
+    const nowMs = Date.now()
+    if (nowMs - this.lastOverdueRun >= this.overdueIntervalMs) {
+      this.lastOverdueRun = nowMs
+      try {
+        const overdue = await this.borrow.sweepOverdue(new Date(nowMs))
+        if (overdue > 0) this.logger.log(`marked ${overdue} borrowings overdue`)
+      } catch (error) {
+        this.logger.error('borrow overdue sweep failed', error as Error)
+      }
+    }
     return processed
+  }
+
+  /**
+   * Runs the overdue sweep on demand. Exposed so a test or a cron trigger can
+   * assert the result without waiting for the interval.
+   */
+  async runOverdueSweep(now = new Date()): Promise<number> {
+    return this.borrow.sweepOverdue(now)
   }
 
   /**
@@ -91,7 +118,7 @@ export class NotificationDispatcher implements OnModuleInit {
 }
 
 @Module({
-  imports: [MessagingModule],
+  imports: [MessagingModule, BorrowModule],
   controllers: [NotificationsController],
   providers: [NotificationsService, NotificationWorker, SavedSearchAlertWorker, NotificationDispatcher],
   exports: [NotificationsService, NotificationWorker, SavedSearchAlertWorker, NotificationDispatcher]

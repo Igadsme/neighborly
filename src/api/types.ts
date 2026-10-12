@@ -375,6 +375,168 @@ export interface PublicUserCard {
   } | null
 }
 
+export interface BorrowItemQuery {
+  query?: string
+  categoryId?: string
+  city?: string
+  neighborhood?: string
+  latitude?: number
+  longitude?: number
+  radiusMiles?: number
+  availableNow?: boolean
+  sort?: string
+  limit?: number
+  offset?: number
+}
+
+export interface BorrowableItemInput {
+  categoryId: string
+  title: string
+  description: string
+  usageInstructions: string
+  condition?: string
+  maxBorrowDays?: number
+  minNoticeHours?: number
+  depositCents?: number
+  neighborhood?: string
+  city?: string
+  latitude?: number
+  longitude?: number
+  radiusMiles?: number
+  publish?: boolean
+}
+
+export interface BorrowRequestInput {
+  startAt: string
+  endAt: string
+  message?: string
+}
+
+export type BorrowRequestStatus =
+  | "REQUESTED"
+  | "APPROVED"
+  | "DECLINED"
+  | "PICKUP_SCHEDULED"
+  | "CHECKED_OUT"
+  | "RETURN_REQUESTED"
+  | "RETURNED"
+  | "COMPLETED"
+  | "OVERDUE"
+  | "CANCELLED"
+  | "DISPUTED"
+
+export type BorrowRole = "borrower" | "lender"
+
+export interface BorrowableItem {
+  id: string
+  sellerId: string
+  categoryId: string
+  title: string
+  description: string
+  condition?: string | null
+  priceCents?: number | null
+  status: string
+  borrowable: boolean
+  maxBorrowDays?: number | null
+  minNoticeHours?: number
+  usageInstructions?: string | null
+  depositCents?: number | null
+  neighborhood?: string | null
+  city?: string | null
+  /** Coordinates are never returned; this is a rounded area only. */
+  hasCoordinates?: boolean
+  approximateLocation?: { lat: number; lng: number } | null
+  viewerIsOwner?: boolean
+  createdAt: string
+  updatedAt?: string
+  seller: PublicUserCard
+  category?: { id: string; name: string; slug: string } | null
+  images?: Array<{ id: string; objectKey: string; sortOrder: number }>
+}
+
+export interface BorrowItemPage {
+  items: BorrowableItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface BorrowHandoff {
+  id: string
+  kind: "PICKUP" | "RETURN"
+  scheduledAt?: string | null
+  /** Only ever populated for the two participants. */
+  locationNote?: string | null
+  borrowerConfirmedAt?: string | null
+  lenderConfirmedAt?: string | null
+  completedAt?: string | null
+  cancelledAt?: string | null
+}
+
+export interface BorrowConditionReport {
+  id: string
+  phase: "BEFORE" | "AFTER"
+  condition: string
+  notes?: string | null
+  createdAt: string
+  reportedBy: PublicUserCard
+}
+
+export interface BorrowExtension {
+  id: string
+  status: "REQUESTED" | "APPROVED" | "REJECTED"
+  requestedEndAt: string
+  previousEndAt: string
+  reason?: string | null
+  createdAt: string
+}
+
+export interface BorrowDispute {
+  id: string
+  borrowRequestId: string
+  reason: string
+  status: "OPEN" | "UNDER_REVIEW" | "RESOLVED" | "CLOSED"
+  summary: string
+  resolution?: string | null
+  createdAt: string
+  openedBy: PublicUserCard
+}
+
+export interface BorrowRequest {
+  id: string
+  listingId: string
+  lenderId: string
+  borrowerId: string
+  status: BorrowRequestStatus
+  /** The caller's side of this borrowing. */
+  role: BorrowRole
+  startAt: string
+  endAt: string
+  originalEndAt: string
+  message?: string | null
+  depositCents?: number | null
+  approvedAt?: string | null
+  checkedOutAt?: string | null
+  returnedAt?: string | null
+  completedAt?: string | null
+  createdAt: string
+  listing: BorrowableItem
+  /** The other party, projected publicly. */
+  borrower?: PublicUserCard
+  handoffs?: BorrowHandoff[]
+  extensions?: BorrowExtension[]
+  conditionReports?: BorrowConditionReport[]
+  disputes?: BorrowDispute[]
+  events?: Array<{ toStatus: BorrowRequestStatus; fromStatus?: string | null; note?: string | null; createdAt: string }>
+}
+
+export interface BorrowAvailability {
+  minNoticeHours: number
+  windows: Array<{ id: string; kind: "UNAVAILABLE" | "AVAILABLE"; startsAt: string; endsAt: string; note?: string | null }>
+  /** Booked dates only: the calendar never says who booked them. */
+  reserved: Array<{ startAt: string; endAt: string }>
+}
+
 export interface ApiRequestSummary {
   categoryId?: string
   minBudgetCents?: number | null

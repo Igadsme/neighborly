@@ -22,6 +22,12 @@ import ResetPassword from "./pages/account/ResetPassword"
 import VerifyEmail from "./pages/account/VerifyEmail"
 import CreateListingFlow from "./pages/marketplace/CreateListingFlow"
 import MyListings from "./pages/marketplace/MyListings"
+import BorrowDetail from "./pages/borrow/BorrowDetail"
+import BorrowItemForm from "./pages/borrow/BorrowItemForm"
+import BorrowItemScreen from "./pages/borrow/BorrowItemScreen"
+import BorrowLists from "./pages/borrow/BorrowLists"
+import BorrowMarketplace from "./pages/borrow/BorrowMarketplace"
+import DisputeCenter from "./pages/borrow/DisputeCenter"
 import MyRequests from "./pages/requests/MyRequests"
 import NotificationCenter from "./pages/notifications/NotificationCenter"
 import NotificationPreferencesScreen from "./pages/notifications/NotificationPreferencesScreen"
@@ -30,7 +36,7 @@ import RequestDetail from "./pages/requests/RequestDetail"
 import RequestFeed from "./pages/requests/RequestFeed"
 import RequestForm from "./pages/requests/RequestForm"
 import { api, onSessionExpired, readStatus } from "./api/client"
-import { Alert } from "./components/account-ui"
+import { Alert, secondaryButton } from "./components/account-ui"
 import type { ApiRequestSummary } from "./api/types"
 import { unreadConversations } from "./lib/activity"
 
@@ -59,6 +65,13 @@ type Page =
   | "create-marketplace"
   | "requests"
   | "my-requests"
+  | "borrow"
+  | "borrow-item"
+  | "borrow-create"
+  | "borrow-edit"
+  | "borrow-detail"
+  | "borrow-lent"
+  | "borrow-dispute"
   | "notifications"
   | "notification-preferences"
   | "saved-searches"
@@ -121,12 +134,64 @@ function EditRequestRoute({
   )
 }
 
+/**
+ * Loads the item being edited. Split out so the edit screen only fetches
+ * when that route is actually opened.
+ */
+function EditBorrowItemRoute({
+  listingId,
+  categories,
+  onNavigate,
+}: {
+  listingId: string | null
+  categories: Array<{ id: string; name: string }>
+  onNavigate: (page: string, id?: string) => void
+}) {
+  const [item, setItem] = useState<import("./api/types").BorrowableItem | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!listingId) return
+    api.borrow
+      .item(listingId)
+      .then(setItem)
+      .catch(cause => setError(readStatus(cause, "That item could not be loaded.")))
+  }, [listingId])
+
+  if (error) {
+    return (
+      <main className="mx-auto w-full max-w-2xl px-6 py-16 space-y-4">
+        <Alert tone="error">{error}</Alert>
+        <button type="button" className={secondaryButton()} onClick={() => onNavigate("borrow-lent")}>
+          Back to my items
+        </button>
+      </main>
+    )
+  }
+  if (!item) {
+    return (
+      <main className="mx-auto w-full max-w-2xl px-6 py-16">
+        <Alert tone="info">Loading item…</Alert>
+      </main>
+    )
+  }
+  return (
+    <BorrowItemForm
+      existing={item}
+      categories={categories}
+      onNavigate={onNavigate}
+      onDone={saved => onNavigate("borrow-item", saved.id)}
+    />
+  )
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>("landing")
   const [listingId, setListingId] = useState<string | null>(null)
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [profileUserId, setProfileUserId] = useState<string | null>(null)
   const [requestId, setRequestId] = useState<string | null>(null)
+  const [disputeId, setDisputeId] = useState<string | null>(null)
   const [isSignedIn, setIsSignedIn] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
   const [viewerId, setViewerId] = useState<string | null>(null)
@@ -147,6 +212,11 @@ export default function App() {
     // Request routes reuse the id slot, so a deep link to a request keeps
     // its own addressable id.
     if (p === "request-detail" || p === "request-edit") setRequestId(id ?? null)
+    // Borrow routes reuse the same id slot, so a notification deep link to a
+    // borrowing lands on the right record.
+    if (p === "borrow-item" || p === "borrow-edit") setRequestId(id ?? null)
+    if (p === "borrow-detail") setRequestId(id ?? null)
+    if (p === "borrow-dispute") setDisputeId(id ?? null)
     setPage(p as Page)
     window.scrollTo({ top: 0, behavior: "instant" })
   }, [])
@@ -373,6 +443,41 @@ export default function App() {
           <SavedSearches onNavigate={navigate} />
         )}
 
+        {page === "borrow" && isSignedIn && <BorrowMarketplace onNavigate={navigate} />}
+
+        {page === "borrow-lent" && isSignedIn && <BorrowLists onNavigate={navigate} />}
+
+        {page === "borrow-item" && isSignedIn && (
+          <BorrowItemScreen listingId={requestId ?? ""} viewerId={viewerId} onNavigate={navigate} />
+        )}
+
+        {page === "borrow-create" && isSignedIn && (
+          <BorrowItemForm
+            categories={categories}
+            onNavigate={navigate}
+            onDone={created => {
+              setNotice(`"${created.title}" is listed for borrowing.`)
+              navigate("borrow-item", created.id)
+            }}
+          />
+        )}
+
+        {page === "borrow-edit" && isSignedIn && (
+          <EditBorrowItemRoute
+            listingId={requestId}
+            categories={categories}
+            onNavigate={navigate}
+          />
+        )}
+
+        {page === "borrow-detail" && isSignedIn && (
+          <BorrowDetail requestId={requestId ?? ""} onNavigate={navigate} />
+        )}
+
+        {page === "borrow-dispute" && isSignedIn && (
+          <DisputeCenter disputeId={disputeId ?? undefined} onNavigate={navigate} />
+        )}
+
         {page === "my-listings" && isSignedIn && (
           <MyListings onNavigate={navigate} />
         )}
@@ -467,6 +572,12 @@ export default function App() {
           page !== "notifications" &&
           page !== "notification-preferences" &&
           page !== "saved-searches" &&
+          page !== "borrow" &&
+          page !== "borrow-item" &&
+          page !== "borrow-create" &&
+          page !== "borrow-edit" &&
+          page !== "borrow-detail" &&
+          page !== "borrow-dispute" &&
           page !== "create-marketplace" && (
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">

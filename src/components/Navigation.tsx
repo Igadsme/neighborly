@@ -30,6 +30,13 @@ type Page =
   | "request-create"
   | "request-edit"
   | "request-detail"
+  | "borrow"
+  | "borrow-item"
+  | "borrow-create"
+  | "borrow-edit"
+  | "borrow-detail"
+  | "borrow-lent"
+  | "borrow-dispute"
   | "notifications"
   | "notification-preferences"
   | "saved-searches"
@@ -278,6 +285,12 @@ export default function Navigation({
                         className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#8A9AB5] transition-colors"
                       >
                         My requests
+                      </button>
+                      <button
+                        onClick={() => onNavigate("borrow-lent")}
+                        className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#8A9AB5] transition-colors"
+                      >
+                        Borrowing
                       </button>
                       <button
                         onClick={onSignOut}

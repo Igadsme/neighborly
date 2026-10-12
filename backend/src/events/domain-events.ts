@@ -26,7 +26,22 @@ export const DOMAIN_EVENTS = {
   offerUpdated: 'offer.updated',
   offerAccepted: 'offer.accepted',
   offerRejected: 'offer.rejected',
-  transactionStatusChanged: 'transaction.status_changed'
+  transactionStatusChanged: 'transaction.status_changed',
+  // Milestone 7 borrowing.
+  borrowRequested: 'borrow.requested',
+  borrowApproved: 'borrow.approved',
+  borrowDeclined: 'borrow.declined',
+  borrowCancelled: 'borrow.cancelled',
+  borrowPickupScheduled: 'borrow.pickup_scheduled',
+  borrowHandoffConfirmed: 'borrow.handoff_confirmed',
+  borrowReturnRequested: 'borrow.return_requested',
+  borrowReturned: 'borrow.returned',
+  borrowCompleted: 'borrow.completed',
+  borrowOverdue: 'borrow.overdue',
+  borrowExtensionRequested: 'borrow.extension_requested',
+  borrowExtensionDecided: 'borrow.extension_decided',
+  borrowDisputeOpened: 'borrow.dispute_opened',
+  borrowDisputeUpdated: 'borrow.dispute_updated'
 } as const
 
 export type DomainEventType = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS]
@@ -106,6 +121,80 @@ export interface OfferRejectedPayload {
   offererId: string
 }
 
+/**
+ * Borrowing payloads.
+ *
+ * Two invariants apply to every one of them. First, only ids and fields the
+ * recipient already has access to: a pickup location note lives on the
+ * handoff, never in an event, because an event is addressed by recipient
+ * rather than by a page they chose to open. Second, `actorId` is explicit,
+ * so a consumer never has to guess whether to suppress a self-notification.
+ */
+export interface BorrowRequestedPayload {
+  borrowRequestId: string
+  listingId: string
+  listingTitle: string
+  lenderId: string
+  borrowerId: string
+  startAt: string
+  endAt: string
+}
+
+export interface BorrowDecisionPayload {
+  borrowRequestId: string
+  listingId: string
+  lenderId: string
+  borrowerId: string
+  from: string
+  to: string
+}
+
+export interface BorrowPickupScheduledPayload {
+  borrowRequestId: string
+  listingId: string
+  lenderId: string
+  borrowerId: string
+  /** When the handoff is expected. The location note is deliberately absent. */
+  scheduledAt: string
+}
+
+export interface BorrowHandoffConfirmedPayload {
+  borrowRequestId: string
+  listingId: string
+  lenderId: string
+  borrowerId: string
+  kind: string
+}
+
+export interface BorrowOverduePayload {
+  borrowRequestId: string
+  listingId: string
+  lenderId: string
+  borrowerId: string
+  endAt: string
+  daysOverdue: number
+}
+
+export interface BorrowExtensionPayload {
+  borrowRequestId: string
+  listingId: string
+  lenderId: string
+  borrowerId: string
+  extensionId: string
+  status: string
+  requestedEndAt: string
+}
+
+export interface BorrowDisputePayload {
+  borrowRequestId: string
+  listingId: string
+  lenderId: string
+  borrowerId: string
+  disputeId: string
+  reason: string
+  status: string
+}
+
 export interface TransactionStatusChangedPayload {
   transactionId: string
   from: string
@@ -125,6 +214,20 @@ export interface DomainEventPayloads {
   'offer.accepted': OfferAcceptedPayload
   'offer.rejected': OfferRejectedPayload
   'transaction.status_changed': TransactionStatusChangedPayload
+  'borrow.requested': BorrowRequestedPayload
+  'borrow.approved': BorrowDecisionPayload
+  'borrow.declined': BorrowDecisionPayload
+  'borrow.cancelled': BorrowDecisionPayload
+  'borrow.pickup_scheduled': BorrowPickupScheduledPayload
+  'borrow.handoff_confirmed': BorrowHandoffConfirmedPayload
+  'borrow.return_requested': BorrowDecisionPayload
+  'borrow.returned': BorrowHandoffConfirmedPayload
+  'borrow.completed': BorrowDecisionPayload
+  'borrow.overdue': BorrowOverduePayload
+  'borrow.extension_requested': BorrowExtensionPayload
+  'borrow.extension_decided': BorrowExtensionPayload
+  'borrow.dispute_opened': BorrowDisputePayload
+  'borrow.dispute_updated': BorrowDisputePayload
 }
 
 /**
