@@ -40,6 +40,25 @@ describe('RequestsService accept path', () => {
           if (!offer) return null
           offer.status = data.status
           return offer
+        },
+        updateMany: async ({
+          where,
+          data
+        }: {
+          where: { id: string; status?: { in: OfferStatus[] } }
+          data: { status: OfferStatus }
+        }) => {
+          const offer = state.offers.find(
+            row => row.id === where.id && (where.status?.in ?? []).includes(row.status)
+          )
+          if (!offer) return { count: 0 }
+          offer.status = data.status
+          return { count: 1 }
+        },
+        findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
+          const offer = state.offers.find(row => row.id === where.id)
+          if (!offer) throw new Error('Record not found')
+          return offer
         }
       },
       conversation: {
@@ -212,7 +231,8 @@ describe('RequestsService public reads', () => {
     await service.list()
 
     const query = findMany.mock.calls[0][0]
-    expect(query.include.requester).toEqual(publicRequester)
+    expect(query.select.requester).toEqual(publicRequester)
+    expect(query.select.offers.select).toEqual({ id: true, status: true })
     const serialized = JSON.stringify(query)
     expect(serialized).not.toContain('passwordHash')
     expect(serialized).not.toContain('email')
@@ -232,9 +252,9 @@ describe('RequestsService public reads', () => {
 
     const query = findFirst.mock.calls[0][0]
     expect(query.where).toEqual({ id: 'request-1', status: 'PUBLISHED', deletedAt: null })
-    expect(query.include.requester).toEqual(publicRequester)
-    expect(query.include.offers.include.offerer).toEqual(publicRequester)
-    expect(query.include.offers.include.items.include.listing.select).toEqual({
+    expect(query.select.requester).toEqual(publicRequester)
+    expect(query.select.offers.include.offerer).toEqual(publicRequester)
+    expect(query.select.offers.include.items.include.listing.select).toEqual({
       id: true,
       title: true,
       priceCents: true,

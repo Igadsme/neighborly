@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
+import { OptionalAuthGuard } from '../auth/optional-auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
 import { enforceRateLimit } from '../common/rate-limit'
 import { CounterOfferDto, CreateOfferDto, CreateRequestDto, ListOffersQuery } from './dto'
@@ -22,7 +23,10 @@ export class RequestsController {
   }
 
   @Get(':id')
-  get(@Param('id') id: string) { return this.requests.get(id) }
+  @UseGuards(OptionalAuthGuard)
+  get(@Req() req: { user?: { id: string } }, @Param('id') id: string) {
+    return this.requests.get(id, req.user?.id)
+  }
 
   @Post()
   @ApiBearerAuth()

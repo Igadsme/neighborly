@@ -1,16 +1,11 @@
 import { PrismaClient } from '@prisma/client'
 import * as argon2 from 'argon2'
+import { bootstrapCategories } from './bootstrap'
 
 const prisma = new PrismaClient()
 
 // Local fixture password only. Not a production credential.
 const SEED_PASSWORD = 'neighborly-local-seed'
-
-const categories = [
-  'Furniture', 'Electronics', 'Clothing & Accessories', 'Vehicles', 'Sports & Outdoors',
-  'Toys & Games', 'Books & Media', 'Home & Garden', 'Tools & Equipment',
-  'Musical Instruments', 'Art & Collectibles', 'Housing', 'Services', 'Jobs', 'Other'
-]
 
 const users = {
   marcus: person('10000000-0000-4000-8000-000000000001', 'Marcus', 'Johnson', 'Decatur'),
@@ -898,13 +893,8 @@ async function seedMarketplace() {
 }
 
 async function main() {
-  for (const name of categories) {
-    await prisma.category.upsert({
-      where: { name },
-      update: {},
-      create: { name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') }
-    })
-  }
+  // Reference data first: idempotent, safe in every environment.
+  await bootstrapCategories(prisma)
 
   const passwordHash = await argon2.hash(SEED_PASSWORD)
   await seedUsers(passwordHash)

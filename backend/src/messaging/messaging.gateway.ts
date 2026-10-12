@@ -51,6 +51,16 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection {
     const conversationId = conversationIdFrom(body)
     if (!conversationId) throw new WsException('Conversation id is required')
 
+    // Room membership revalidates the session: an expired access
+    // token or a deactivated account loses room access even on a
+    // long-lived socket connection.
+    const tokenExp = client.data?.tokenExp
+    if (typeof tokenExp === 'number' && tokenExp * 1000 <= Date.now()) {
+      throw new WsException('Access token expired')
+    }
+    const account = await this.prisma.user.findUnique({ where: { id: userId }, select: accountSelect })
+    if (!isActiveAccount(account)) throw new WsException('Account is not active')
+
     const participant = await this.prisma.conversationParticipant.findUnique({
       where: { conversationId_userId: { conversationId, userId } }
     })
@@ -75,6 +85,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection {
     const account = await this.prisma.user.findUnique({ where: { id: claims.sub }, select: accountSelect })
     if (!isActiveAccount(account)) throw new Error('Unauthorized')
     socket.data.userId = claims.sub
+    socket.data.tokenExp = claims.exp
   }
 }
 

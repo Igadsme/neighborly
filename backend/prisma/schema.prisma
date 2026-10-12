@@ -398,6 +398,7 @@ model Transaction {
   appointments   Appointment[]
   reviews        Review[]
 
+  @@unique([offerId])
   @@index([updatedAt])
 }
 
