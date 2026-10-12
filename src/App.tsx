@@ -23,6 +23,9 @@ import VerifyEmail from "./pages/account/VerifyEmail"
 import CreateListingFlow from "./pages/marketplace/CreateListingFlow"
 import MyListings from "./pages/marketplace/MyListings"
 import MyRequests from "./pages/requests/MyRequests"
+import NotificationCenter from "./pages/notifications/NotificationCenter"
+import NotificationPreferencesScreen from "./pages/notifications/NotificationPreferencesScreen"
+import SavedSearches from "./pages/notifications/SavedSearches"
 import RequestDetail from "./pages/requests/RequestDetail"
 import RequestFeed from "./pages/requests/RequestFeed"
 import RequestForm from "./pages/requests/RequestForm"
@@ -56,6 +59,9 @@ type Page =
   | "create-marketplace"
   | "requests"
   | "my-requests"
+  | "notifications"
+  | "notification-preferences"
+  | "saved-searches"
   | "request-create"
   | "request-edit"
   | "request-detail"
@@ -276,6 +282,7 @@ export default function App() {
           onNavigate={navigate}
           unreadMessages={unreadMessages}
           onSignOut={signOut}
+          onNavigateRoute={navigate}
         />
       )}
 
@@ -352,6 +359,18 @@ export default function App() {
 
         {page === "request-detail" && isSignedIn && (
           <RequestDetail requestId={requestId ?? ""} viewerId={viewerId} onNavigate={navigate} />
+        )}
+
+        {page === "notifications" && isSignedIn && (
+          <NotificationCenter onNavigate={navigate} />
+        )}
+
+        {page === "notification-preferences" && isSignedIn && (
+          <NotificationPreferencesScreen onNavigate={navigate} />
+        )}
+
+        {page === "saved-searches" && isSignedIn && (
+          <SavedSearches onNavigate={navigate} />
         )}
 
         {page === "my-listings" && isSignedIn && (
@@ -445,6 +464,9 @@ export default function App() {
           page !== "requests" &&
           page !== "request-create" &&
           page !== "request-detail" &&
+          page !== "notifications" &&
+          page !== "notification-preferences" &&
+          page !== "saved-searches" &&
           page !== "create-marketplace" && (
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">

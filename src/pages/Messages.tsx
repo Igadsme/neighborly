@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { subscribeRealtime } from '../lib/realtime'
 import { Avatar, Badge, EmptyState, Icon } from '../components/ui'
 import { api, readError, readStatus } from '../api/client'
 import type { ApiConversation, ApiMessage, ApiOfferDetail, ApiTransaction } from '../api/types'
@@ -35,8 +36,42 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
   const [offerError, setOfferError] = useState('')
   const [acting, setActing] = useState(false)
   const [counterArmed, setCounterArmed] = useState(false)
+  const MESSAGE_PAGE = 50
   const [reloadKey, setReloadKey] = useState(0)
   const composerRef = useRef<HTMLTextAreaElement>(null)
+  const [hasMoreMessages, setHasMoreMessages] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  // Refetch trigger. A plain counter keeps the existing load effect intact.
+  const bumpReload = useCallback(() => setReloadKey(current => current + 1), [])
+
+  /**
+   * Loads the page of history older than what is on screen. Keyed on the
+   * oldest message id rather than an offset, so a message arriving while
+   * someone is scrolling cannot make the next page skip or repeat a row.
+   */
+  const loadOlder = useCallback(async () => {
+    if (!selected || loadingOlder || !hasMoreMessages) return
+    setLoadingOlder(true)
+    try {
+      const oldest = messages[0]
+      const older = await api.conversations.messages(selected, {
+        limit: MESSAGE_PAGE,
+        before: oldest?.id
+      })
+      // De-duplicate by id: an event delivered between the page request and
+      // the response must not render the same row twice.
+      setMessages(current => {
+        const seen = new Set(current.map(row => row.id))
+        return [...older.filter(row => !seen.has(row.id)), ...current]
+      })
+      const page = await api.conversations.hasMoreMessages(selected, oldest?.id)
+      setHasMoreMessages(page.hasMore)
+    } catch (cause) {
+      setSendError(readError(cause, 'Earlier messages could not be loaded.'))
+    } finally {
+      setLoadingOlder(false)
+    }
+  }, [selected, loadingOlder, hasMoreMessages, messages])
 
   useEffect(() => {
     let active = true
@@ -69,6 +104,37 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
     }
   }, [reloadKey])
 
+  // Realtime is a *signal*, never the source of truth: an incoming message or
+  // a reconnect triggers a refetch of persisted state. That is what prevents
+  // a duplicate message after a reconnect or an event delivered twice.
+  useEffect(() => {
+    let active = true
+    const subscription = subscribeRealtime({
+      onMessage: payload => {
+        const conversationId = (payload as { conversationId?: string }).conversationId
+        // Ignore traffic for a conversation the viewer is not in; the
+        // server already authorizes delivery, this avoids a needless refetch.
+        if (!active) return
+        if (conversationId && conversationId !== selected) {
+          if (conversations.some(conv => conv.id === conversationId)) bumpReload()
+          return
+        }
+        bumpReload()
+      },
+      onUnread: payload => {
+        if (!active) return
+        if (payload.conversationId === selected) bumpReload()
+      },
+      onReconnect: () => {
+        if (active) bumpReload()
+      }
+    })
+    return () => {
+      active = false
+      subscription.disconnect()
+    }
+  }, [selected, conversations, bumpReload])
+
   useEffect(() => {
     if (!conversations.length) {
       setSelected('')
@@ -84,17 +150,24 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
   useEffect(() => {
     if (!selected) {
       setMessages([])
+      setHasMoreMessages(false)
       return
     }
     let active = true
     api.conversations
-      .messages(selected)
+      .messages(selected, { limit: MESSAGE_PAGE })
       .then((rows) => {
         if (active) setMessages(rows)
       })
       .catch((cause: unknown) => {
         if (active) setSendError(readError(cause, 'Messages could not be loaded.'))
       })
+    api.conversations
+      .hasMoreMessages(selected)
+      .then((page) => {
+        if (active) setHasMoreMessages(page.hasMore)
+      })
+      .catch(() => undefined)
     api.conversations.markRead(selected).catch(() => undefined)
     return () => {
       active = false
@@ -360,6 +433,18 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
               <div className="flex-1 h-px bg-[#E8E6DF]" />
             </div>
 
+            {hasMoreMessages && (
+              <div className="flex justify-center pb-3">
+                <button
+                  type="button"
+                  disabled={loadingOlder}
+                  onClick={() => void loadOlder()}
+                  className="rounded-xl border border-[#D8DED8] px-4 py-1.5 text-sm text-[#1B2A4A] hover:bg-[#F4F6F2] disabled:opacity-50"
+                >
+                  {loadingOlder ? 'Loading…' : 'Load earlier messages'}
+                </button>
+              </div>
+            )}
             {messages.map(msg => {
               const mine = msg.senderId === userId
               return (
@@ -371,7 +456,15 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
                     <div className={`px-4 py-2.5 text-sm leading-relaxed ${mine ? 'msg-bubble-sent' : 'msg-bubble-recv'}`}>
                       {msg.body}
                     </div>
-                    <span className="text-[10px] text-[#C5CCDA] mt-1 px-1">{relativeTime(msg.createdAt)}</span>
+                    <span className="text-[10px] text-[#C5CCDA] mt-1 px-1">
+                      {relativeTime(msg.createdAt)}
+                      {/* Read receipt, shown only on messages the viewer sent. */}
+                      {mine && msg.readAt && (
+                        <span className="ml-1 text-[#2D6A4F]" title="Read">
+                          ✓✓
+                        </span>
+                      )}
+                    </span>
                   </div>
                 </div>
               )

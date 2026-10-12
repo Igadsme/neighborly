@@ -33,6 +33,7 @@ function productionSecret(value: string, helpers: Joi.CustomHelpers) {
 const optionalUrl = Joi.string().uri().optional().allow('')
 const optionalSecret = Joi.string().min(32).optional().allow('')
 const rateLimit = Joi.number().integer().min(1).optional()
+const optionalPositiveInt = Joi.number().integer().min(1).optional()
 
 export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
@@ -88,6 +89,8 @@ export const envValidationSchema = Joi.object({
   RATE_LIMIT_LISTING_IMAGES: rateLimit,
   RATE_LIMIT_OFFERS: rateLimit,
   RATE_LIMIT_REQUESTS: rateLimit,
+  SAVED_SEARCH_POLL_MS: optionalPositiveInt,
+  NOTIFICATION_POLL_MS: optionalPositiveInt,
   RATE_LIMIT_REPORTS: rateLimit,
   SLOW_QUERY_LOG: Joi.string().valid('0', '1').optional().allow(''),
   SLOW_QUERY_MS: Joi.number().integer().min(1).optional()

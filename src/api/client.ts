@@ -38,12 +38,16 @@ import type {
   ListingInput,
   ListingPage,
   ListingQueryParams,
+  NotificationPage,
+  NotificationPreferences,
   RequestMatch,
   RequestPage,
   RequestQuery,
   RequestStatus,
   RequestStatusEvent,
+  SavedSearchAlert,
   StoredImage,
+  UnreadCounts,
   HousingCreateInput,
   JobCreateInput,
   ServiceCreateInput,
@@ -510,6 +514,30 @@ export const api = {
     deleteSavedSearch: (id: string) =>
       request<void>(`/listings/saved-searches/${id}`, { method: "DELETE" }),
   },
+  notifications: {
+    list: (query: { unreadOnly?: boolean; limit?: number; offset?: number } = {}) => {
+      const params = new URLSearchParams()
+      if (query.unreadOnly) params.set("unreadOnly", "true")
+      if (query.limit !== undefined) params.set("limit", String(query.limit))
+      if (query.offset !== undefined) params.set("offset", String(query.offset))
+      const text = params.toString()
+      return request<NotificationPage>(`/notifications${text ? `?${text}` : ""}`)
+    },
+    unreadCount: () => request<UnreadCounts>("/notifications/unread-count"),
+    markRead: (id: string) =>
+      request<unknown>(`/notifications/${id}/read`, { method: "PATCH" }),
+    markAllRead: () => request<{ updated: number }>("/notifications/read-all", { method: "PATCH" }),
+    preferences: () => request<NotificationPreferences>("/notifications/preferences"),
+    updatePreferences: (input: Partial<NotificationPreferences>) =>
+      request<NotificationPreferences>("/notifications/preferences", {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    savedSearchAlerts: () =>
+      request<SavedSearchAlert[]>("/notifications/saved-search-alerts"),
+    markSavedSearchAlertRead: (id: string) =>
+      request<unknown>(`/notifications/saved-search-alerts/${id}/read`, { method: "PATCH" }),
+  },
   categories: {
     list: () =>
       request<
@@ -630,8 +658,24 @@ export const api = {
         body: JSON.stringify(input),
       }),
     list: () => request<ApiConversation[]>("/conversations"),
-    messages: (conversationId: string) =>
-      request<ApiMessage[]>(`/conversations/${conversationId}/messages`),
+    /**
+     * A page of history, oldest first. `before` is a message id rather than
+     * an offset, so a message sent mid-scroll cannot make a later page skip
+     * or repeat a row.
+     */
+    messages: (conversationId: string, options: { limit?: number; before?: string } = {}) => {
+      const params = new URLSearchParams()
+      if (options.limit !== undefined) params.set("limit", String(options.limit))
+      if (options.before) params.set("before", options.before)
+      const text = params.toString()
+      return request<ApiMessage[]>(
+        `/conversations/${conversationId}/messages${text ? `?${text}` : ""}`
+      )
+    },
+    hasMoreMessages: (conversationId: string, before?: string) =>
+      request<{ hasMore: boolean }>(
+        `/conversations/${conversationId}/messages/more${before ? `?before=${before}` : ""}`
+      ),
     send: (conversationId: string, body: string) =>
       request<ApiMessage>(`/conversations/${conversationId}/messages`, {
         method: "POST",

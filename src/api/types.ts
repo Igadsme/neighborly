@@ -75,6 +75,59 @@ export interface ServiceCreateInput {
   availability: string
 }
 
+export interface NotificationRow {
+  id: string
+  type: string
+  title: string
+  body?: string | null
+  link?: string | null
+  readAt?: string | null
+  createdAt: string
+}
+
+export interface NotificationPage {
+  items: NotificationRow[]
+  total: number
+  /** Global unread count, independent of the current page. */
+  unread: number
+  limit: number
+  offset: number
+}
+
+export interface UnreadCounts {
+  notifications: number
+  messages: number
+}
+
+export interface NotificationPreferences {
+  messages: boolean
+  offers: boolean
+  matches: boolean
+  savedSearches: boolean
+  requestUpdates: boolean
+  newListings: boolean
+  priceDrops: boolean
+  events: boolean
+  community: boolean
+}
+
+export interface SavedSearchAlert {
+  id: string
+  savedSearchId: string
+  listingId: string
+  readAt?: string | null
+  createdAt: string
+  listing: {
+    id: string
+    title: string
+    priceCents?: number | null
+    neighborhood?: string | null
+    /** The listing may since have been archived or removed by its owner. */
+    status?: string
+    deletedAt?: string | null
+  } | null
+}
+
 export type RequestStatus =
   | "DRAFT"
   | "PUBLISHED"
@@ -410,6 +463,8 @@ export interface ApiConversation {
 }
 
 export interface ApiMessage {
+  /** Set once the caller has read past this message; it is the caller's own state. */
+  readAt?: string | null
   id: string
   conversationId: string
   senderId: string

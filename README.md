@@ -53,7 +53,8 @@ Backend tests: `pnpm test` (hermetic unit suite), `../scripts/run-integration-te
 (real PostgreSQL plus a real S3-compatible object store).
 
 Marketplace (Milestone 4): `docs/MILESTONE_4_MARKETPLACE.md`.
-Requests and matching (Milestone 5): `docs/MILESTONE_5_REQUEST_MATCHING.md`. Listing images: `docs/STORAGE.md`.
+Requests and matching (Milestone 5): `docs/MILESTONE_5_REQUEST_MATCHING.md`.
+Messaging and notifications (Milestone 6): `docs/MILESTONE_6_MESSAGING_NOTIFICATIONS.md`. Listing images: `docs/STORAGE.md`.
 Account lifecycle (Milestone 3): `docs/MILESTONE_3_AUTHENTICATION.md`.
 Email delivery: `docs/EMAIL_DELIVERY.md` — no provider is configured, messages go to the `EmailOutbox` table.
 Account deletion: `docs/ACCOUNT_DELETION.md`.

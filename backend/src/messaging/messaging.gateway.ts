@@ -43,6 +43,25 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection {
     }
   }
 
+  /**
+   * Joining a personal room is how the client receives unread counts and
+   * notifications. It is authorized by the socket's own authenticated user,
+   * so a client can only ever join its own room.
+   */
+  @SubscribeMessage('user.join')
+  async joinUserRoom(@ConnectedSocket() client: HandshakeSocket) {
+    const userId = client.data?.userId
+    if (typeof userId !== 'string' || !userId) throw new WsException('Unauthorized')
+    const tokenExp = client.data?.tokenExp
+    if (typeof tokenExp === 'number' && tokenExp * 1000 <= Date.now()) {
+      throw new WsException('Access token expired')
+    }
+    const account = await this.prisma.user.findUnique({ where: { id: userId }, select: accountSelect })
+    if (!isActiveAccount(account)) throw new WsException('Account is not active')
+    await client.join(`user:${userId}`)
+    return { ok: true }
+  }
+
   @SubscribeMessage('conversation.join')
   async joinConversation(@ConnectedSocket() client: HandshakeSocket, @MessageBody() body: unknown) {
     const userId = client.data?.userId
@@ -70,8 +89,36 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection {
     return { ok: true }
   }
 
+  /**
+   * Broadcasts to the conversation room.
+   *
+   * The sender receives the echo as well, because Socket.IO's `except`
+   * filters by socket id and the gateway only knows the sender's user id.
+   * That is safe: every message carries a stable id, and the client keys
+   * rendered rows on it, so an echo of a message the sender already holds
+   * cannot render twice.
+   */
   publishMessage(conversationId: string, message: unknown) {
     this.server?.to(`conversation:${conversationId}`).emit('message.created', message)
+  }
+
+  /**
+   * Unread counts are pushed per user, not per room, because a member may be
+   * in several conversations and the badge is global. Each socket only ever
+   * joins its own `user:<id>` room, which `attachUser` authorizes.
+   */
+  publishUnreadCounts(conversationId: string, counts: Array<{ userId: string; unreadCount: number }>) {
+    for (const entry of counts) {
+      this.server?.to(`user:${entry.userId}`).emit('conversation.unread', {
+        conversationId,
+        unreadCount: entry.unreadCount
+      })
+    }
+  }
+
+  /** In-app notification push to the single authorized recipient's room. */
+  publishNotification(userId: string, notification: unknown) {
+    this.server?.to(`user:${userId}`).emit('notification.created', notification)
   }
 
   private async attachUser(socket: HandshakeSocket) {

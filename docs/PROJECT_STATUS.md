@@ -1,5 +1,7 @@
 # Project Status
 
+**12 Oct 2026 — Milestone 6 (messaging, realtime & notifications).** Durable outbox consumer, persisted notifications with enforced preferences, saved-search alerts, realtime unread counts and read receipts over the existing Socket.IO gateway, and the notification center, preferences, and saved-search editing UI. Completes the saved-search deferral from Milestone 4. `docs/MILESTONE_6_MESSAGING_NOTIFICATIONS.md`.
+
 **12 Oct 2026 — Milestone 5 (I need request & matching engine).** Request lifecycle with a declared state machine, server-side request discovery, a deterministic explainable matching engine, expanded offer management, atomic acceptance that also fulfils the request, and the typed domain-event contract plus transactional outbox that Milestone 6 consumes. `docs/MILESTONE_5_REQUEST_MATCHING.md`.
 
 **12 Oct 2026 — Milestone 3 (authentication & user accounts).** Registration hardening, email verification, password recovery, refresh-token rotation with reuse detection, session management, account settings, email change, anonymizing account deletion, and suspension enforcement across REST and realtime landed on `milestone3-authentication-user-accounts`. Requirements, evidence, and verification runs: `docs/MILESTONE_3_AUTHENTICATION.md`. Email delivery has **no provider configured** (`docs/EMAIL_DELIVERY.md`); avatar upload is not available.

@@ -30,6 +30,7 @@ export class MessagingService {
           select: {
             userId: true,
             lastReadAt: true,
+            unreadCount: true,
             user: { select: publicUserSelect }
           }
         },
@@ -41,13 +42,93 @@ export class MessagingService {
       },
       orderBy: { updatedAt: 'desc' }
     })
-    return rows.map(row => ({ ...row, messages: row.messages.map(redactMessage) }))
+    return rows.map(row => ({
+      ...row,
+      messages: row.messages.map(redactMessage),
+      // Per-member unread for this conversation.
+      unreadCount: row.participants.find(p => p.userId === userId)?.unreadCount ?? 0
+    }))
   }
 
-  async listMessages(userId: string, conversationId: string) {
+  /**
+   * Message history, oldest page last.
+   *
+   * The page is capped at 100 rows and any row beyond the cap is dropped,
+   * so a caller asking for a larger window receives a bounded page and can
+   * ask again with `before`.
+   *
+   * Pagination is by `before` (a message id) rather than an offset, so a
+   * message sent while someone is paging cannot shift a later page and cause
+   * a row to be skipped or repeated. `before` is resolved to its timestamp,
+   * and `hasMore` reports whether anything older remains.
+   */
+  async listMessages(
+    userId: string,
+    conversationId: string,
+    options: { limit?: number; before?: string } = {}
+  ) {
     await this.assertParticipant(userId, conversationId)
-    const rows = await this.prisma.message.findMany({ where: { conversationId }, orderBy: { createdAt: 'asc' } })
-    return rows.map(redactMessage)
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 100)
+
+    const anchor = options.before
+      ? await this.prisma.message.findFirst({
+          where: { id: options.before, conversationId },
+          select: { createdAt: true }
+        })
+      : null
+    // An id that does not belong to this conversation is treated as absent
+    // rather than silently returning the whole history.
+    if (options.before && !anchor) {
+      throw new BadRequestException('Unknown message anchor for this conversation')
+    }
+
+    // One extra row tells us whether another page exists without a count.
+    const rows = await this.prisma.message.findMany({
+      where: { conversationId, ...(anchor ? { createdAt: { lt: anchor.createdAt } } : {}) },
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1
+    })
+    // Sorted here rather than trusting the driver, so the page order is a
+    // property of this method and not of the adapter underneath it.
+    const page = rows
+      .slice(0, limit)
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+
+    const viewer = await this.prisma.conversationParticipant.findUnique({
+      where: { conversationId_userId: { conversationId, userId } },
+      select: { lastReadAt: true }
+    })
+    const lastReadAt = viewer?.lastReadAt ?? null
+
+    return page.map(row => ({
+      ...redactMessage(row),
+      // A read receipt for the caller's own view: the viewer has seen this
+      // message. It is the caller's own state, never another member's.
+      readAt: lastReadAt && row.createdAt <= lastReadAt ? lastReadAt : null
+    }))
+  }
+
+  /** Whether the newest page left older messages behind. */
+
+  /**
+   * Whether there is history older than `before`.
+   *
+   * With no anchor this answers "does this conversation have any history at
+   * all", which is what the first load needs; afterwards the caller passes
+   * the oldest id it holds.
+   */
+  async hasMoreMessages(userId: string, conversationId: string, before?: string) {
+    await this.assertParticipant(userId, conversationId)
+    const anchor = before
+      ? await this.prisma.message.findFirst({
+          where: { id: before, conversationId },
+          select: { createdAt: true }
+        })
+      : null
+    const count = await this.prisma.message.count({
+      where: { conversationId, ...(anchor ? { createdAt: { lt: anchor.createdAt } } : {}) }
+    })
+    return count > 0
   }
 
   async sendMessage(userId: string, conversationId: string, body: string) {
@@ -62,9 +143,24 @@ export class MessagingService {
     const message = await this.prisma.$transaction(async tx => {
       const created = await tx.message.create({ data: { conversationId, senderId: userId, body: clean } })
       await tx.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })
+      // Increment for the other participants only. Doing it here, in the same
+      // transaction as the message, is what keeps the badge correct after a
+      // crash: there is no window where a message exists uncounted.
+      await tx.conversationParticipant.updateMany({
+        where: { conversationId, NOT: { userId } },
+        data: { unreadCount: { increment: 1 } }
+      })
       return created
     })
     this.realtime.publishMessage(conversationId, message)
+    // Realtime unread push so a second device updates without polling.
+    await this.realtime.publishUnreadCounts(
+      conversationId,
+      (await this.prisma.conversationParticipant.findMany({
+        where: { conversationId },
+        select: { userId: true, unreadCount: true }
+      })).map(row => ({ userId: row.userId, unreadCount: row.unreadCount }))
+    )
     return message
   }
 
@@ -115,12 +211,27 @@ export class MessagingService {
     return { conversation: { id: conversation.id }, message, reused }
   }
 
+  /**
+   * Marks the caller's own conversation read. It cannot mark anyone else's,
+   * because the row is keyed by (conversationId, userId).
+   */
   async markRead(userId: string, conversationId: string) {
     await this.assertParticipant(userId, conversationId)
-    return this.prisma.conversationParticipant.update({
+    const row = await this.prisma.conversationParticipant.update({
       where: { conversationId_userId: { conversationId, userId } },
-      data: { lastReadAt: new Date() }
+      data: { lastReadAt: new Date(), unreadCount: 0 }
     })
+    this.realtime.publishUnreadCounts(conversationId, [{ userId, unreadCount: 0 }])
+    return row
+  }
+
+  /** Total unread across every conversation, for the global badge. */
+  async unreadTotals(userId: string) {
+    const row = await this.prisma.conversationParticipant.aggregate({
+      where: { userId, unreadCount: { gt: 0 } },
+      _sum: { unreadCount: true }
+    })
+    return { messages: row._sum.unreadCount ?? 0 }
   }
 
   private async assertParticipant(userId: string, conversationId: string) {

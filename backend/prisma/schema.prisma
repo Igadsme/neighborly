@@ -157,6 +157,8 @@ model User {
   blocksReceived         BlockedUser[]             @relation("BlocksReceived")
   reportsFiled           Report[]                  @relation("ReportsFiled")
   moderationActions      ModerationAction[]
+  notifications          Notification[]
+  savedSearchAlerts      SavedSearchAlert[]
 }
 
 model Profile {
@@ -191,16 +193,22 @@ model UserPreference {
 }
 
 model NotificationPreference {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @unique @db.Uuid
-  newListings Boolean  @default(true)
-  priceDrops  Boolean  @default(true)
-  messages    Boolean  @default(true)
-  events      Boolean  @default(false)
-  community   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  newListings    Boolean  @default(true)
+  priceDrops     Boolean  @default(true)
+  messages       Boolean  @default(true)
+  events         Boolean  @default(false)
+  community      Boolean  @default(false)
+  // Milestone 6 categories. Defaults keep an existing row behaving the way
+  // its owner already expects.
+  offers         Boolean  @default(true)
+  matches        Boolean  @default(true)
+  savedSearches  Boolean  @default(true)
+  requestUpdates Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Category {
@@ -213,32 +221,33 @@ model Category {
 }
 
 model Listing {
-  id                String         @id @default(uuid()) @db.Uuid
-  sellerId          String         @db.Uuid
-  categoryId        String         @db.Uuid
+  id                String             @id @default(uuid()) @db.Uuid
+  sellerId          String             @db.Uuid
+  categoryId        String             @db.Uuid
   title             String
   description       String
   priceCents        Int?
   condition         String?
-  status            ListingStatus  @default(DRAFT)
+  status            ListingStatus      @default(DRAFT)
   neighborhood      String?
   city              String?
-  latitude          Decimal?       @db.Decimal(9, 6)
-  longitude         Decimal?       @db.Decimal(9, 6)
+  latitude          Decimal?           @db.Decimal(9, 6)
+  longitude         Decimal?           @db.Decimal(9, 6)
   radiusMiles       Int?
-  pickupAvailable   Boolean        @default(true)
-  deliveryAvailable Boolean        @default(false)
-  shippingAvailable Boolean        @default(false)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  pickupAvailable   Boolean            @default(true)
+  deliveryAvailable Boolean            @default(false)
+  shippingAvailable Boolean            @default(false)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
   deletedAt         DateTime?
-  seller            User           @relation(fields: [sellerId], references: [id])
-  category          Category       @relation(fields: [categoryId], references: [id])
+  seller            User               @relation(fields: [sellerId], references: [id])
+  category          Category           @relation(fields: [categoryId], references: [id])
   images            ListingImage[]
   favorites         Favorite[]
   offerItems        OfferItem[]
   matches           RequestMatch[]
   priceHistory      PriceHistory[]
+  savedSearchAlerts SavedSearchAlert[]
 
   @@index([status, categoryId, createdAt])
   @@index([status, createdAt])
@@ -286,13 +295,14 @@ model Favorite {
 }
 
 model SavedSearch {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  query     String
-  filters   Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String             @id @default(uuid()) @db.Uuid
+  userId            String             @db.Uuid
+  query             String
+  filters           Json
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  savedSearchAlerts SavedSearchAlert[]
 
   @@index([userId, updatedAt])
 }
@@ -419,6 +429,42 @@ model RequestMatch {
   @@index([requestId, rank])
 }
 
+/// A persisted, in-app notification. `dedupeKey` makes redelivery of the
+/// same domain event idempotent.
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  type      String
+  title     String
+  body      String?
+  link      String?
+  dedupeKey String    @unique
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+/// One alert per (saved search, listing). The unique dedupeKey is what
+/// stops a re-processed listing from alerting the same member twice.
+model SavedSearchAlert {
+  id            String      @id @default(uuid()) @db.Uuid
+  savedSearchId String      @db.Uuid
+  userId        String      @db.Uuid
+  listingId     String      @db.Uuid
+  dedupeKey     String      @unique
+  readAt        DateTime?
+  createdAt     DateTime    @default(now())
+  savedSearch   SavedSearch @relation(fields: [savedSearchId], references: [id], onDelete: Cascade)
+  listing       Listing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([savedSearchId])
+}
+
 /// Transactional outbox for domain events. Rows are written in the same
 /// transaction as the state change, so an event can never be lost by a
 /// crash between the commit and a publish attempt. `dedupeKey` makes
@@ -456,6 +502,9 @@ model ConversationParticipant {
   userId         String       @db.Uuid
   joinedAt       DateTime     @default(now())
   lastReadAt     DateTime?
+  /// Denormalized unread count. Maintained on send and reset on read, so
+  /// the badge costs one indexed column read instead of a message scan.
+  unreadCount    Int          @default(0)
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 

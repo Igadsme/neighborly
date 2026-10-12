@@ -18,6 +18,7 @@ import { JobsModule } from './jobs/jobs.module'
 import { ServicesModule } from './services/services.module'
 import { StorageModule } from './storage/storage.module'
 import { EventsModule } from './events/events.module'
+import { NotificationsModule } from './notifications/notifications.module'
 
 @Module({
   imports: [
@@ -38,7 +39,8 @@ import { EventsModule } from './events/events.module'
     ServicesModule,
     CommunityModule,
     SafetyModule,
-    StorageModule
+    StorageModule,
+    NotificationsModule
   ]
 })
 export class AppModule {}

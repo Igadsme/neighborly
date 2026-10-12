@@ -1,4 +1,5 @@
 import { useState } from "react"
+import NotificationBell from "./NotificationBell"
 import { Avatar, Icon } from "./ui"
 
 type Page =
@@ -29,12 +30,21 @@ type Page =
   | "request-create"
   | "request-edit"
   | "request-detail"
+  | "notifications"
+  | "notification-preferences"
+  | "saved-searches"
 
 interface NavProps {
   currentPage: Page
   onNavigate: (p: Page) => void
   unreadMessages?: number
   onSignOut?: () => void
+  /**
+   * Route navigation with an optional entity id. The notification bell needs
+   * both (a notification links to a specific listing or request), while the
+   * nav buttons need only the page.
+   */
+  onNavigateRoute?: (page: string, id?: string) => void
 }
 
 export default function Navigation({
@@ -42,6 +52,7 @@ export default function Navigation({
   onNavigate,
   unreadMessages = 0,
   onSignOut,
+  onNavigateRoute,
 }: NavProps) {
   const [locationOpen, setLocationOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -173,6 +184,9 @@ export default function Navigation({
                   </span>
                 )}
               </button>
+
+              {/* Notifications */}
+              <NotificationBell onNavigate={onNavigateRoute ?? (() => undefined)} />
 
               {/* Saved */}
               <button
