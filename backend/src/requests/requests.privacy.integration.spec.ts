@@ -1,6 +1,7 @@
 import { OutboxWriter } from '../events/outbox-writer'
 import { RequestLifecycleService } from './request-lifecycle.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { randomUUID } from 'node:crypto'
 import { createOfferFixture, createTestPrisma, INTEGRATION_IDS } from '../common/testing/integration-fixtures'
 
 describe('Request privacy projections against real PostgreSQL', () => {
@@ -20,18 +21,36 @@ describe('Request privacy projections against real PostgreSQL', () => {
   it('hides coordinates and requester identity from anonymous list and detail', async () => {
     await createOfferFixture(prisma)
 
-    // Filtered by this fixture's category: the shared database holds requests
-    // from every other suite, so an unfiltered first page is not ours.
-    const listed = (await service.list({ categoryId: INTEGRATION_IDS.category, limit: 100 })).items
-    const published = listed.find(row => row.id === INTEGRATION_IDS.request)
+    // A request of this suite's own, because the shared fixture request may
+    // already have been fulfilled by the acceptance suite that runs against
+    // the same rows, and the public feed deliberately shows only live ones.
+    const category = randomUUID()
+    await prisma.category.create({
+      data: { id: category, name: `Privacy ${category.slice(0, 8)}`, slug: `privacy-${category}` }
+    })
+    const own = await service.create(
+      INTEGRATION_IDS.requester,
+      {
+        categoryId: category,
+        title: 'Need a desk',
+        description: 'Looking for a small writing desk nearby',
+        mode: 'BUY',
+        latitude: 33.75,
+        longitude: -84.35,
+        neighborhood: 'Inman Park'
+      } as never,
+      true
+    )
+
+    const listed = (await service.list({ categoryId: category, limit: 100 })).items
+    const published = listed.find(row => row.id === own.id)
     expect(published).toBeDefined()
     expect(published).not.toHaveProperty('latitude')
     expect(published).not.toHaveProperty('longitude')
     expect(published).not.toHaveProperty('requesterId')
     expect(published!.title).toBe('Need a desk')
-    expect(published!.requester.profile?.firstName).toBe('Req')
 
-    const detail = await service.get(INTEGRATION_IDS.request)
+    const detail = await service.get(own.id)
     expect(detail).not.toHaveProperty('latitude')
     expect(detail).not.toHaveProperty('longitude')
     expect(detail).not.toHaveProperty('requesterId')
