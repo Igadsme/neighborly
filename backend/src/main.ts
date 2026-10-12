@@ -18,8 +18,10 @@ async function bootstrap() {
   app.use(urlencoded({ extended: false, limit: jsonBodyLimit }))
   app.use(helmet(helmetOptions()))
   if (trustProxyEnabled()) app.getHttpAdapter().getInstance().set('trust proxy', 1)
-  // Bearer tokens only. Cookies are not set, so credentialed CORS stays off.
-  app.enableCors({ origin: corsOrigins(), credentials: false })
+  // Credentialed CORS is required so the browser sends the HttpOnly
+  // refresh cookie. corsOrigins() refuses `*` and empty lists, so only
+  // explicitly listed origins may send credentials.
+  app.enableCors({ origin: corsOrigins(), credentials: true })
   app.setGlobalPrefix('api/v1')
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
   app.useGlobalFilters(new LoggingExceptionFilter(app.get(HttpAdapterHost).httpAdapter))

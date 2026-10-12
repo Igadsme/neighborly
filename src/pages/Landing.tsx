@@ -4,7 +4,7 @@ import type { Listing } from "../data"
 import { api, ApiError } from "../api/client"
 import { listingFromApi, mediaSrc } from "../lib/view"
 
-type Page = "landing" | "onboarding" | "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community"
+type Page = "landing" | "onboarding" | "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community" | "forgot-password"
 
 interface LandingProps {
   onNavigate: (p: Page) => void
@@ -787,6 +787,17 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 {signingIn ? "Signing in..." : "Sign in"}
               </Button>
               <button
+                type="button"
+                onClick={() => {
+                  setSignInOpen(false)
+                  onNavigate("forgot-password")
+                }}
+                className="w-full text-sm text-[#5A6B85] hover:underline"
+              >
+                Forgot your password?
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setSignInOpen(false)
                   onNavigate("onboarding")

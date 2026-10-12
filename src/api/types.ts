@@ -8,6 +8,45 @@ export interface AuthResponse {
   accessToken: string
 }
 
+export interface AccountStatus {
+  id: string
+  email: string
+  status: "ACTIVE" | "SUSPENDED" | "DELETED"
+  emailVerified: boolean
+  pendingEmail: string | null
+  avatarUrl: string | null
+  deletionRequestedAt: string | null
+  activeSessions: number
+  memberSince: string
+}
+
+export interface AccountProfileInput {
+  firstName?: string
+  lastName?: string
+  displayName?: string
+  bio?: string
+  neighborhood?: string
+  city?: string
+  state?: string
+}
+
+export interface AccountPrivacyInput {
+  newListings?: boolean
+  priceDrops?: boolean
+  messages?: boolean
+  events?: boolean
+  community?: boolean
+}
+
+export interface ActiveSession {
+  id: string
+  userAgent: string | null
+  ipAddress: string | null
+  createdAt: string
+  lastUsedAt: string
+  expiresAt: string
+}
+
 export interface CurrentUser {
   id: string
   email: string

@@ -1,4 +1,7 @@
 import type {
+  AccountPrivacyInput,
+  AccountProfileInput,
+  AccountStatus,
   AcceptOfferResult,
   ApiCommunityComment,
   ApiCommunityEvent,
@@ -59,24 +62,130 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const headers = new Headers(options.headers)
+export const CSRF_COOKIE = "neighborly.csrf"
+export const CSRF_HEADER = "X-Neighborly-CSRF"
+
+function readCookie(name: string) {
+  const entry = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`))
+  if (!entry) return undefined
+  const value = entry.slice(name.length + 1)
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+/**
+ * Every call is credentialed so the HttpOnly refresh cookie rides along.
+ * The CSRF cookie is readable by design; it is echoed back in a header on
+ * state-changing requests, which a cross-site page cannot do.
+ */
+function authHeaders(headers: Headers, method: string) {
+  const token = window.localStorage.getItem(ACCESS_TOKEN_KEY)
+  if (token) headers.set("Authorization", `Bearer ${token}`)
+  if (!["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase())) {
+    const csrf = readCookie(CSRF_COOKIE)
+    if (csrf) headers.set(CSRF_HEADER, csrf)
+  }
+  return headers
+}
+
+async function readBody(response: Response) {
+  return response.json().catch(() => null) as Promise<{
+    message?: string | string[]
+  } | null>
+}
+
+type Renewal = "renewed" | "unauthorized" | "failed"
+
+let refreshInFlight: Promise<Renewal> | null = null
+
+/**
+ * Renews the access token through the HttpOnly refresh cookie. Concurrent
+ * 401s share one in-flight refresh so a burst of requests cannot rotate the
+ * cookie several times and trip reuse detection.
+ */
+function renewAccessToken(): Promise<Renewal> {
+  if (refreshInFlight) return refreshInFlight
+  refreshInFlight = (async () => {
+    try {
+      const response = await fetch(`${API_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+        headers: authHeaders(new Headers({ Accept: "application/json" }), "POST"),
+      })
+      if (!response.ok) {
+        // Only a rejection of the session itself ends it. A 5xx or a
+        // network failure is treated as transient so a blip does not sign
+        // the user out of a session the server still considers valid.
+        if (response.status === 401 || response.status === 403) {
+          window.localStorage.removeItem(ACCESS_TOKEN_KEY)
+          return "unauthorized"
+        }
+        return "failed"
+      }
+      const payload = (await response.json()) as AuthResponse
+      window.localStorage.setItem(ACCESS_TOKEN_KEY, payload.accessToken)
+      return "renewed"
+    } catch {
+      return "failed"
+    } finally {
+      refreshInFlight = null
+    }
+  })()
+  return refreshInFlight
+}
+
+export function onSessionExpired(listener: () => void) {
+  sessionExpiredListeners.add(listener)
+  return () => {
+    sessionExpiredListeners.delete(listener)
+  }
+}
+
+const sessionExpiredListeners = new Set<() => void>()
+
+function announceSessionExpired() {
+  sessionExpiredListeners.forEach(listener => listener())
+}
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  retried = false
+): Promise<T> {
+  const method = options.method ?? "GET"
+  const headers = authHeaders(new Headers(options.headers), method)
   headers.set("Accept", "application/json")
   if (options.body && !headers.has("Content-Type"))
     headers.set("Content-Type", "application/json")
-  const token = window.localStorage.getItem(ACCESS_TOKEN_KEY)
-  if (token) headers.set("Authorization", `Bearer ${token}`)
 
-  const response = await fetch(`${API_URL}${path}`, { ...options, headers })
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers,
+    credentials: "include",
+  })
+
+  // One transparent renewal, then surface the original error. The session
+  // is only torn down when the server rejected the refresh credential.
+  if (response.status === 401 && !retried && !path.startsWith("/auth/")) {
+    const renewal = await renewAccessToken()
+    if (renewal === "renewed") return request<T>(path, options, true)
+    if (renewal === "unauthorized") announceSessionExpired()
+  }
+
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as {
-      message?: string | string[]
-    } | null
+    const payload = await readBody(response)
     throw new ApiError(
       readMessage(payload?.message, response.status),
       response.status,
     )
   }
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 
@@ -135,9 +244,61 @@ export const api = {
       window.localStorage.setItem(ACCESS_TOKEN_KEY, result.accessToken)
       return result
     },
-    signOut: () => window.localStorage.removeItem(ACCESS_TOKEN_KEY),
+    signOut: async () => {
+      // Clear locally first so the UI is responsive even if the network
+      // call fails, then tell the server to revoke this session.
+      window.localStorage.removeItem(ACCESS_TOKEN_KEY)
+      try {
+        await request<void>("/auth/logout", { method: "POST" })
+      } catch {
+        // A revoked-or-missing cookie is already the desired end state.
+      }
+    },
+    /** Ends every session on every device. */
+    signOutEverywhere: async () => {
+      window.localStorage.removeItem(ACCESS_TOKEN_KEY)
+      await request<void>("/auth/logout-all", { method: "POST" })
+    },
     me: () => request<CurrentUser>("/users/me"),
     hasSession: () => Boolean(window.localStorage.getItem(ACCESS_TOKEN_KEY)),
+    verifyEmail: (token: string) =>
+      request<{ verified: boolean; email: string }>("/auth/verify-email", {
+        method: "POST",
+        body: JSON.stringify({ token }),
+      }),
+    resendVerification: (email?: string) =>
+      request<{ sent: boolean }>("/auth/resend-verification", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
+    forgotPassword: (email: string) =>
+      request<{ accepted: boolean }>("/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
+    resetPassword: (token: string, password: string) =>
+      request<{ reset: boolean }>("/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({ token, password }),
+      }),
+    changePassword: (currentPassword: string, password: string) =>
+      request<{ changed: boolean }>("/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ currentPassword, password }),
+      }),
+    sessions: () =>
+      request<
+        Array<{
+          id: string
+          userAgent: string | null
+          ipAddress: string | null
+          createdAt: string
+          lastUsedAt: string
+          expiresAt: string
+        }>
+      >("/auth/sessions"),
+    revokeSession: (id: string) =>
+      request<void>(`/auth/sessions/${id}`, { method: "DELETE" }),
     completeOnboarding: (input: {
       neighborhood?: string
       city?: string
@@ -158,6 +319,42 @@ export const api = {
   users: {
     profile: (id: string) => request<PublicProfile>(`/users/${id}/profile`),
     reviews: (id: string) => request<ProfileReview[]>(`/users/${id}/reviews`),
+    accountStatus: () => request<AccountStatus>("/users/me/status"),
+    updateProfile: (input: AccountProfileInput) =>
+      request<CurrentUser>("/users/me/profile", {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    updatePrivacy: (input: AccountPrivacyInput) =>
+      request<CurrentUser>("/users/me/privacy", {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    requestEmailChange: (email: string, currentPassword: string) =>
+      request<{ pendingEmail: string }>("/users/me/email", {
+        method: "POST",
+        body: JSON.stringify({ email, currentPassword }),
+      }),
+    cancelEmailChange: () => request<{ pendingEmail: null }>("/users/me/email/pending", { method: "DELETE" }),
+    sessions: () =>
+      request<
+        Array<{
+          id: string
+          userAgent: string | null
+          ipAddress: string | null
+          createdAt: string
+          lastUsedAt: string
+          expiresAt: string
+        }>
+      >("/users/me/sessions"),
+    revokeSession: (id: string) => request<void>(`/users/me/sessions/${id}`, { method: "DELETE" }),
+    revokeAllSessions: () =>
+      request<void>("/users/me/sessions/revoke-all", { method: "POST" }),
+    deleteAccount: (password: string, confirm: string) =>
+      request<{ deleted: boolean; alreadyDeleted: boolean }>("/users/me", {
+        method: "DELETE",
+        body: JSON.stringify({ password, confirm }),
+      }),
   },
   safety: {
     report: (input: {

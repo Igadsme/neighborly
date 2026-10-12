@@ -47,7 +47,10 @@ describe('Production category bootstrap against real PostgreSQL', () => {
 
     const reloaded = await prisma.category.findUniqueOrThrow({ where: { id: custom.id } })
     expect(reloaded.name).toBe('Integration Custom')
-    const all = await prisma.category.findMany()
-    expect(all).toHaveLength(categoryNames.length + 1)
+    // Scoped to the bootstrapped names: sibling integration suites seed
+    // their own fixture categories into this shared database, so a total
+    // row count would be asserting on another suite's data.
+    const bootstrapped = await prisma.category.findMany({ where: { name: { in: categoryNames } } })
+    expect(bootstrapped).toHaveLength(categoryNames.length)
   })
 })

@@ -109,75 +109,83 @@ enum ModerationActionKind {
 }
 
 model User {
-  id                 String               @id @default(uuid()) @db.Uuid
-  email              String               @unique
-  passwordHash       String
-  status             UserStatus           @default(ACTIVE)
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  deletedAt          DateTime?
-  profile            Profile?
-  listings           Listing[]
-  requests           NeedRequest[]
-  offers             RequestOffer[]       @relation("Offerer")
-  favorites          Favorite[]
-  savedSearches      SavedSearch[]
-  preference         UserPreference?
+  id                     String                    @id @default(uuid()) @db.Uuid
+  email                  String                    @unique
+  passwordHash           String
+  status                 UserStatus                @default(ACTIVE)
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  deletedAt              DateTime?
+  emailVerifiedAt        DateTime?
+  pendingEmail           String?
+  pendingEmailAt         DateTime?
+  deletionRequestedAt    DateTime?
+  sessions               RefreshSession[]
+  emailTokens            EmailVerificationToken[]
+  passwordTokens         PasswordResetToken[]
+  profile                Profile?
+  listings               Listing[]
+  requests               NeedRequest[]
+  offers                 RequestOffer[]            @relation("Offerer")
+  favorites              Favorite[]
+  savedSearches          SavedSearch[]
+  preference             UserPreference?
   notificationPreference NotificationPreference?
-  conversations      ConversationParticipant[]
-  sentMessages       Message[]            @relation("MessageSender")
-  reviewsGiven       Review[]             @relation("ReviewAuthor")
-  reviewsReceived    Review[]             @relation("ReviewSubject")
-  transactionMembers TransactionParticipant[]
-  housingListings    HousingListing[]
-  jobListings        JobListing[]
-  jobApplications    JobApplication[]
-  jobSaves           JobSave[]
-  serviceListings    ServiceListing[]
-  serviceQuotes      ServiceQuote[]
-  communityPosts     CommunityPost[]
-  communityReactions CommunityReaction[]
-  communityComments  CommunityComment[]
-  communityEvents    CommunityEvent[]
-  eventRsvps         CommunityEventRsvp[]
-  lostFoundItems     LostFoundItem[]
-  giveaways          Giveaway[]           @relation("GiveawayAuthor")
-  claimedGiveaways   Giveaway[]           @relation("GiveawayClaimer")
-  staffRoles         StaffRoleAssignment[]
-  blocksGiven        BlockedUser[]        @relation("BlocksGiven")
-  blocksReceived     BlockedUser[]        @relation("BlocksReceived")
-  reportsFiled       Report[]             @relation("ReportsFiled")
-  moderationActions  ModerationAction[]
+  conversations          ConversationParticipant[]
+  sentMessages           Message[]                 @relation("MessageSender")
+  reviewsGiven           Review[]                  @relation("ReviewAuthor")
+  reviewsReceived        Review[]                  @relation("ReviewSubject")
+  transactionMembers     TransactionParticipant[]
+  housingListings        HousingListing[]
+  jobListings            JobListing[]
+  jobApplications        JobApplication[]
+  jobSaves               JobSave[]
+  serviceListings        ServiceListing[]
+  serviceQuotes          ServiceQuote[]
+  communityPosts         CommunityPost[]
+  communityReactions     CommunityReaction[]
+  communityComments      CommunityComment[]
+  communityEvents        CommunityEvent[]
+  eventRsvps             CommunityEventRsvp[]
+  lostFoundItems         LostFoundItem[]
+  giveaways              Giveaway[]                @relation("GiveawayAuthor")
+  claimedGiveaways       Giveaway[]                @relation("GiveawayClaimer")
+  staffRoles             StaffRoleAssignment[]
+  blocksGiven            BlockedUser[]             @relation("BlocksGiven")
+  blocksReceived         BlockedUser[]             @relation("BlocksReceived")
+  reportsFiled           Report[]                  @relation("ReportsFiled")
+  moderationActions      ModerationAction[]
 }
 
 model Profile {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @unique @db.Uuid
-  firstName    String
-  lastName     String
-  displayName  String?
-  bio          String?
-  neighborhood String?
-  city         String?
-  state        String?
-  latitude     Decimal? @db.Decimal(9, 6)
-  longitude    Decimal? @db.Decimal(9, 6)
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @unique @db.Uuid
+  firstName     String
+  lastName      String
+  displayName   String?
+  bio           String?
+  neighborhood  String?
+  city          String?
+  state         String?
+  avatarUrl     String?
+  latitude      Decimal? @db.Decimal(9, 6)
+  longitude     Decimal? @db.Decimal(9, 6)
   phoneVerified Boolean  @default(false)
   emailVerified Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UserPreference {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @unique @db.Uuid
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @unique @db.Uuid
   interests    Json
   capabilities Json
   completedAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model NotificationPreference {
@@ -194,41 +202,41 @@ model NotificationPreference {
 }
 
 model Category {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String   @unique
-  slug      String   @unique
-  createdAt DateTime @default(now())
+  id        String        @id @default(uuid()) @db.Uuid
+  name      String        @unique
+  slug      String        @unique
+  createdAt DateTime      @default(now())
   listings  Listing[]
   requests  NeedRequest[]
 }
 
 model Listing {
-  id                 String          @id @default(uuid()) @db.Uuid
-  sellerId           String          @db.Uuid
-  categoryId         String          @db.Uuid
-  title              String
-  description        String
-  priceCents         Int?
-  condition          String?
-  status             ListingStatus   @default(DRAFT)
-  neighborhood       String?
-  city               String?
-  latitude           Decimal?        @db.Decimal(9, 6)
-  longitude          Decimal?        @db.Decimal(9, 6)
-  radiusMiles        Int?
-  pickupAvailable    Boolean         @default(true)
-  deliveryAvailable  Boolean         @default(false)
-  shippingAvailable  Boolean         @default(false)
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  deletedAt          DateTime?
-  seller             User            @relation(fields: [sellerId], references: [id])
-  category           Category        @relation(fields: [categoryId], references: [id])
-  images             ListingImage[]
-  favorites          Favorite[]
-  offerItems         OfferItem[]
-  matches            RequestMatch[]
-  priceHistory       PriceHistory[]
+  id                String         @id @default(uuid()) @db.Uuid
+  sellerId          String         @db.Uuid
+  categoryId        String         @db.Uuid
+  title             String
+  description       String
+  priceCents        Int?
+  condition         String?
+  status            ListingStatus  @default(DRAFT)
+  neighborhood      String?
+  city              String?
+  latitude          Decimal?       @db.Decimal(9, 6)
+  longitude         Decimal?       @db.Decimal(9, 6)
+  radiusMiles       Int?
+  pickupAvailable   Boolean        @default(true)
+  deliveryAvailable Boolean        @default(false)
+  shippingAvailable Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  deletedAt         DateTime?
+  seller            User           @relation(fields: [sellerId], references: [id])
+  category          Category       @relation(fields: [categoryId], references: [id])
+  images            ListingImage[]
+  favorites         Favorite[]
+  offerItems        OfferItem[]
+  matches           RequestMatch[]
+  priceHistory      PriceHistory[]
 
   @@index([status, categoryId, createdAt])
   @@index([status, createdAt])
@@ -271,15 +279,15 @@ model SavedSearch {
 }
 
 model NeedRequest {
-  id          String        @id @default(uuid()) @db.Uuid
-  requesterId String        @db.Uuid
-  categoryId  String        @db.Uuid
+  id          String         @id @default(uuid()) @db.Uuid
+  requesterId String         @db.Uuid
+  categoryId  String         @db.Uuid
   title       String
   description String
   budgetCents Int?
-  latitude    Decimal?      @db.Decimal(9, 6)
-  longitude   Decimal?      @db.Decimal(9, 6)
-  radiusMiles Int           @default(10)
+  latitude    Decimal?       @db.Decimal(9, 6)
+  longitude   Decimal?       @db.Decimal(9, 6)
+  radiusMiles Int            @default(10)
   deadline    DateTime?
   urgency     String?
   mode        ExchangeMode
@@ -298,17 +306,17 @@ model NeedRequest {
 }
 
 model RequestOffer {
-  id          String          @id @default(uuid()) @db.Uuid
-  requestId   String          @db.Uuid
-  offererId   String          @db.Uuid
-  amountCents Int?
-  message     String
-  status      OfferStatus     @default(PENDING)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  request     NeedRequest     @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  offerer     User            @relation("Offerer", fields: [offererId], references: [id])
-  items       OfferItem[]
+  id            String         @id @default(uuid()) @db.Uuid
+  requestId     String         @db.Uuid
+  offererId     String         @db.Uuid
+  amountCents   Int?
+  message       String
+  status        OfferStatus    @default(PENDING)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  request       NeedRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  offerer       User           @relation("Offerer", fields: [offererId], references: [id])
+  items         OfferItem[]
   counterOffers CounterOffer[]
 
   @@index([requestId, status, createdAt])
@@ -338,13 +346,13 @@ model CounterOffer {
 }
 
 model RequestMatch {
-  id        String       @id @default(uuid()) @db.Uuid
-  requestId String       @db.Uuid
-  listingId String       @db.Uuid
-  score     Decimal      @db.Decimal(5, 2)
-  createdAt DateTime     @default(now())
-  request   NeedRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  listing   Listing      @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  id        String      @id @default(uuid()) @db.Uuid
+  requestId String      @db.Uuid
+  listingId String      @db.Uuid
+  score     Decimal     @db.Decimal(5, 2)
+  createdAt DateTime    @default(now())
+  request   NeedRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  listing   Listing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@unique([requestId, listingId])
 }
@@ -386,13 +394,13 @@ model Message {
 }
 
 model Transaction {
-  id             String                    @id @default(uuid()) @db.Uuid
-  conversationId String?                   @db.Uuid
-  offerId        String?                   @db.Uuid
-  status         TransactionStatus         @default(DRAFT)
-  createdAt      DateTime                  @default(now())
-  updatedAt      DateTime                  @updatedAt
-  conversation   Conversation?             @relation(fields: [conversationId], references: [id])
+  id             String                   @id @default(uuid()) @db.Uuid
+  conversationId String?                  @db.Uuid
+  offerId        String?                  @db.Uuid
+  status         TransactionStatus        @default(DRAFT)
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  conversation   Conversation?            @relation(fields: [conversationId], references: [id])
   participants   TransactionParticipant[]
   milestones     TransactionMilestone[]
   appointments   Appointment[]
@@ -414,12 +422,12 @@ model TransactionParticipant {
 }
 
 model TransactionMilestone {
-  id            String      @id @default(uuid()) @db.Uuid
-  transactionId String      @db.Uuid
+  id            String             @id @default(uuid()) @db.Uuid
+  transactionId String             @db.Uuid
   fromStatus    TransactionStatus?
   toStatus      TransactionStatus
-  createdAt     DateTime    @default(now())
-  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime           @default(now())
+  transaction   Transaction        @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([transactionId, createdAt])
 }
@@ -450,16 +458,16 @@ model Review {
 }
 
 model PriceHistory {
-  id        String   @id @default(uuid()) @db.Uuid
-  listingId String   @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
+  listingId  String   @db.Uuid
   priceCents Int?
-  createdAt DateTime @default(now())
-  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
 }
 
 model HousingListing {
-  id           String        @id @default(uuid()) @db.Uuid
-  ownerId      String        @db.Uuid
+  id           String         @id @default(uuid()) @db.Uuid
+  ownerId      String         @db.Uuid
   title        String
   description  String
   propertyType String
@@ -468,22 +476,22 @@ model HousingListing {
   priceUnit    String?
   beds         Int
   baths        Int
-  sqft         Int           @default(0)
+  sqft         Int            @default(0)
   neighborhood String?
   city         String?
   available    String?
   lease        String?
-  pets         Boolean       @default(false)
-  furnished    Boolean       @default(false)
+  pets         Boolean        @default(false)
+  furnished    Boolean        @default(false)
   utilities    String?
-  verified     Boolean       @default(false)
-  status       PublishStatus @default(PUBLISHED)
-  latitude     Decimal?      @db.Decimal(9, 6)
-  longitude    Decimal?      @db.Decimal(9, 6)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  verified     Boolean        @default(false)
+  status       PublishStatus  @default(PUBLISHED)
+  latitude     Decimal?       @db.Decimal(9, 6)
+  longitude    Decimal?       @db.Decimal(9, 6)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
   deletedAt    DateTime?
-  owner        User          @relation(fields: [ownerId], references: [id])
+  owner        User           @relation(fields: [ownerId], references: [id])
   images       HousingImage[]
 
   @@index([status, listingType, createdAt])
@@ -503,28 +511,28 @@ model HousingImage {
 }
 
 model JobListing {
-  id               String        @id @default(uuid()) @db.Uuid
-  ownerId          String        @db.Uuid
+  id               String           @id @default(uuid()) @db.Uuid
+  ownerId          String           @db.Uuid
   title            String
   company          String
   logoKey          String?
   description      String
-  responsibilities String[]      @default([])
+  responsibilities String[]         @default([])
   employmentType   String
   level            String
   salary           String
   location         String
   remote           String
   deadline         String?
-  tags             String[]      @default([])
-  verified         Boolean       @default(false)
-  status           PublishStatus @default(PUBLISHED)
-  latitude         Decimal?      @db.Decimal(9, 6)
-  longitude        Decimal?      @db.Decimal(9, 6)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  tags             String[]         @default([])
+  verified         Boolean          @default(false)
+  status           PublishStatus    @default(PUBLISHED)
+  latitude         Decimal?         @db.Decimal(9, 6)
+  longitude        Decimal?         @db.Decimal(9, 6)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
   deletedAt        DateTime?
-  owner            User          @relation(fields: [ownerId], references: [id])
+  owner            User             @relation(fields: [ownerId], references: [id])
   applications     JobApplication[]
   saves            JobSave[]
 
@@ -557,8 +565,8 @@ model JobSave {
 }
 
 model ServiceListing {
-  id                 String        @id @default(uuid()) @db.Uuid
-  ownerId            String        @db.Uuid
+  id                 String         @id @default(uuid()) @db.Uuid
+  ownerId            String         @db.Uuid
   title              String
   businessName       String
   description        String
@@ -566,18 +574,18 @@ model ServiceListing {
   startingPriceCents Int
   location           String
   availability       String
-  tags               String[]      @default([])
+  tags               String[]       @default([])
   imageKey           String?
-  backgroundCheck    Boolean       @default(false)
-  rating             Decimal?      @db.Decimal(2, 1)
-  reviewCount        Int           @default(0)
-  status             PublishStatus @default(PUBLISHED)
-  latitude           Decimal?      @db.Decimal(9, 6)
-  longitude          Decimal?      @db.Decimal(9, 6)
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  backgroundCheck    Boolean        @default(false)
+  rating             Decimal?       @db.Decimal(2, 1)
+  reviewCount        Int            @default(0)
+  status             PublishStatus  @default(PUBLISHED)
+  latitude           Decimal?       @db.Decimal(9, 6)
+  longitude          Decimal?       @db.Decimal(9, 6)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
   deletedAt          DateTime?
-  owner              User          @relation(fields: [ownerId], references: [id])
+  owner              User           @relation(fields: [ownerId], references: [id])
   quotes             ServiceQuote[]
 
   @@index([status, category, createdAt])
@@ -603,18 +611,18 @@ model ServiceQuote {
 }
 
 model CommunityPost {
-  id           String             @id @default(uuid()) @db.Uuid
-  authorId     String             @db.Uuid
+  id           String              @id @default(uuid()) @db.Uuid
+  authorId     String              @db.Uuid
   type         String
   title        String
   body         String
   neighborhood String?
   city         String?
-  status       PublishStatus      @default(PUBLISHED)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  status       PublishStatus       @default(PUBLISHED)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
   deletedAt    DateTime?
-  author       User               @relation(fields: [authorId], references: [id])
+  author       User                @relation(fields: [authorId], references: [id])
   reactions    CommunityReaction[]
   comments     CommunityComment[]
 
@@ -648,8 +656,8 @@ model CommunityComment {
 }
 
 model CommunityEvent {
-  id           String              @id @default(uuid()) @db.Uuid
-  organizerId  String              @db.Uuid
+  id           String               @id @default(uuid()) @db.Uuid
+  organizerId  String               @db.Uuid
   title        String
   description  String?
   neighborhood String?
@@ -657,11 +665,11 @@ model CommunityEvent {
   dateLabel    String
   timeLabel    String
   imageKey     String?
-  status       PublishStatus       @default(PUBLISHED)
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  status       PublishStatus        @default(PUBLISHED)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
   deletedAt    DateTime?
-  organizer    User                @relation(fields: [organizerId], references: [id])
+  organizer    User                 @relation(fields: [organizerId], references: [id])
   rsvps        CommunityEventRsvp[]
 
   @@index([status, createdAt])
@@ -739,16 +747,16 @@ model BlockedUser {
 }
 
 model Report {
-  id         String           @id @default(uuid()) @db.Uuid
-  reporterId String           @db.Uuid
+  id         String             @id @default(uuid()) @db.Uuid
+  reporterId String             @db.Uuid
   targetType ReportTargetType
-  targetId   String           @db.Uuid
+  targetId   String             @db.Uuid
   reason     ReportReason
   details    String?
-  status     ReportStatus     @default(OPEN)
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
-  reporter   User             @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: Cascade)
+  status     ReportStatus       @default(OPEN)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  reporter   User               @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: Cascade)
   actions    ModerationAction[]
 
   @@unique([reporterId, targetType, targetId])
@@ -769,4 +777,70 @@ model ModerationAction {
 
   @@index([reportId, createdAt])
   @@index([actorId])
+}
+
+/// Milestone 3 account security. Additive only: existing rows are untouched.
+///
+/// A single-use email-verification token. Only the SHA-256 hash of the
+/// token is stored, so a database leak cannot be replayed. `consumedAt`
+/// makes consumption one-time even under a concurrent double submit.
+model EmailVerificationToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @unique
+  email      String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consumedAt])
+  @@index([expiresAt])
+}
+
+/// A single-use password-reset token, stored hashed and time limited.
+model PasswordResetToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consumedAt])
+  @@index([expiresAt])
+}
+
+/// One browser session. `familyId` groups a rotation chain: presenting an
+/// already-rotated token revokes every remaining session in that family.
+model RefreshSession {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  familyId      String    @db.Uuid
+  tokenHash     String    @unique
+  userAgent     String?
+  ipAddress     String?
+  createdAt     DateTime  @default(now())
+  lastUsedAt    DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason String?
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([familyId])
+  @@index([expiresAt])
+}
+
+/// Provider-neutral outbound email. Nothing here is ever logged; the
+/// outbox row is the integration point for a real delivery provider.
+model EmailOutbox {
+  id        String   @id @default(uuid()) @db.Uuid
+  toEmail   String
+  subject   String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([toEmail, createdAt])
 }

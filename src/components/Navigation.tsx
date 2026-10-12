@@ -18,6 +18,10 @@ type Page =
   | "services"
   | "jobs"
   | "community"
+  | "account"
+  | "forgot-password"
+  | "reset-password"
+  | "verify-email"
 
 interface NavProps {
   currentPage: Page
@@ -236,6 +240,12 @@ export default function Navigation({
                       </button>
                     ))}
                     <div className="border-t border-[#F5F4EF] mt-1 pt-1">
+                      <button
+                        onClick={() => onNavigate("account")}
+                        className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#8A9AB5] transition-colors"
+                      >
+                        Account settings
+                      </button>
                       <button
                         onClick={onSignOut}
                         className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#8A9AB5] transition-colors"

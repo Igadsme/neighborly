@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Navigation from "./components/Navigation"
 import Landing from "./pages/Landing"
 import Onboarding from "./pages/Onboarding"
@@ -16,10 +16,34 @@ import Housing from "./pages/Housing"
 import Services from "./pages/Services"
 import Jobs from "./pages/Jobs"
 import Community from "./pages/Community"
-import { api } from "./api/client"
+import AccountSettings from "./pages/account/AccountSettings"
+import ForgotPassword from "./pages/account/ForgotPassword"
+import ResetPassword from "./pages/account/ResetPassword"
+import VerifyEmail from "./pages/account/VerifyEmail"
+import { api, onSessionExpired } from "./api/client"
 import { unreadConversations } from "./lib/activity"
 
-type Page = "landing" | "onboarding" | "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community"
+type Page =
+  | "landing"
+  | "onboarding"
+  | "home"
+  | "explore"
+  | "categories"
+  | "map"
+  | "listing"
+  | "create"
+  | "messages"
+  | "saved"
+  | "profile"
+  | "dashboard"
+  | "housing"
+  | "services"
+  | "jobs"
+  | "community"
+  | "account"
+  | "forgot-password"
+  | "reset-password"
+  | "verify-email"
 
 export default function App() {
   const [page, setPage] = useState<Page>("landing")
@@ -30,14 +54,29 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true)
   const [viewerId, setViewerId] = useState<string | null>(null)
   const [unreadMessages, setUnreadMessages] = useState(0)
+  // Single-use deep-link tokens. They are read from the URL once, handed
+  // to the relevant screen, and stripped from the address bar so they are
+  // not left in history or in a shared link.
+  const [accountToken, setAccountToken] = useState<string | null>(null)
 
-  const navigate = (p: string, id?: string) => {
+  const navigate = useCallback((p: string, id?: string) => {
     if (p === "listing") setListingId(id ?? null)
     if (p === "messages") setConversationId(id ?? null)
     if (p === "profile") setProfileUserId(id ?? null)
     setPage(p as Page)
     window.scrollTo({ top: 0, behavior: "instant" })
-  }
+  }, [])
+
+  // Verification and reset links arrive as `/?verify=…` and `/?reset=…`.
+  const consumeDeepLink = useCallback(() => {
+    const params = new URLSearchParams(window.location.search)
+    const token = params.get("verify") ?? params.get("verifyEmailChange") ?? params.get("reset")
+    if (!token) return
+    setAccountToken(token)
+    setPage(params.get("reset") ? "reset-password" : "verify-email")
+    // Replace rather than push so the token does not survive a back button.
+    window.history.replaceState({}, "", window.location.pathname)
+  }, [])
 
   const signIn = (next?: string, id?: string) => {
     setIsSignedIn(true)
@@ -46,12 +85,23 @@ export default function App() {
   }
 
   const signOut = () => {
-    api.auth.signOut()
+    void api.auth.signOut()
     setViewerId(null)
     setUnreadMessages(0)
     setIsSignedIn(false)
     navigate("landing")
   }
+
+  useEffect(() => {
+    consumeDeepLink()
+    // A refresh that fails ends the session wherever the user happens to be.
+    return onSessionExpired(() => {
+      setViewerId(null)
+      setUnreadMessages(0)
+      setIsSignedIn(false)
+      navigate("landing")
+    })
+  }, [consumeDeepLink, navigate])
 
   useEffect(() => {
     if (!api.auth.hasSession()) {
@@ -152,6 +202,41 @@ export default function App() {
           <Landing onNavigate={navigate} onSignIn={signIn} />
         )}
 
+        {page === "forgot-password" && (
+          <ForgotPassword
+            onBack={() => navigate(api.auth.hasSession() ? "home" : "landing")}
+            onSubmitted={(email) => window.setTimeout(() => setAccountToken(email), 0)}
+          />
+        )}
+
+        {page === "reset-password" && (
+          <ResetPassword
+            token={accountToken}
+            onDone={() => {
+              setAccountToken(null)
+              navigate("landing")
+            }}
+          />
+        )}
+
+        {page === "verify-email" && (
+          <VerifyEmail
+            token={accountToken}
+            onDone={() => {
+              setAccountToken(null)
+              navigate(api.auth.hasSession() ? "home" : "landing")
+            }}
+            onResend={() => {
+              setAccountToken(null)
+              navigate("home")
+            }}
+          />
+        )}
+
+        {page === "account" && isSignedIn && (
+          <AccountSettings onSignedOut={signOut} />
+        )}
+
         {page === "onboarding" && <Onboarding onComplete={signIn} />}
 
         {page === "home" && isSignedIn && (
@@ -212,7 +297,12 @@ export default function App() {
         )}
 
         {/* Redirect to sign in if accessing signed-in pages without auth */}
-        {!isSignedIn && page !== "landing" && page !== "onboarding" && (
+        {!isSignedIn &&
+          page !== "landing" &&
+          page !== "onboarding" &&
+          page !== "forgot-password" &&
+          page !== "reset-password" &&
+          page !== "verify-email" && (
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">
               <div className="text-5xl mb-4">🏡</div>

@@ -49,7 +49,11 @@ pnpm start:dev
 ```
 
 Backend tests: `pnpm test` (hermetic unit suite) and `../scripts/run-integration-tests.sh`
-(real PostgreSQL in a disposable container). See `docs/MILESTONE_2_DATABASE_SECURITY_INTEGRITY.md`.
+(real PostgreSQL in a disposable container).
+
+Account lifecycle (Milestone 3): `docs/MILESTONE_3_AUTHENTICATION.md`.
+Email delivery: `docs/EMAIL_DELIVERY.md` — no provider is configured, messages go to the `EmailOutbox` table.
+Account deletion: `docs/ACCOUNT_DELETION.md`.
 
 The API listens on port 3000. Health is `GET http://localhost:3000/api/v1/health`. Swagger is `http://localhost:3000/docs`.
 

@@ -71,6 +71,9 @@ jobs:
       # Applying the whole migration chain from an empty database is the
       # check that migrations stay safe to deploy.
       - run: pnpm exec prisma migrate deploy
+      # Covers offer acceptance, request privacy, transactions, category
+      # bootstrap, and the Milestone 3 account lifecycle: registration,
+      # verification, recovery, refresh rotation, suspension, deletion.
       - run: pnpm exec jest --config jest.integration.config.cjs --runInBand
         env:
           NEIGHBORLY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55432/neighborly_m2
