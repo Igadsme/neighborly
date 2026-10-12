@@ -385,7 +385,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   Where do you live?
                 </h1>
                 <p className="text-[#8A9AB5] mb-8">
-                  We'll show you listings and neighbors that are closest to you.
+                  We&apos;ll show you listings and neighbors that are closest to you.
                   Your exact address is never shared.
                 </p>
 
@@ -445,7 +445,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   What brings you here?
                 </h1>
                 <p className="text-[#8A9AB5] mb-8">
-                  Select all that apply — we'll personalize your feed
+                  Select all that apply — we&apos;ll personalize your feed
                   accordingly.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
@@ -549,7 +549,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   🎉
                 </div>
                 <h1 className="font-display text-4xl font-semibold text-[#1B2A4A] mb-3">
-                  You're all set, Gad!
+                  You&apos;re all set, Gad!
                 </h1>
                 <p className="text-[#5C6E8A] mb-8 leading-relaxed">
                   Welcome to Neighborly. Your personalized feed is ready with

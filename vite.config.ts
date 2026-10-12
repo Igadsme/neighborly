@@ -236,18 +236,25 @@ function figmaErrorOverlayReplay(): Plugin {
     configureServer(server) {
       let lastError: object | null = null
 
-      const origSend = server.ws.send.bind(server.ws) as (...args: any[]) => void
-      server.ws.send = ((...args: any[]) => {
-        const payload = args[0]
-        if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-          const type = (payload as { type?: string }).type
+      const origSend = server.ws.send.bind(server.ws) as (
+        eventOrPayload: unknown,
+        payload?: unknown
+      ) => void
+      server.ws.send = ((eventOrPayload: unknown, payload?: unknown) => {
+        const candidate = eventOrPayload
+        if (
+          candidate &&
+          typeof candidate === 'object' &&
+          !Array.isArray(candidate)
+        ) {
+          const type = (candidate as { type?: string }).type
           if (type === 'error') {
-            lastError = payload as object
+            lastError = candidate as object
           } else if (type === 'update' || type === 'full-reload') {
             lastError = null
           }
         }
-        return origSend(...args)
+        return origSend(eventOrPayload, payload)
       }) as typeof server.ws.send
 
       server.ws.on('connection', (socket) => {

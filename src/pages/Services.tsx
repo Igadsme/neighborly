@@ -353,7 +353,7 @@ export default function Services({ onNavigate }: ServicesProps) {
               <div className="text-center py-8">
                 <div className="text-4xl mb-3">✅</div>
                 <p className="font-semibold text-[#1B2A4A]">Request sent!</p>
-                <p className="text-sm text-[#8A9AB5]">You'll hear back within {bookingService.availability}</p>
+                <p className="text-sm text-[#8A9AB5]">You&apos;ll hear back within {bookingService.availability}</p>
               </div>
             ) : (
               <div className="space-y-4">

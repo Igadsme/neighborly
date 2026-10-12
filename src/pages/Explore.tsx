@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ListingCard, Chip, Badge, Button, Icon, Toggle, TabBar } from '../components/ui'
+import { ListingCard, Chip, Badge, Button, Icon, Toggle } from '../components/ui'
 import type { Listing } from '../data'
 import { api, readError, readStatus } from '../api/client'
 import { listingFromApi, mediaSrc } from '../lib/view'
@@ -36,7 +36,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
   const [deliveryOnly, setDeliveryOnly] = useState(false)
   const [view, setView] = useState<'grid' | 'list' | 'map'>('grid')
   const [sort, setSort] = useState('relevance')
-  const [showFilters, setShowFilters] = useState(true)
+  const [showFilters] = useState(true)
   const [searched, setSearched] = useState(true)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [alertSaved, setAlertSaved] = useState(false)
@@ -68,7 +68,9 @@ export default function Explore({ onNavigate }: ExploreProps) {
     return () => {
       active = false
     }
-  }, [searchNonce])
+    // Intentionally keyed on searchNonce (the search-submit counter), not on
+    // `query`, so typing does not refetch on every keystroke.
+  }, [searchNonce]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveAlert = async () => {
     if (alertSaved) {
@@ -281,7 +283,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
                 {searched && (
                   <p className="text-sm text-[#5C6E8A]">
                     <span className="font-bold text-[#1B2A4A]">{filteredListings.length} results</span>
-                    {query && <span> for "<span className="text-[#2D6A4F] font-medium">{query}</span>"</span>}
+                    {query && <span> for &quot;<span className="text-[#2D6A4F] font-medium">{query}</span>&quot;</span>}
                   </p>
                 )}
                 {/* Active filters */}

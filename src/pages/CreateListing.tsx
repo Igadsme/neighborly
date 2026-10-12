@@ -268,7 +268,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
               What are you listing?
             </h2>
             <p className="text-[#8A9AB5] mb-6">
-              Choose the type that best fits what you're offering.
+              Choose the type that best fits what you&apos;re offering.
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {listingTypes.map((type) => (
@@ -855,7 +855,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                         🚀 Boost your listing
                       </p>
                       <p className="text-xs text-[#8A9AB5] mt-0.5">
-                        Promotion isn't available yet. Payments are not connected.
+                        Promotion isn&apos;t available yet. Payments are not connected.
                       </p>
                     </div>
                     <Button variant="secondary" size="sm" disabled>

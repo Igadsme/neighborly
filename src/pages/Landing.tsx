@@ -419,8 +419,8 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             Everything local. All in one place.
           </h2>
           <p className="text-[#5C6E8A] text-lg max-w-2xl mx-auto">
-            From furniture and electronics to jobs and home services — if it's
-            happening in your neighborhood, it's on Neighborly.
+            From furniture and electronics to jobs and home services — if it&apos;s
+            happening in your neighborhood, it&apos;s on Neighborly.
           </p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -485,9 +485,9 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 Safety First
               </Badge>
               <h2 className="font-display text-4xl font-semibold text-[#1B2A4A] mb-5">
-                "Everything local.
+                &quot;Everything local.
                 <br />
-                <span className="text-[#2D6A4F]">Everyone accountable.</span>"
+                <span className="text-[#2D6A4F]">Everyone accountable.</span>&quot;
               </h2>
               <p className="text-[#5C6E8A] text-lg leading-relaxed mb-8">
                 Neighborly was built on the belief that local commerce should be
@@ -609,7 +609,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   ))}
                 </div>
                 <p className="text-white/90 text-sm leading-relaxed mb-5">
-                  "{t.text}"
+                  &quot;{t.text}&quot;
                 </p>
                 <div className="flex items-center gap-3 pt-4 border-t border-white/10">
                   <Avatar src={t.avatar} name={t.name} size="sm" verified />
@@ -677,7 +677,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 </span>
               </div>
               <p className="text-sm text-[#8A9AB5] leading-relaxed max-w-xs">
-                Everything local. Everyone accountable. Atlanta's trusted
+                Everything local. Everyone accountable. Atlanta&apos;s trusted
                 community marketplace.
               </p>
             </div>

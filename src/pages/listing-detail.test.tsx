@@ -90,7 +90,9 @@ function listingRoutes(options: {
     options.urls?.push(url)
     if (init?.method === "POST" && url.endsWith("/conversations")) {
       if (options.holdMessage) await options.holdMessage
-      options.messageBody && (options.messageBody.current = init.body ? JSON.parse(String(init.body)) : null)
+      if (options.messageBody) {
+        options.messageBody.current = init.body ? JSON.parse(String(init.body)) : null
+      }
       const sent = options.messageBody?.current as { body?: string } | null
       return json(
         options.messageResult ?? {
@@ -108,7 +110,9 @@ function listingRoutes(options: {
       )
     }
     if (init?.method === "POST" && url.includes("/safety/reports")) {
-      options.messageBody && (options.messageBody.current = init.body ? JSON.parse(String(init.body)) : null)
+      if (options.messageBody) {
+        options.messageBody.current = init.body ? JSON.parse(String(init.body)) : null
+      }
       return json({ id: "report-1", status: "OPEN" }, options.reportStatus ?? 201)
     }
     if (init?.method === "POST" && url.includes("/favorite")) {

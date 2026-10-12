@@ -584,7 +584,7 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                               {giveaway.claimed && <Badge variant="gray" size="sm">Claimed</Badge>}
                               {!giveaway.claimed && (
                                 <button onClick={() => void claimGiveaway(giveaway.id)} className="ml-2 text-sm font-semibold text-[#2D6A4F] hover:underline">
-                                  I'll take it! →
+                                  I&apos;ll take it! →
                                 </button>
                               )}
                             </div>

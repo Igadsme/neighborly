@@ -1,7 +1,23 @@
 import { useState } from "react"
 import { Avatar, Icon } from "./ui"
 
-type Page = "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community"
+type Page =
+  | "landing"
+  | "onboarding"
+  | "home"
+  | "explore"
+  | "categories"
+  | "map"
+  | "listing"
+  | "create"
+  | "messages"
+  | "saved"
+  | "profile"
+  | "dashboard"
+  | "housing"
+  | "services"
+  | "jobs"
+  | "community"
 
 interface NavProps {
   currentPage: Page

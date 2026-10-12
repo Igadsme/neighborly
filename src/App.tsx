@@ -137,8 +137,8 @@ export default function App() {
       {/* Navigation (shown when signed in, except on onboarding) */}
       {isSignedIn && page !== "onboarding" && (
         <Navigation
-          currentPage={page as any}
-          onNavigate={navigate as any}
+          currentPage={page}
+          onNavigate={navigate}
           unreadMessages={unreadMessages}
           onSignOut={signOut}
         />
@@ -149,66 +149,66 @@ export default function App() {
         className={isSignedIn && !isMapPage && page !== "onboarding" ? "" : ""}
       >
         {page === "landing" && (
-          <Landing onNavigate={navigate as any} onSignIn={signIn} />
+          <Landing onNavigate={navigate} onSignIn={signIn} />
         )}
 
         {page === "onboarding" && <Onboarding onComplete={signIn} />}
 
         {page === "home" && isSignedIn && (
-          <HomeFeed onNavigate={navigate as any} />
+          <HomeFeed onNavigate={navigate} />
         )}
 
         {page === "explore" && isSignedIn && (
-          <Explore onNavigate={navigate as any} />
+          <Explore onNavigate={navigate} />
         )}
 
         {page === "categories" && isSignedIn && (
-          <Categories onNavigate={navigate as any} />
+          <Categories onNavigate={navigate} />
         )}
 
         {page === "map" && isSignedIn && (
-          <MapDiscovery onNavigate={navigate as any} />
+          <MapDiscovery onNavigate={navigate} />
         )}
 
         {page === "listing" && isSignedIn && (
-          <ListingDetail listingId={listingId} onNavigate={navigate as any} />
+          <ListingDetail listingId={listingId} onNavigate={navigate} />
         )}
 
         {page === "create" && isSignedIn && (
-          <CreateListing onNavigate={navigate as any} />
+          <CreateListing onNavigate={navigate} />
         )}
 
         {page === "messages" && isSignedIn && (
           <Messages
             conversationId={conversationId}
-            onNavigate={navigate as any}
+            onNavigate={navigate}
           />
         )}
 
         {page === "saved" && isSignedIn && (
-          <SavedItems onNavigate={navigate as any} />
+          <SavedItems onNavigate={navigate} />
         )}
 
         {page === "profile" && isSignedIn && (
-          <Profile userId={profileUserId} onNavigate={navigate as any} />
+          <Profile userId={profileUserId} onNavigate={navigate} />
         )}
 
         {page === "dashboard" && isSignedIn && (
-          <Dashboard onNavigate={navigate as any} />
+          <Dashboard onNavigate={navigate} />
         )}
 
         {page === "housing" && isSignedIn && (
-          <Housing onNavigate={navigate as any} />
+          <Housing onNavigate={navigate} />
         )}
 
         {page === "services" && isSignedIn && (
-          <Services onNavigate={navigate as any} />
+          <Services onNavigate={navigate} />
         )}
 
         {page === "jobs" && isSignedIn && <Jobs />}
 
         {page === "community" && isSignedIn && (
-          <Community onNavigate={navigate as any} />
+          <Community onNavigate={navigate} />
         )}
 
         {/* Redirect to sign in if accessing signed-in pages without auth */}

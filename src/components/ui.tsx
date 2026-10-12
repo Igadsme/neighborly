@@ -214,7 +214,6 @@ export function StarRating({
   size?: "xs" | "sm" | "md"
 }) {
   const sizes = { xs: "text-xs", sm: "text-sm", md: "text-base" }
-  const starSizes = { xs: 10, sm: 12, md: 14 }
   return (
     <div className={`flex items-center gap-1 ${sizes[size]}`}>
       <span className="text-[#F59E0B]">★</span>

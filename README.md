@@ -60,14 +60,20 @@ Vite binds to `$PORT` or **8443** (`vite.config.ts`). `CORS_ORIGIN` in `env.exam
 
 ## Checks
 
+CI (`.github/workflows/ci.yml`) runs lint, type checks, tests, and builds for both packages on every push to `main` and every pull request, with pnpm cache and frozen-lockfile installs. No deployment runs in CI.
+
 ```bash
-# frontend
+# frontend (repo root)
+pnpm lint
 pnpm exec tsc --noEmit
+pnpm test
 pnpm build
 
 # backend
 cd backend
 pnpm prisma:generate
+pnpm exec prisma validate
+pnpm lint
 pnpm exec tsc --noEmit
 pnpm test
 pnpm build

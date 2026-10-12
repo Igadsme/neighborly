@@ -86,7 +86,7 @@ Signed-out visitors can open `landing` and `onboarding`. Any other id shows the 
 - No AI feature work.
 - Landing marketing cards remain a fixture screen. The Categories featured strip reads `GET /listings` and is not a fixture strip. Map, Profile, and Listing Detail (UUID ids) read the API. Non-UUID listing ids still use fixtures. Map still paints the Atlanta map, the mile line, and safe spots; it does not call Mapbox. The categories grid reads `GET /categories` for counts on Housing, Jobs, Services, and Vehicles. Other tile counts, trending searches, and neighborhood counts stay painted. Housing, services, jobs, and community pages read the APIs from `0003_verticals`. They are mapped in `docs/FRONTEND_BACKEND_MAP.md`.
 - This board is not a release-complete claim. Docker Compose, migrate, seed, and signed-in browser e2e were not run for this pass. Docker Desktop is still missing on this Mac, so those steps stay blocked.
-- Local `.env`, `docker compose`, and a full browser pass against Postgres on a Mac are not part of this wiring. CI runs frontend `tsc`, Vitest, and `vite build`, plus the existing backend Jest suite.
+- Local `.env`, `docker compose`, and a full browser pass against Postgres on a Mac are not part of this wiring. CI runs frontend lint, `tsc`, Vitest, and `vite build`, plus backend lint, `prisma validate`, `tsc`, the Jest suite, and `nest build` (`.github/workflows/ci.yml`).
 
 ## Workspace (T7 Shield)
 

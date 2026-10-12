@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsOptional, IsString, IsUUID } from 'class-validator'
+import { IsArray, IsBoolean, IsOptional, IsString } from 'class-validator'
 
 export class CompleteOnboardingDto {
   @IsOptional()

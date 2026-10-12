@@ -5,10 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+# No deployment happens in this workflow. Deployments live in
+# deploy-staging.yml and deploy-production.yml and are gated behind
+# manual approval and environment protection rules.
+
 jobs:
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -18,7 +23,9 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
       - run: pnpm exec tsc --noEmit
       - run: pnpm test
       - run: pnpm build
@@ -26,6 +33,7 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       DATABASE_URL: postgresql://neighborly:neighborly@localhost:5432/neighborly
     defaults:
@@ -43,6 +51,8 @@ jobs:
           cache-dependency-path: backend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec prisma generate
+      - run: pnpm exec prisma validate
+      - run: pnpm lint
       - run: pnpm exec tsc --noEmit
       - run: pnpm test
       - run: pnpm build

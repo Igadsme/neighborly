@@ -394,7 +394,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                   <StarRating rating={person.rating} count={person.transactions} size="xs" />
                 </div>
                 <Button variant="soft" size="xs" fullWidth disabled>Follow</Button>
-                <p className="text-[10px] text-[#8A9AB5] mt-2">Following isn't available yet.</p>
+                <p className="text-[10px] text-[#8A9AB5] mt-2">Following isn&apos;t available yet.</p>
               </div>
             ))}
           </div>

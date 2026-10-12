@@ -24,7 +24,6 @@ const collections = [{ id: "all", label: "All saved" }]
 export default function SavedItems({ onNavigate }: SavedItemsProps) {
   const [activeCollection, setActiveCollection] = useState("all")
   const [activeTab, setActiveTab] = useState("Saved Listings")
-  const [selectedItems, setSelectedItems] = useState<string[]>([])
   const [comparingIds, setComparingIds] = useState<string[]>([])
   const [savedListings, setSavedListings] = useState<Listing[]>([])
   const [savedSearches, setSavedSearches] = useState<ApiSavedSearch[]>([])
@@ -247,7 +246,7 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
                           className="text-[#8A9AB5]"
                         />
                         <p className="font-semibold text-sm text-[#1B2A4A]">
-                          "{search.query}"
+                          &quot;{search.query}&quot;
                         </p>
                       </div>
                       <div className="flex items-center gap-3 text-xs text-[#8A9AB5]">

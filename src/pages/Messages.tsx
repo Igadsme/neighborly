@@ -411,7 +411,7 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
                 <span className="text-yellow-600 mt-0.5">⚠️</span>
                 <div className="flex-1">
                   <p className="text-xs font-semibold text-[#92400E]">Payment safety reminder</p>
-                  <p className="text-xs text-[#78350F] mt-0.5">Never send money via Venmo, Zelle, or gift cards to someone you haven't met. Neighborly never asks for payment outside the app.</p>
+                  <p className="text-xs text-[#78350F] mt-0.5">Never send money via Venmo, Zelle, or gift cards to someone you haven&apos;t met. Neighborly never asks for payment outside the app.</p>
                 </div>
                 <button onClick={() => setShowScamWarning(false)} className="text-[#92400E] hover:opacity-70"><Icon name="x" size={12} /></button>
               </div>
