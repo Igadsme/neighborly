@@ -299,10 +299,24 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
 
   return (
     <div className="h-[calc(100vh-64px)] flex bg-[#FAFAF7]">
+      {/*
+        One heading for the whole screen, outside both panes. The two panes
+        swap on a narrow screen - the list is hidden while a conversation is
+        open - so a heading inside either pane comes and goes with it and the
+        page is sometimes left with no level-one heading at all. Keeping it
+        here means there is always exactly one, and it names whichever view
+        is showing. The visible text in the list header is a styled div so it
+        does not become a second heading.
+      */}
+      <h1 className="sr-only">
+        {activeConversation && selected
+          ? `Conversation with ${personName(otherOf(activeConversation)?.user)}`
+          : 'Messages'}
+      </h1>
       <div className={`w-full md:w-80 md:flex-shrink-0 flex flex-col bg-white border-r border-[#E8E6DF] ${selected ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-4 border-b border-[#E8E6DF]">
           <div className="flex items-center justify-between mb-3">
-            <h1 className="font-display text-xl font-semibold text-[#1B2A4A]">Messages</h1>
+            <div className="font-display text-xl font-semibold text-[#1B2A4A]">Messages</div>
             {/*
               There is no "start a new conversation" endpoint, so the previous
               "+" button did nothing at all. It is removed rather than left as
@@ -388,14 +402,22 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
       </div>
 
       {activeConversation && (
-        <div className={`flex-1 flex flex-col ${selected ? 'flex' : 'hidden md:flex'}`}>
-          <div className="flex items-center gap-3 p-4 bg-white border-b border-[#E8E6DF]">
-            <button className="md:hidden text-[#5C6E8A] mr-1" onClick={() => setSelected('')}>
+        // min-w-0 lets this pane shrink below the intrinsic width of its
+        // contents. Without it a flex item keeps min-width:auto, so a wide
+        // message row pushed the whole screen past a 390px viewport and every
+        // later page inherited the resulting horizontal scrollbar.
+        <div className={`flex-1 min-w-0 flex flex-col ${selected ? 'flex' : 'hidden md:flex'}`}>
+          <div className="flex items-center gap-3 p-4 bg-white border-b border-[#E8E6DF] min-w-0">
+            <button
+              aria-label="Back to conversations"
+              className="md:hidden flex items-center justify-center min-h-11 min-w-11 -ml-2 text-[#5C6E8A] mr-1"
+              onClick={() => setSelected('')}
+            >
               <Icon name="chevronRight" size={18} className="rotate-180" />
             </button>
             <Avatar name={personName(otherOf(activeConversation)?.user)} size="md" />
-            <div className="flex-1">
-              <p className="font-semibold text-sm text-[#1B2A4A]">{personName(otherOf(activeConversation)?.user)}</p>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm text-[#1B2A4A] truncate">{personName(otherOf(activeConversation)?.user)}</p>
               <div className="flex items-center gap-2 text-xs text-[#5C6E8A]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#74C69D]" />
                 Active{otherOf(activeConversation)?.user?.profile?.neighborhood ? ` · ${otherOf(activeConversation)?.user?.profile?.neighborhood}` : ''}
@@ -419,7 +441,11 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
               >
                 <Icon name="shield" size={16} />
               </button>
-              <button className="w-8 h-8 rounded-full hover:bg-[#F5F4EF] flex items-center justify-center text-[#5C6E8A] transition-colors">
+              <button
+                type="button"
+                aria-label="Conversation filters"
+                className="w-8 h-8 rounded-full hover:bg-[#F5F4EF] flex items-center justify-center text-[#5C6E8A] transition-colors"
+              >
                 <Icon name="sliders" size={16} />
               </button>
             </div>
@@ -552,12 +578,17 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
               ))}
             </div>
             <div className="flex items-end gap-2">
-              <button className="w-9 h-9 flex-shrink-0 rounded-full bg-[#F5F4EF] flex items-center justify-center text-[#5C6E8A] hover:bg-[#EEF0F5] transition-colors">
+              <button
+                type="button"
+                aria-label="Attach a photo"
+                className="w-9 h-9 flex-shrink-0 rounded-full bg-[#F5F4EF] flex items-center justify-center text-[#5C6E8A] hover:bg-[#EEF0F5] transition-colors"
+              >
                 <Icon name="camera" size={16} />
               </button>
               <div className="flex-1 relative">
                 <textarea
                   ref={composerRef}
+                  aria-label="Message"
                   value={newMessage}
                   onChange={e => { setNewMessage(e.target.value); setSendError('') }}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendMessage() } }}
@@ -567,6 +598,8 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
                 />
               </div>
               <button
+                type="button"
+                aria-label="Send message"
                 onClick={() => void sendMessage()}
                 disabled={!newMessage.trim() || acting}
                 className="w-9 h-9 flex-shrink-0 rounded-full bg-[#2D6A4F] text-white flex items-center justify-center hover:bg-[#1B4332] transition-colors disabled:opacity-40"

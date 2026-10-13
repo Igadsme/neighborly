@@ -484,6 +484,7 @@ export default function Navigation({
             <button
               key={page}
               type="button"
+              aria-label={label}
               aria-current={isActive(page) ? "page" : undefined}
               onClick={() => onNavigate(page)}
               className={`flex-1 min-h-11 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
