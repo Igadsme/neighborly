@@ -154,6 +154,10 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
     setSignInOpen(true)
   }
 
+  const totalNearbyListings = categoryCounts
+    ? Object.values(categoryCounts).reduce((total, count) => total + count, 0)
+    : null
+
   const tileCount = (label: string) => {
     if (!categoryCounts) return "…"
     if (label === "For Sale") {
@@ -276,7 +280,18 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           <div className="flex-1 text-white">
             <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm px-3 py-1.5 rounded-full text-sm font-medium mb-6 text-white border border-white/20">
               <span className="w-2 h-2 rounded-full bg-[#74C69D] animate-pulse" />
-              3,200+ active listings in Atlanta
+              {/*
+                The count is the real number of listings the API reports,
+                not a marketing figure. It used to read a hardcoded
+                "3,200+ active listings in Atlanta", which on a real
+                launch would be a number the product could not stand
+                behind and that did not change no matter what was listed.
+                While the count loads the badge says nothing numeric, so
+                it never shows a stale or invented total.
+              */}
+              {totalNearbyListings === null
+                ? "Listings from your neighbors"
+                : `${totalNearbyListings.toLocaleString()} nearby listings`}
             </div>
 
             <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-semibold leading-[1.05] mb-6">

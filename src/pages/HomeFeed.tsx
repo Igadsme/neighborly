@@ -419,7 +419,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
             className="flex gap-4 scroll-x-focusable scrollbar-hide pb-2"
             tabIndex={0}
             role="group"
-            aria-label="Free listings"
+            aria-label="Preview neighbor examples"
           >
             {suggestedPeople.map(person => (
               <div key={person.name} className="flex-shrink-0 w-48 bg-white rounded-2xl border border-[#E8E6DF] p-4 text-center">
