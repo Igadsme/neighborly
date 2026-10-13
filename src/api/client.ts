@@ -50,6 +50,12 @@ import type {
   VerificationRecord,
   BorrowRequestInput,
   AppealRow,
+  CommunityBadgeRow,
+  ContributionRecord,
+  JoinResult,
+  MissionDetail,
+  MissionPage,
+  MissionParticipantRow,
   MyReview,
   NotificationPage,
   Passport,
@@ -622,6 +628,104 @@ export const api = {
         })
     }
   },
+  missions: {
+    list: (query: Record<string, string | number | boolean | undefined> = {}) => {
+      const search = new URLSearchParams()
+      for (const [key, value] of Object.entries(query)) {
+        if (value !== undefined && value !== "") search.set(key, String(value))
+      }
+      const suffix = search.toString()
+      return request<MissionPage>(`/missions${suffix ? `?${suffix}` : ""}`)
+    },
+    detail: (missionId: string) => request<MissionDetail>(`/missions/${missionId}`),
+    create: (input: Record<string, unknown>) =>
+      request<MissionDetail>("/missions", { method: "POST", body: JSON.stringify(input) }),
+    update: (missionId: string, input: Record<string, unknown>) =>
+      request<MissionDetail>(`/missions/${missionId}`, {
+        method: "PATCH",
+        body: JSON.stringify(input)
+      }),
+    setStatus: (missionId: string, status: string, note?: string) =>
+      request<MissionDetail>(`/missions/${missionId}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status, note })
+      }),
+    join: (missionId: string) =>
+      request<JoinResult>(`/missions/${missionId}/join`, { method: "POST" }),
+    leave: (missionId: string) =>
+      request<{ missionId: string; status: string }>(`/missions/${missionId}/leave`, {
+        method: "POST"
+      }),
+    checkIn: (missionId: string) =>
+      request<{ missionId: string; status: string }>(`/missions/${missionId}/check-in`, {
+        method: "POST"
+      }),
+    mine: (query: Record<string, string | number | boolean | undefined> = {}) =>
+      request<MissionPage>(`/missions/organizer?${new URLSearchParams(
+        Object.entries(query)
+          .filter(([, value]) => value !== undefined && value !== "")
+          .map(([key, value]) => [key, String(value)])
+      )}`),
+    joined: (query: Record<string, string | number | boolean | undefined> = {}) =>
+      request<MissionPage>(`/missions/joined?${new URLSearchParams(
+        Object.entries(query)
+          .filter(([, value]) => value !== undefined && value !== "")
+          .map(([key, value]) => [key, String(value)])
+      )}`),
+    participants: (missionId: string) =>
+      request<MissionParticipantRow[]>(`/missions/${missionId}/participants`),
+    approve: (missionId: string, participantId: string) =>
+      request<unknown>(`/missions/${missionId}/participants/${participantId}/approve`, {
+        method: "POST"
+      }),
+    markAttendance: (missionId: string, participantId: string, asStaff = false) =>
+      request<unknown>(
+        `/missions/${missionId}/participants/${participantId}/${asStaff ? "attendance-staff" : "attendance"}`,
+        { method: "POST" }
+      ),
+    complete: (missionId: string, asStaff = false) =>
+      request<{ verified: number }>(`/missions/${missionId}/${asStaff ? "complete-staff" : "complete"}`, {
+        method: "POST"
+      }),
+    revoke: (missionId: string, participantId: string, reason: string, asStaff = false) =>
+      request<unknown>(
+        `/missions/${missionId}/participants/${participantId}/revoke${asStaff ? "-staff" : ""}`,
+        { method: "POST", body: JSON.stringify({ reason }) }
+      ),
+    contributions: () => request<ContributionRecord>("/missions/contributions"),
+    badgeCatalogue: () =>
+      request<CommunityBadgeRow[]>("/missions/badges"),
+    report: (missionId: string, reason: string, details?: string) =>
+      request<unknown>(`/missions/${missionId}/report`, {
+        method: "POST",
+        body: JSON.stringify({ reportReason: reason, details })
+      }),
+    staffQueue: () =>
+      request<
+        Array<{
+          id: string
+          targetType: string
+          reason: string
+          details?: string | null
+          createdAt: string
+          reporter: PublicUserCard
+          mission: {
+            id: string
+            title: string
+            status: string
+            confirmedCount: number
+            capacity: number
+            organizer: PublicUserCard
+          } | null
+        }>
+      >("/missions/staff/queue"),
+    staffModerate: (missionId: string, action: "hide" | "restore", note: string) =>
+      request<unknown>(`/missions/staff/${missionId}/moderate`, {
+        method: "POST",
+        body: JSON.stringify({ action, note })
+      })
+  },
+
   borrow: {
     listItems: (query: BorrowItemQuery = {}) => {
       const params = new URLSearchParams()

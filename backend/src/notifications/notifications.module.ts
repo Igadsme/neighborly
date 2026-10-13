@@ -1,7 +1,9 @@
 import { Injectable, Logger, Module, OnModuleInit } from '@nestjs/common'
 import { BorrowModule } from '../borrow/borrow.module'
+import { MissionsModule } from '../missions/missions.module'
 import { PassportModule } from '../passport/passport.module'
 import { ReviewsService } from '../passport/reviews.service'
+import { MissionsService } from '../missions/missions.service'
 import { BorrowService } from '../borrow/borrow.service'
 import { MessagingGateway } from '../messaging/messaging.gateway'
 import { MessagingModule } from '../messaging/messaging.module'
@@ -32,13 +34,16 @@ export class NotificationDispatcher implements OnModuleInit {
   private readonly overdueIntervalMs = Number(process.env.BORROW_OVERDUE_POLL_MS ?? 300_000)
   private lastReviewPublish = 0
   private readonly reviewPublishIntervalMs = Number(process.env.REVIEW_PUBLISH_POLL_MS ?? 600_000)
+  private lastMissionReminder = 0
+  private readonly missionReminderIntervalMs = Number(process.env.MISSION_REMINDER_POLL_MS ?? 3_600_000)
 
   constructor(
     private readonly worker: NotificationWorker,
     private readonly savedSearch: SavedSearchAlertWorker,
     private readonly gateway: MessagingGateway,
     private readonly borrow: BorrowService,
-    private readonly reviews: ReviewsService
+    private readonly reviews: ReviewsService,
+    private readonly missions: MissionsService
   ) {}
 
   onModuleInit() {
@@ -110,6 +115,18 @@ export class NotificationDispatcher implements OnModuleInit {
         this.logger.error('review publication sweep failed', error as Error)
       }
     }
+    // Upcoming-mission reminders, bounded by the service itself so a slow or
+    // repeatedly failing reminder cannot be triggered more often here.
+    const nowForMissions = Date.now()
+    if (nowForMissions - this.lastMissionReminder >= this.missionReminderIntervalMs) {
+      this.lastMissionReminder = nowForMissions
+      try {
+        const sent = await this.missions.sendUpcomingReminders(new Date(nowForMissions))
+        if (sent.reminders > 0) this.logger.log(`sent ${sent.reminders} mission reminders`)
+      } catch (error) {
+        this.logger.error('mission reminder sweep failed', error as Error)
+      }
+    }
     return processed
   }
 
@@ -136,7 +153,7 @@ export class NotificationDispatcher implements OnModuleInit {
 }
 
 @Module({
-  imports: [MessagingModule, BorrowModule, PassportModule],
+  imports: [MessagingModule, BorrowModule, PassportModule, MissionsModule],
   controllers: [NotificationsController],
   providers: [NotificationsService, NotificationWorker, SavedSearchAlertWorker, NotificationDispatcher],
   exports: [NotificationsService, NotificationWorker, SavedSearchAlertWorker, NotificationDispatcher]

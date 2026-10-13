@@ -30,6 +30,13 @@ type Page =
   | "request-create"
   | "request-edit"
   | "request-detail"
+  | "missions"
+  | "mission-detail"
+  | "mission-create"
+  | "mission-edit"
+  | "mission-manage"
+  | "mission-contributions"
+  | "community-moderation"
   | "passport"
   | "passport-me"
   | "passport-settings"
@@ -303,6 +310,18 @@ export default function Navigation({
                         className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#8A9AB5] transition-colors"
                       >
                         My passport
+                      </button>
+                      <button
+                        onClick={() => onNavigate("missions")}
+                        className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#8A9AB5] transition-colors"
+                      >
+                        Neighborhood missions
+                      </button>
+                      <button
+                        onClick={() => onNavigate("mission-contributions")}
+                        className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#8A9AB5] transition-colors"
+                      >
+                        My contributions
                       </button>
                       <button
                         onClick={onSignOut}

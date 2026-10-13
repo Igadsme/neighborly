@@ -43,7 +43,22 @@ const PREFERENCE_BY_TYPE: Record<string, keyof PreferenceFlags> = {
   borrow_extension_requested: 'requestUpdates',
   borrow_extension_decided: 'requestUpdates',
   borrow_dispute_opened: 'requestUpdates',
-  borrow_dispute_updated: 'requestUpdates'
+  borrow_dispute_updated: 'requestUpdates',
+  // Missions reuse the request-update preference for the same reason: a
+  // neighbor who does not want activity updates opted out of all of them, and
+  // a new category would silently opt them back in.
+  mission_joined: 'requestUpdates',
+  mission_published: 'requestUpdates',
+  mission_updated: 'requestUpdates',
+  mission_cancelled: 'requestUpdates',
+  mission_completed: 'requestUpdates',
+  mission_participant_approved: 'requestUpdates',
+  mission_waitlist_promoted: 'requestUpdates',
+  mission_reminder: 'requestUpdates',
+  mission_attendance_confirmed: 'requestUpdates',
+  mission_participation_verified: 'requestUpdates',
+  badge_earned: 'requestUpdates',
+  community_moderation_changed: 'requestUpdates'
 }
 
 export interface PreferenceFlags {
@@ -428,6 +443,159 @@ export class NotificationWorker {
             type: 'borrow_dispute_updated',
             title: `Dispute is now ${String(payload.status ?? '').toLowerCase().replace('_', ' ')}`,
             link: `/borrow/disputes/${payload.disputeId}`,
+            dedupe: [eventId, String(index)]
+          }))
+
+      case DOMAIN_EVENTS.missionPublished:
+        return [
+          {
+            userId: String(payload.organizerId ?? ''),
+            type: 'mission_published',
+            title: `"${String(payload.missionTitle ?? 'Your mission')}" is live`,
+            body: 'Neighbors can find it now.',
+            link: `/missions/${payload.missionId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId)
+
+      case DOMAIN_EVENTS.missionJoined:
+        // The organizer hears about the sign-up; the joiner already knows.
+        return [
+          {
+            userId: String(payload.organizerId ?? ''),
+            type: 'mission_joined',
+            title: `Someone joined "${String(payload.missionTitle ?? 'your mission')}"`,
+            body:
+              payload.reason === 'waitlisted'
+                ? 'They are on the waitlist.'
+                : payload.reason === 'awaiting_approval'
+                  ? 'Waiting for your approval.'
+                  : 'They have a confirmed place.',
+            link: `/missions/${payload.missionId}/manage`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.missionParticipantApproved:
+        return [
+          {
+            userId: String(payload.participantId ?? ''),
+            type: 'mission_participant_approved',
+            title: `You have a place at "${String(payload.missionTitle ?? 'a mission')}"`,
+            link: `/missions/${payload.missionId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId)
+
+      case DOMAIN_EVENTS.missionWaitlistPromoted:
+        return [
+          {
+            userId: String(payload.participantId ?? ''),
+            type: 'mission_waitlist_promoted',
+            title: `A place opened at "${String(payload.missionTitle ?? 'a mission')}"`,
+            body: 'You moved off the waitlist.',
+            link: `/missions/${payload.missionId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId)
+
+      case DOMAIN_EVENTS.missionReminder:
+        return [
+          {
+            userId: String(payload.participantId ?? ''),
+            type: 'mission_reminder',
+            title: `"${String(payload.missionTitle ?? 'A mission')}" is coming up`,
+            body: 'It starts within a day.',
+            link: `/missions/${payload.missionId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId)
+
+      case DOMAIN_EVENTS.missionAttendanceConfirmed:
+        return [
+          {
+            userId: String(payload.participantId ?? ''),
+            type: 'mission_attendance_confirmed',
+            title: `Your attendance was confirmed`,
+            body: 'That is one step closer to verified participation.',
+            link: `/missions/${payload.missionId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.missionParticipationVerified:
+        return [
+          {
+            userId: String(payload.participantId ?? ''),
+            type: 'mission_participation_verified',
+            title: `Your participation was verified`,
+            body: 'It now counts toward your passport.',
+            link: `/missions/${payload.missionId}`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId)
+
+      case DOMAIN_EVENTS.missionCompleted:
+        return (payload.participantIds as string[] | undefined ?? [])
+          .filter(userId => userId && userId !== actorId)
+          .map((userId, index) => ({
+            userId,
+            type: 'mission_completed',
+            title: `"${String(payload.missionTitle ?? 'A mission')}" is complete`,
+            link: `/missions/${payload.missionId}`,
+            dedupe: [eventId, String(index)]
+          }))
+
+      case DOMAIN_EVENTS.missionCancelled:
+        return (payload.participantIds as string[] | undefined ?? [])
+          .filter(userId => userId && userId !== actorId)
+          .map((userId, index) => ({
+            userId,
+            type: 'mission_cancelled',
+            title: `"${String(payload.missionTitle ?? 'A mission')}" was cancelled`,
+            body: 'Nothing is expected of you.',
+            link: `/missions/${payload.missionId}`,
+            dedupe: [eventId, String(index)]
+          }))
+
+      case DOMAIN_EVENTS.missionUpdated:
+        // An edit is only worth interrupting someone about when it moves the
+        // mission in time or place, so only the organizer is told. Everyone
+        // else hears about it through the mission itself.
+        return [
+          {
+            userId: String(payload.organizerId ?? ''),
+            type: 'mission_updated',
+            title: `"${String(payload.missionTitle ?? 'Your mission')}" was updated`,
+            link: `/missions/${payload.missionId}/manage`,
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId && intent.userId !== actorId)
+
+      case DOMAIN_EVENTS.communityBadgeEarned:
+        return [
+          {
+            userId: String(payload.userId ?? ''),
+            type: 'badge_earned',
+            title: `You earned ${String(payload.label ?? 'a badge')}`,
+            body: 'Verified activity, not points.',
+            link: '/missions/contributions',
+            dedupe: [eventId]
+          }
+        ].filter(intent => intent.userId)
+
+      case DOMAIN_EVENTS.communityModerationChanged:
+        return (payload.participantIds as string[] | undefined ?? [])
+          .filter(userId => userId && userId !== actorId)
+          .map((userId, index) => ({
+            userId,
+            type: 'community_moderation_changed',
+            title:
+              payload.to === 'HIDDEN'
+                ? `"${String(payload.missionTitle ?? 'A mission')}" was taken down`
+                : `"${String(payload.missionTitle ?? 'A mission')}" is back up`,
+            body: payload.reason ? String(payload.reason) : undefined,
+            link: `/missions/${payload.missionId}`,
             dedupe: [eventId, String(index)]
           }))
 

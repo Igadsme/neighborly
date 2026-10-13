@@ -41,7 +41,20 @@ export const DOMAIN_EVENTS = {
   borrowExtensionRequested: 'borrow.extension_requested',
   borrowExtensionDecided: 'borrow.extension_decided',
   borrowDisputeOpened: 'borrow.dispute_opened',
-  borrowDisputeUpdated: 'borrow.dispute_updated'
+  borrowDisputeUpdated: 'borrow.dispute_updated',
+  // Milestone 9 neighborhood missions.
+  missionPublished: 'mission.published',
+  missionUpdated: 'mission.updated',
+  missionCancelled: 'mission.cancelled',
+  missionCompleted: 'mission.completed',
+  missionJoined: 'mission.joined',
+  missionParticipantApproved: 'mission.participant_approved',
+  missionWaitlistPromoted: 'mission.waitlist_promoted',
+  missionReminder: 'mission.reminder',
+  missionAttendanceConfirmed: 'mission.attendance_confirmed',
+  missionParticipationVerified: 'mission.participation_verified',
+  communityBadgeEarned: 'community.badge_earned',
+  communityModerationChanged: 'community.moderation_changed'
 } as const
 
 export type DomainEventType = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS]
@@ -202,6 +215,35 @@ export interface TransactionStatusChangedPayload {
   participantIds: string[]
 }
 
+/**
+ * Milestone 9 mission events.
+ *
+ * `participantId` is included when one person is the subject of the event, so a
+ * notification can be addressed to that person alone rather than to everyone on
+ * the mission. No location, meeting point, or other participant detail is ever
+ * placed in an event payload: events are read by the notification worker,
+ * which is not the same trust boundary as the mission itself.
+ */
+export interface MissionPayload {
+  missionId: string
+  missionTitle: string
+  organizerId: string
+  /** Present only when one person is the subject of the event. */
+  participantId?: string
+  /** Everyone holding a confirmed slot, for organizer-to-all announcements. */
+  participantIds?: string[]
+  /** Neutral status context, e.g. 'PUBLISHED' or 'CANCELLED'. */
+  to?: string
+  /** Why, in a phrase safe to show a recipient. */
+  reason?: string
+}
+
+export interface BadgeEarnedPayload {
+  userId: string
+  code: string
+  label: string
+}
+
 /** Maps an event type to its payload shape, for compile-time safety. */
 export interface DomainEventPayloads {
   'request.created': RequestCreatedPayload
@@ -228,6 +270,18 @@ export interface DomainEventPayloads {
   'borrow.extension_decided': BorrowExtensionPayload
   'borrow.dispute_opened': BorrowDisputePayload
   'borrow.dispute_updated': BorrowDisputePayload
+  'mission.published': MissionPayload
+  'mission.updated': MissionPayload
+  'mission.cancelled': MissionPayload
+  'mission.completed': MissionPayload
+  'mission.joined': MissionPayload
+  'mission.participant_approved': MissionPayload
+  'mission.waitlist_promoted': MissionPayload
+  'mission.reminder': MissionPayload
+  'mission.attendance_confirmed': MissionPayload
+  'mission.participation_verified': MissionPayload
+  'community.badge_earned': BadgeEarnedPayload
+  'community.moderation_changed': MissionPayload
 }
 
 /**

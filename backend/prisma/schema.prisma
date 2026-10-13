@@ -355,6 +355,10 @@ enum ReportTargetType {
   /// Milestone 8: a reported review, so review moderation reuses the
   /// existing Report and ModerationAction audit surface.
   REVIEW
+  /// Milestone 9: a reported mission and a reported participant, so community
+  /// moderation reuses the same tables rather than inventing a queue.
+  MISSION
+  MISSION_PARTICIPANT
 }
 
 enum ReportReason {
@@ -381,71 +385,280 @@ enum ModerationActionKind {
 }
 
 model User {
-  id                        String                    @id @default(uuid()) @db.Uuid
-  email                     String                    @unique
-  passwordHash              String
-  status                    UserStatus                @default(ACTIVE)
-  createdAt                 DateTime                  @default(now())
-  updatedAt                 DateTime                  @updatedAt
-  deletedAt                 DateTime?
-  emailVerifiedAt           DateTime?
-  pendingEmail              String?
-  pendingEmailAt            DateTime?
-  deletionRequestedAt       DateTime?
-  sessions                  RefreshSession[]
-  emailTokens               EmailVerificationToken[]
-  passwordTokens            PasswordResetToken[]
-  profile                   Profile?
-  listings                  Listing[]
-  requests                  NeedRequest[]
-  offers                    RequestOffer[]            @relation("Offerer")
-  favorites                 Favorite[]
-  savedSearches             SavedSearch[]
-  preference                UserPreference?
-  notificationPreference    NotificationPreference?
-  conversations             ConversationParticipant[]
-  sentMessages              Message[]                 @relation("MessageSender")
-  reviewsGiven              Review[]                  @relation("ReviewAuthor")
-  reviewsReceived           Review[]                  @relation("ReviewSubject")
-  transactionMembers        TransactionParticipant[]
-  housingListings           HousingListing[]
-  jobListings               JobListing[]
-  jobApplications           JobApplication[]
-  jobSaves                  JobSave[]
-  serviceListings           ServiceListing[]
-  serviceQuotes             ServiceQuote[]
-  communityPosts            CommunityPost[]
-  communityReactions        CommunityReaction[]
-  communityComments         CommunityComment[]
-  communityEvents           CommunityEvent[]
-  eventRsvps                CommunityEventRsvp[]
-  lostFoundItems            LostFoundItem[]
-  giveaways                 Giveaway[]                @relation("GiveawayAuthor")
-  claimedGiveaways          Giveaway[]                @relation("GiveawayClaimer")
-  staffRoles                StaffRoleAssignment[]
-  blocksGiven               BlockedUser[]             @relation("BlocksGiven")
-  blocksReceived            BlockedUser[]             @relation("BlocksReceived")
-  reportsFiled              Report[]                  @relation("ReportsFiled")
-  moderationActions         ModerationAction[]
-  notifications             Notification[]
-  savedSearchAlerts         SavedSearchAlert[]
+  id                            String                    @id @default(uuid()) @db.Uuid
+  email                         String                    @unique
+  passwordHash                  String
+  status                        UserStatus                @default(ACTIVE)
+  createdAt                     DateTime                  @default(now())
+  updatedAt                     DateTime                  @updatedAt
+  deletedAt                     DateTime?
+  emailVerifiedAt               DateTime?
+  pendingEmail                  String?
+  pendingEmailAt                DateTime?
+  deletionRequestedAt           DateTime?
+  sessions                      RefreshSession[]
+  emailTokens                   EmailVerificationToken[]
+  passwordTokens                PasswordResetToken[]
+  profile                       Profile?
+  listings                      Listing[]
+  requests                      NeedRequest[]
+  offers                        RequestOffer[]            @relation("Offerer")
+  favorites                     Favorite[]
+  savedSearches                 SavedSearch[]
+  preference                    UserPreference?
+  notificationPreference        NotificationPreference?
+  conversations                 ConversationParticipant[]
+  sentMessages                  Message[]                 @relation("MessageSender")
+  reviewsGiven                  Review[]                  @relation("ReviewAuthor")
+  reviewsReceived               Review[]                  @relation("ReviewSubject")
+  transactionMembers            TransactionParticipant[]
+  housingListings               HousingListing[]
+  jobListings                   JobListing[]
+  jobApplications               JobApplication[]
+  jobSaves                      JobSave[]
+  serviceListings               ServiceListing[]
+  serviceQuotes                 ServiceQuote[]
+  communityPosts                CommunityPost[]
+  communityReactions            CommunityReaction[]
+  communityComments             CommunityComment[]
+  communityEvents               CommunityEvent[]
+  eventRsvps                    CommunityEventRsvp[]
+  lostFoundItems                LostFoundItem[]
+  giveaways                     Giveaway[]                @relation("GiveawayAuthor")
+  claimedGiveaways              Giveaway[]                @relation("GiveawayClaimer")
+  staffRoles                    StaffRoleAssignment[]
+  blocksGiven                   BlockedUser[]             @relation("BlocksGiven")
+  blocksReceived                BlockedUser[]             @relation("BlocksReceived")
+  reportsFiled                  Report[]                  @relation("ReportsFiled")
+  moderationActions             ModerationAction[]
+  notifications                 Notification[]
+  savedSearchAlerts             SavedSearchAlert[]
   // Milestone 7 borrowing relations. Named where one model points at the
   // same table twice.
-  borrowedItems             BorrowRequest[]           @relation("BorrowBorrower")
-  lentItems                 BorrowRequest[]           @relation("BorrowLender")
-  borrowExtensionsRequested BorrowExtension[]         @relation("BorrowExtensionRequester")
-  borrowExtensionsDecided   BorrowExtension[]         @relation("BorrowExtensionDecider")
-  borrowConditionReports    BorrowConditionReport[]
-  borrowDisputesOpened      BorrowDispute[]
-  borrowEvidenceUploaded    BorrowDisputeEvidence[]
+  borrowedItems                 BorrowRequest[]           @relation("BorrowBorrower")
+  lentItems                     BorrowRequest[]           @relation("BorrowLender")
+  borrowExtensionsRequested     BorrowExtension[]         @relation("BorrowExtensionRequester")
+  borrowExtensionsDecided       BorrowExtension[]         @relation("BorrowExtensionDecider")
+  borrowConditionReports        BorrowConditionReport[]
+  borrowDisputesOpened          BorrowDispute[]
+  borrowEvidenceUploaded        BorrowDisputeEvidence[]
   // Milestone 8 passport and trust.
-  passportPrivacy           PassportPrivacySettings?  @relation("PassportPrivacy")
-  verifications             VerificationRecord[]      @relation("VerificationOwner")
-  verificationsReviewed     VerificationRecord[]      @relation("VerificationReviewer")
-  trustAuditEvents          TrustAuditEvent[]         @relation("TrustAuditOwner")
-  trustAuditActored         TrustAuditEvent[]         @relation("TrustAuditActor")
-  appealsFiled              ModerationAppeal[]        @relation("AppealsFiled")
-  appealsHandled            ModerationAppeal[]        @relation("AppealsHandled")
+  passportPrivacy               PassportPrivacySettings?  @relation("PassportPrivacy")
+  verifications                 VerificationRecord[]      @relation("VerificationOwner")
+  verificationsReviewed         VerificationRecord[]      @relation("VerificationReviewer")
+  trustAuditEvents              TrustAuditEvent[]         @relation("TrustAuditOwner")
+  trustAuditActored             TrustAuditEvent[]         @relation("TrustAuditActor")
+  appealsFiled                  ModerationAppeal[]        @relation("AppealsFiled")
+  appealsHandled                ModerationAppeal[]        @relation("AppealsHandled")
+  // Milestone 9 neighborhood missions.
+  missionsOrganized             NeighborhoodMission[]     @relation("MissionOrganizer")
+  missionParticipations         MissionParticipant[]      @relation("MissionParticipantUser")
+  missionAttendanceMarked       MissionParticipant[]      @relation("MissionAttendanceMarker")
+  missionParticipationsVerified MissionParticipant[]      @relation("MissionParticipationVerifier")
+  memberBadges                  MemberBadge[]
+  missionStatusEvents           MissionStatusEvent[]
+  missionModerationEvents       MissionModerationEvent[]
+}
+
+/// What kind of local activity a mission is. A small closed set beats a
+/// free-text category: it keeps discovery filterable and stops "misc" from
+/// becoming a dumping ground.
+enum MissionCategory {
+  CLEANUP
+  GARDENING
+  DONATION
+  VOLUNTEER
+  ASSISTANCE
+  IMPROVEMENT
+}
+
+enum MissionStatus {
+  /// Only the organizer can see it. Never appears in discovery.
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+  ARCHIVED
+}
+
+enum MissionParticipantStatus {
+  /// Joined and waiting for a slot or for organizer approval.
+  WAITLISTED
+  /// Holds a confirmed slot. Counts against capacity.
+  CONFIRMED
+  /// The participant marked themselves present at the mission.
+  CHECKED_IN
+  /// The organizer confirmed this person was really there.
+  ATTENDED
+  /// Attendance and completion are both established. The only status that
+  /// can earn a badge, because clicking Join is not participation.
+  VERIFIED
+  /// Left on their own accord.
+  WITHDRAWN
+  /// Removed by the organizer or a moderator.
+  REMOVED
+}
+
+enum MissionModerationKind {
+  HIDDEN
+  RESTORED
+  PARTICIPANT_REMOVED
+  REPORT_RESOLVED
+}
+
+/// A real, scheduled, local activity. A mission exists to be attended, not to
+/// be browsed, which is why attendance and completion are first-class fields
+/// rather than a comment thread.
+model NeighborhoodMission {
+  id                        String                   @id @default(uuid()) @db.Uuid
+  organizerId               String                   @db.Uuid
+  title                     String
+  description               String
+  category                  MissionCategory
+  status                    MissionStatus            @default(DRAFT)
+  /// Neighborhood and city only. There is no latitude or longitude on a
+  /// mission: a meeting point is participant-only text, never a public map pin.
+  neighborhood              String?
+  city                      String?
+  /// How to find the meeting point. Shown to confirmed participants only.
+  meetingPoint              String?
+  startAt                   DateTime
+  endAt                     DateTime
+  /// How many people can be confirmed at once. Always at least one.
+  capacity                  Int                      @default(10)
+  /// The confirmed headcount, maintained by one atomic guarded UPDATE and
+  /// bounded by capacity in the database. This is the overbooking guard.
+  confirmedCount            Int                      @default(0)
+  /// Organizer must approve each participant before they hold a slot.
+  requiresApproval          Boolean                  @default(false)
+  /// Staff must confirm attendance before participation becomes verified.
+  /// Set when an organizer is not trusted to mark their own event.
+  requiresStaffVerification Boolean                  @default(false)
+  publishedAt               DateTime?
+  completedAt               DateTime?
+  cancelledAt               DateTime?
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+  organizer                 User                     @relation("MissionOrganizer", fields: [organizerId], references: [id], onDelete: Restrict)
+  participants              MissionParticipant[]
+  statusEvents              MissionStatusEvent[]
+  moderationEvents          MissionModerationEvent[]
+
+  @@index([status, startAt])
+  @@index([organizerId, status])
+  @@index([category, status, startAt])
+}
+
+/// One person on one mission.
+///
+/// The unique (missionId, userId) index is what stops the same neighbor from
+/// joining repeatedly to farm participation, and it is enforced by the
+/// database rather than by a read-then-write in the service.
+model MissionParticipant {
+  id                   String                   @id @default(uuid()) @db.Uuid
+  missionId            String                   @db.Uuid
+  userId               String                   @db.Uuid
+  status               MissionParticipantStatus @default(WAITLISTED)
+  /// Position in the waitlist, or null once confirmed. Promotions reuse the
+  /// slot they free, so ordering is explicit rather than inferred from time.
+  waitlistPosition     Int?
+  /// The participant agreed to be recorded as having taken part. Without it
+  /// the organizer cannot mark attendance.
+  consentedAt          DateTime?
+  checkedInAt          DateTime?
+  /// Who confirmed attendance. Staff when the mission requires it.
+  attendanceMarkedById String?                  @db.Uuid
+  attendanceMarkedAt   DateTime?
+  /// When verified participation was established. Only reachable after the
+  /// organizer completed the mission, so joining is never enough.
+  verifiedAt           DateTime?
+  verifiedById         String?                  @db.Uuid
+  withdrawnAt          DateTime?
+  removedAt            DateTime?
+  removalReason        String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  mission              NeighborhoodMission      @relation(fields: [missionId], references: [id], onDelete: Restrict)
+  user                 User                     @relation("MissionParticipantUser", fields: [userId], references: [id], onDelete: Restrict)
+  attendanceMarkedBy   User?                    @relation("MissionAttendanceMarker", fields: [attendanceMarkedById], references: [id], onDelete: SetNull)
+  verifiedBy           User?                    @relation("MissionParticipationVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  badges               MemberBadge[]
+
+  @@unique([missionId, userId])
+  @@index([missionId, status])
+  @@index([userId, status])
+  @@index([missionId, waitlistPosition])
+}
+
+/// Append-only history of a mission's lifecycle. Archived and cancelled
+/// missions keep their story instead of disappearing.
+model MissionStatusEvent {
+  id         String              @id @default(uuid()) @db.Uuid
+  missionId  String              @db.Uuid
+  actorId    String?             @db.Uuid
+  fromStatus MissionStatus?
+  toStatus   MissionStatus
+  note       String?
+  createdAt  DateTime            @default(now())
+  mission    NeighborhoodMission @relation(fields: [missionId], references: [id], onDelete: Restrict)
+  actor      User?               @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([missionId, createdAt])
+}
+
+/// What a badge actually claims, written once and shown to everyone who holds
+/// it. A badge whose explanation is written per-award can drift into meaning
+/// something it never proved.
+model CommunityBadge {
+  code        String        @id
+  label       String
+  description String
+  /// The plain-language sentence a member sees when they ask what they hold.
+  explanation String
+  /// Order shown on a passport. Purely presentational.
+  sortOrder   Int           @default(100)
+  createdAt   DateTime      @default(now())
+  holders     MemberBadge[]
+}
+
+/// One badge held by one member.
+///
+/// Awarded at most once per (member, badge): the unique index makes the award
+/// idempotent, so a retried event cannot hand out a second copy. Revocation
+/// sets revokedAt instead of deleting, which keeps the reversal auditable and
+/// lets the badge be earned again honestly if the credit was restored.
+model MemberBadge {
+  id               String              @id @default(uuid()) @db.Uuid
+  userId           String              @db.Uuid
+  code             String
+  /// The verified participation that triggered the award, when there was a
+  /// single one. Null for a threshold reached across several missions.
+  missionId        String?             @db.Uuid
+  awardedAt        DateTime            @default(now())
+  revokedAt        DateTime?
+  revocationReason String?
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge            CommunityBadge      @relation(fields: [code], references: [code], onDelete: Restrict)
+  mission          MissionParticipant? @relation(fields: [missionId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, code])
+  @@index([userId, revokedAt])
+}
+
+/// Moderation history for a mission. Nothing here is ever deleted: a hidden
+/// mission stays on record with the reason it was hidden.
+model MissionModerationEvent {
+  id        String                @id @default(uuid()) @db.Uuid
+  missionId String                @db.Uuid
+  actorId   String?               @db.Uuid
+  kind      MissionModerationKind
+  note      String?
+  createdAt DateTime              @default(now())
+  mission   NeighborhoodMission   @relation(fields: [missionId], references: [id], onDelete: Restrict)
+  actor     User?                 @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([missionId, createdAt])
+  @@index([kind, createdAt])
 }
 
 model Profile {

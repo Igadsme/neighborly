@@ -198,8 +198,44 @@ export class PassportService {
       rating: settings.showRatings ? summary : null,
       trustSignals: settings.showTrustSignals ? trustSignals(inputs) : [],
       verifications: settings.showTrustSignals ? await this.publicVerifications(userId) : [],
+      // Milestone 9: community contribution, on the member's own terms. A
+      // revoked badge is excluded rather than shown as struck through, because
+      // a withdrawn claim is not a claim.
+      contributions: settings.showContributions ? await this.publicContributions(userId) : null,
       isSelf: viewerId === userId,
       withdrawn: withdrawn !== null
+    }
+  }
+
+  /**
+   * The public half of a member's community record: a count of verified
+   * missions and the badges that count still supports.
+   *
+   * Written here rather than in the missions module so a passport cannot show
+   * a contribution figure that disagrees with the badge list beside it.
+   */
+  private async publicContributions(userId: string) {
+    const [verifiedMissionCount, organizedCount, badges] = await Promise.all([
+      this.prisma.missionParticipant.count({ where: { userId, status: 'VERIFIED' } }),
+      this.prisma.neighborhoodMission.count({
+        where: { organizerId: userId, status: { in: ['PUBLISHED', 'COMPLETED'] } }
+      }),
+      this.prisma.memberBadge.findMany({
+        where: { userId, revokedAt: null },
+        select: { code: true, awardedAt: true, badge: { select: { label: true, description: true, explanation: true } } },
+        orderBy: { badge: { sortOrder: 'asc' } }
+      })
+    ])
+    return {
+      verifiedMissionCount,
+      organizedCount,
+      badges: badges.map(row => ({
+        code: row.code,
+        label: row.badge.label,
+        description: row.badge.description,
+        explanation: row.badge.explanation,
+        awardedAt: row.awardedAt
+      }))
     }
   }
 

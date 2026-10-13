@@ -224,3 +224,119 @@ describe('NotificationWorker borrow intents', () => {
     }
   })
 })
+
+describe('NotificationWorker mission intents', () => {
+  const worker = new NotificationWorker({} as never, {} as never)
+  const organizer = '33333333-3333-4333-8333-333333333333'
+  const participant = '44444444-4444-4444-8444-444444444444'
+  const missionId = 'mission-1'
+
+  function mission(type: string, payload: Record<string, unknown>, actor?: string | null) {
+    return worker.intentsFor({
+      type,
+      payload: payload as never,
+      actorId: actor ?? null,
+      dedupeKey: `evt:${type}`
+    })
+  }
+
+  const base = {
+    missionId,
+    missionTitle: 'Riverside cleanup',
+    organizerId: organizer
+  }
+
+  it('tells the organizer when someone joins', () => {
+    const rows = mission('mission.joined', { ...base, participantId: participant }, participant)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].userId).toBe(organizer)
+    expect(rows[0].type).toBe('mission_joined')
+    // The joiner is not told about their own join.
+    expect(rows.some(row => row.userId === participant)).toBe(false)
+  })
+
+  it('says plainly whether the joiner got a place or the waitlist', () => {
+    expect(mission('mission.joined', { ...base, participantId: participant }, participant)[0].body).toMatch(
+      /confirmed place/i
+    )
+    expect(
+      mission('mission.joined', { ...base, participantId: participant, reason: 'waitlisted' }, participant)[0].body
+    ).toMatch(/waitlist/i)
+    expect(
+      mission('mission.joined', { ...base, participantId: participant, reason: 'awaiting_approval' }, participant)[0]
+        .body
+    ).toMatch(/approval/i)
+  })
+
+  it('addresses participant-scoped events to that participant alone', () => {
+    for (const type of [
+      'mission.participant_approved',
+      'mission.waitlist_promoted',
+      'mission.reminder',
+      'mission.attendance_confirmed',
+      'mission.participation_verified'
+    ]) {
+      const rows = mission(type, { ...base, participantId: participant })
+      expect(rows).toHaveLength(1)
+      expect(rows[0].userId).toBe(participant)
+    }
+  })
+
+  it('fans a completion out to every confirmed participant except the actor', () => {
+    const rows = mission('mission.completed', { ...base, participantIds: [participant, organizer] }, organizer)
+    expect(rows.map(row => row.userId)).toEqual([participant])
+  })
+
+  it('fans a cancellation out without implying anything is expected', () => {
+    const rows = mission('mission.cancelled', { ...base, participantIds: [participant] }, organizer)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].body).toMatch(/nothing is expected/i)
+  })
+
+  it('addresses a badge to the member who earned it', () => {
+    const rows = mission('community.badge_earned', { userId: participant, code: 'FIRST_HELPER', label: 'First verified helper' })
+    expect(rows).toHaveLength(1)
+    expect(rows[0].userId).toBe(participant)
+    expect(rows[0].title).toContain('First verified helper')
+    // The copy makes the distinction from points explicit.
+    expect(rows[0].body).toMatch(/not points/i)
+  })
+
+  it('reports a moderation change to everyone affected, with the reason', () => {
+    const rows = mission('community.moderation_changed', {
+      ...base,
+      participantIds: [participant],
+      to: 'HIDDEN',
+      reason: 'Reported as spam'
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0].body).toBe('Reported as spam')
+  })
+
+  it('tells the organizer about their own edit but not the participants', () => {
+    const rows = mission('mission.updated', base, organizer)
+    expect(rows).toHaveLength(0)
+    expect(mission('mission.updated', base, participant).map(row => row.userId)).toEqual([organizer])
+  })
+
+  it('gives every mission notification a distinct dedupe key', () => {
+    const rows = [
+      ...mission('mission.joined', { ...base, participantId: participant }, participant),
+      ...mission('mission.participant_approved', { ...base, participantId: participant })
+    ]
+    expect(rows[0].dedupe[0]).not.toBe(rows[1].dedupe[0])
+  })
+
+  it('links every mission notification to a real route', () => {
+    const rows = [
+      ...mission('mission.joined', { ...base, participantId: participant }, participant),
+      ...mission('mission.participant_approved', { ...base, participantId: participant }),
+      ...mission('mission.reminder', { ...base, participantId: participant }),
+      ...mission('mission.completed', { ...base, participantIds: [participant] }, organizer),
+      ...mission('community.badge_earned', { userId: participant, code: 'FIRST_HELPER', label: 'First verified helper' })
+    ]
+    for (const row of rows) {
+      expect(row.link).toMatch(/^\/(missions|borrow)/)
+    }
+  })
+})

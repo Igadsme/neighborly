@@ -29,6 +29,12 @@ import BorrowLists from "./pages/borrow/BorrowLists"
 import BorrowMarketplace from "./pages/borrow/BorrowMarketplace"
 import DisputeCenter from "./pages/borrow/DisputeCenter"
 import MyRequests from "./pages/requests/MyRequests"
+import CommunityModeration from "./pages/missions/CommunityModeration"
+import Contributions from "./pages/missions/Contributions"
+import MissionDetailPage from "./pages/missions/MissionDetailPage"
+import MissionEditor from "./pages/missions/MissionEditor"
+import MissionFeed from "./pages/missions/MissionFeed"
+import MissionManage from "./pages/missions/MissionManage"
 import PassportEdit from "./pages/passport/PassportEdit"
 import PassportSettings from "./pages/passport/PassportSettings"
 import PassportView from "./pages/passport/PassportView"
@@ -74,6 +80,13 @@ type Page =
   | "passport-settings"
   | "passport-edit"
   | "passport-privacy"
+  | "missions"
+  | "mission-detail"
+  | "mission-create"
+  | "mission-edit"
+  | "mission-manage"
+  | "mission-contributions"
+  | "community-moderation"
   | "staff-queue"
   | "borrow"
   | "borrow-item"
@@ -229,6 +242,7 @@ export default function App() {
   const [requestId, setRequestId] = useState<string | null>(null)
   const [disputeId, setDisputeId] = useState<string | null>(null)
   const [passportUserId, setPassportUserId] = useState<string | null>(null)
+  const [missionId, setMissionId] = useState<string | null>(null)
   const [isSignedIn, setIsSignedIn] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
   const [viewerId, setViewerId] = useState<string | null>(null)
@@ -255,6 +269,8 @@ export default function App() {
     if (p === "borrow-detail") setRequestId(id ?? null)
     if (p === "borrow-dispute") setDisputeId(id ?? null)
     if (p === "passport" || p === "passport-me") setPassportUserId(id ?? null)
+    if (p === "mission-detail" || p === "mission-manage") setMissionId(id ?? null)
+    if (p === "mission-edit") setMissionId(id ?? null)
     setPage(p as Page)
     window.scrollTo({ top: 0, behavior: "instant" })
   }, [])
@@ -481,6 +497,34 @@ export default function App() {
           <SavedSearches onNavigate={navigate} />
         )}
 
+        {page === "missions" && (
+          <MissionFeed onNavigate={navigate} canOrganize={isSignedIn} />
+        )}
+
+        {page === "mission-detail" && missionId && (
+          <MissionDetailPage missionId={missionId} onNavigate={navigate} />
+        )}
+
+        {page === "mission-create" && isSignedIn && (
+          <MissionEditor onNavigate={navigate} />
+        )}
+
+        {page === "mission-edit" && isSignedIn && (
+          <MissionEditor missionId={missionId} onNavigate={navigate} />
+        )}
+
+        {page === "mission-manage" && isSignedIn && missionId && (
+          <MissionManage missionId={missionId} onNavigate={navigate} />
+        )}
+
+        {page === "mission-contributions" && isSignedIn && (
+          <Contributions onNavigate={navigate} />
+        )}
+
+        {page === "community-moderation" && isSignedIn && (
+          <CommunityModeration onNavigate={navigate} />
+        )}
+
         {page === "passport" && passportUserId && (
           <PassportView userId={passportUserId} viewerId={viewerId} onNavigate={navigate} />
         )}
@@ -626,6 +670,13 @@ export default function App() {
           page !== "notifications" &&
           page !== "notification-preferences" &&
           page !== "saved-searches" &&
+          page !== "missions" &&
+          page !== "mission-detail" &&
+          page !== "mission-create" &&
+          page !== "mission-edit" &&
+          page !== "mission-manage" &&
+          page !== "mission-contributions" &&
+          page !== "community-moderation" &&
           page !== "passport" &&
           page !== "passport-me" &&
           page !== "passport-settings" &&

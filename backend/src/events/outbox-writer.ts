@@ -31,7 +31,7 @@ export class OutboxWriter {
     payload: Prisma.InputJsonValue,
     options: { actorId?: string; dedupe?: string[] } = {},
     client: Prisma.TransactionClient | PrismaService = this.prisma
-  ): Promise<void> {
+  ): Promise<boolean> {
     const key = options.dedupe ? dedupeKey(type, ...options.dedupe) : null
     try {
       await client.domainEventOutbox.create({
@@ -42,11 +42,12 @@ export class OutboxWriter {
           ...(key ? { dedupeKey: key } : {})
         }
       })
+      return true
     } catch (error) {
       if (isUniqueViolation(error)) {
         // The event already exists, which is exactly the desired outcome.
         audit('event.deduplicated', { type, dedupeKey: key })
-        return
+        return false
       }
       // An outbox failure must not silently swallow a business change, but
       // it also must not roll back a completed transaction. Log loudly.

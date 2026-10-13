@@ -527,6 +527,134 @@ export interface AppealRow {
   createdAt: string
 }
 
+export type MissionCategory =
+  | "CLEANUP"
+  | "GARDENING"
+  | "DONATION"
+  | "VOLUNTEER"
+  | "ASSISTANCE"
+  | "IMPROVEMENT"
+export type MissionStatus = "DRAFT" | "PUBLISHED" | "CANCELLED" | "COMPLETED" | "ARCHIVED"
+export type MissionParticipantStatus =
+  | "WAITLISTED"
+  | "CONFIRMED"
+  | "CHECKED_IN"
+  | "ATTENDED"
+  | "VERIFIED"
+  | "WITHDRAWN"
+  | "REMOVED"
+
+export interface MissionListItem {
+  id: string
+  title: string
+  description: string
+  category: MissionCategory
+  status: MissionStatus
+  neighborhood?: string | null
+  city?: string | null
+  startAt: string
+  endAt: string
+  capacity: number
+  confirmedCount: number
+  slotsLeft: number
+  full: boolean
+  upcoming: boolean
+  requiresApproval: boolean
+  organizer: PublicUserCard
+}
+
+export interface MissionPage {
+  items: MissionListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface MissionParticipation {
+  id: string
+  status: MissionParticipantStatus
+  waitlistPosition?: number | null
+  checkedInAt?: string | null
+  attendanceMarkedAt?: string | null
+  verifiedAt?: string | null
+}
+
+export interface MissionDetail {
+  id: string
+  title: string
+  description: string
+  category: MissionCategory
+  status: MissionStatus
+  neighborhood?: string | null
+  city?: string | null
+  /** Present only for the organizer, confirmed participants, and staff. */
+  meetingPoint?: string | null
+  startAt: string
+  endAt: string
+  capacity: number
+  confirmedCount: number
+  slotsLeft: number
+  requiresApproval: boolean
+  requiresStaffVerification: boolean
+  publishedAt?: string | null
+  completedAt?: string | null
+  cancelledAt?: string | null
+  isOrganizer: boolean
+  organizer: PublicUserCard
+  myParticipation?: MissionParticipation | null
+  ended: boolean
+}
+
+export interface MissionParticipantRow {
+  id: string
+  status: MissionParticipantStatus
+  waitlistPosition?: number | null
+  checkedInAt?: string | null
+  attendanceMarkedAt?: string | null
+  verifiedAt?: string | null
+  user: PublicUserCard
+}
+
+export interface CommunityBadgeRow {
+  code: string
+  label: string
+  description: string
+  /** The sentence a member reads when they ask what the badge means. */
+  explanation: string
+  awardedAt?: string
+}
+
+export interface ContributionRecord {
+  showContributions: boolean
+  verifiedMissionCount: number
+  organizedCount: number
+  badges: CommunityBadgeRow[]
+  participation: Array<{
+    id: string
+    status: MissionParticipantStatus
+    verifiedAt?: string | null
+    checkedInAt?: string | null
+    mission: {
+      id: string
+      title: string
+      category: MissionCategory
+      status: MissionStatus
+      startAt: string
+      neighborhood?: string | null
+      city?: string | null
+    }
+  }>
+}
+
+export interface JoinResult {
+  missionId: string
+  status: MissionParticipantStatus
+  confirmed: boolean
+  waitlisted: boolean
+  waitlistPosition?: number | null
+  message: string
+}
+
 export type BorrowRequestStatus =
   | "REQUESTED"
   | "APPROVED"
