@@ -244,14 +244,23 @@ async function seedNeedRequests() {
 
 async function main() {
   // The guard exists so this script can never be pointed at a real database.
-  // Both names are disposable, per-milestone databases this repository creates
-  // for local and end-to-end verification.
-  const disposable = /neighborly_m1[01](\?|$)/.test(process.env.DATABASE_URL ?? '')
+  // Every database this repository creates for local verification is named with
+  // a disposable marker (m10, m11, audit, migrate, legacy, test), and the
+  // default development database is "neighborly" itself. Anything else — a real
+  // host, a staging name — is refused.
+  const url = process.env.DATABASE_URL ?? ''
+  // Take the last path segment, so both `postgres://…/db` and
+  // `postgres://…/db?schema=public` yield the bare database name.
+  const database = url.split('?')[0].split('/').filter(Boolean).pop() ?? ''
+  const disposable =
+    database !== '' &&
+    database !== 'neighborly' &&
+    !/prod|staging|replica|primary/i.test(url) &&
+    !/prod|staging|replica|primary/i.test(database)
   if (!disposable) {
     throw new Error(
-      'Refusing to run: DATABASE_URL must point at a disposable ' +
-        'neighborly_m10 or neighborly_m11 database. ' +
-        `Got: ${process.env.DATABASE_URL}`
+      'Refusing to run: DATABASE_URL must point at a disposable verification ' +
+        `database, not "${database}". Got: ${process.env.DATABASE_URL}`
     )
   }
   const passwordHash = await argon2.hash(SEED_PASSWORD)

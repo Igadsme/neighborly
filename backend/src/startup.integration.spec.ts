@@ -1,6 +1,12 @@
 import { INestApplication } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from './app.module'
+import {
+  ConsoleEmailSender,
+  EMAIL_SENDER,
+  EmailSender,
+  OutboxEmailSender,
+} from './auth/email-sender'
 
 /**
  * Application-level startup test.
@@ -95,6 +101,61 @@ const moduleRef = await NestFactory.create(AppModule, { logger: ['error', 'warn'
         throw new Error(`${path} returned ${response.status}, expected ${expected.join('|')}. Body: ${body.slice(0, 300)}`)
       }
     }
+  })
+
+  /*
+   * Regression guard for a P1 defect found in the final 12-milestone audit.
+   *
+   * AuthModule bound EMAIL_SENDER with a factory that returned the sender
+   * *class* rather than an instance. Nest injects a factory's return value
+   * verbatim, so every consumer received a constructor: `sender.send` was
+   * undefined and any code path that sent an email threw a TypeError.
+   *
+   * The blast radius was the whole product, not one feature: registration,
+   * email verification, and password reset all send mail, so a brand-new
+   * member could not create an account at all. Both adapter settings were
+   * affected — `console` and the default `outbox`.
+   *
+   * Nothing caught it because the auth suites override the token with
+   * `useValue: new OutboxEmailSender(prisma)`, an actual instance, and a unit
+   * test cannot tell an injected constructor from an injected instance unless
+   * it asserts on the resolved value. This suite resolves the token from the
+   * real module graph, which is the only place the wiring is visible.
+   */
+  it('injects a usable email sender instance, not a class', async () => {
+    const sender = await app.get<EmailSender>(EMAIL_SENDER, { strict: false })
+
+    expect(sender).toBeDefined()
+    // A constructor has no `send` on its own prototype-less object; this
+    // assertion is what the broken wiring failed.
+    expect(typeof sender.send).toBe('function')
+    expect(sender).not.toBe(OutboxEmailSender)
+    expect(sender).not.toBe(ConsoleEmailSender)
+    // Constructors are functions, so also rule out being handed a bare class.
+    expect(typeof sender).toBe('object')
+  })
+
+  it('completes registration end-to-end through the real module graph', async () => {
+    // The strongest possible check: the endpoint a new member hits first.
+    // Before the fix this returned 500 with "this.email.send is not a
+    // function", because registration sends a verification email.
+    const url = await app.getUrl()
+    const response = await fetch(`${url}/api/v1/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: `startup-guard-${Date.now()}@example.com`,
+        // Satisfies the password policy: length, lower, upper and a digit.
+        password: 'StartupGuardPassw0rd',
+        firstName: 'Startup',
+        lastName: 'Guard',
+      }),
+    })
+    const body = await response.text()
+
+    expect(response.status).toBe(201)
+    expect(body).toContain('accessToken')
+    expect(body).not.toContain('this.email.send is not a function')
   })
 
   it('serves the health endpoint', async () => {
