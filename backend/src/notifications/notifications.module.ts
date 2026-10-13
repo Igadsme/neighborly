@@ -1,5 +1,7 @@
 import { Injectable, Logger, Module, OnModuleInit } from '@nestjs/common'
 import { BorrowModule } from '../borrow/borrow.module'
+import { PassportModule } from '../passport/passport.module'
+import { ReviewsService } from '../passport/reviews.service'
 import { BorrowService } from '../borrow/borrow.service'
 import { MessagingGateway } from '../messaging/messaging.gateway'
 import { MessagingModule } from '../messaging/messaging.module'
@@ -28,12 +30,15 @@ export class NotificationDispatcher implements OnModuleInit {
   private readonly pollMs = Number(process.env.NOTIFICATION_POLL_MS ?? 5000)
   private lastOverdueRun = 0
   private readonly overdueIntervalMs = Number(process.env.BORROW_OVERDUE_POLL_MS ?? 300_000)
+  private lastReviewPublish = 0
+  private readonly reviewPublishIntervalMs = Number(process.env.REVIEW_PUBLISH_POLL_MS ?? 600_000)
 
   constructor(
     private readonly worker: NotificationWorker,
     private readonly savedSearch: SavedSearchAlertWorker,
     private readonly gateway: MessagingGateway,
-    private readonly borrow: BorrowService
+    private readonly borrow: BorrowService,
+    private readonly reviews: ReviewsService
   ) {}
 
   onModuleInit() {
@@ -92,6 +97,19 @@ export class NotificationDispatcher implements OnModuleInit {
         this.logger.error('borrow overdue sweep failed', error as Error)
       }
     }
+    // Reviews publish on their own schedule, so this runs on the same cadence
+    // as the overdue sweep: the correctness comes from the conditional claim
+    // inside publishIfDue, not from how often it is called.
+    const nowForReviews = Date.now()
+    if (nowForReviews - this.lastReviewPublish >= this.reviewPublishIntervalMs) {
+      this.lastReviewPublish = nowForReviews
+      try {
+        const published = await this.reviews.publishDueReviews(new Date(nowForReviews))
+        if (published > 0) this.logger.log(`published ${published} reviews`)
+      } catch (error) {
+        this.logger.error('review publication sweep failed', error as Error)
+      }
+    }
     return processed
   }
 
@@ -118,7 +136,7 @@ export class NotificationDispatcher implements OnModuleInit {
 }
 
 @Module({
-  imports: [MessagingModule, BorrowModule],
+  imports: [MessagingModule, BorrowModule, PassportModule],
   controllers: [NotificationsController],
   providers: [NotificationsService, NotificationWorker, SavedSearchAlertWorker, NotificationDispatcher],
   exports: [NotificationsService, NotificationWorker, SavedSearchAlertWorker, NotificationDispatcher]

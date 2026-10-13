@@ -29,6 +29,10 @@ import BorrowLists from "./pages/borrow/BorrowLists"
 import BorrowMarketplace from "./pages/borrow/BorrowMarketplace"
 import DisputeCenter from "./pages/borrow/DisputeCenter"
 import MyRequests from "./pages/requests/MyRequests"
+import PassportEdit from "./pages/passport/PassportEdit"
+import PassportSettings from "./pages/passport/PassportSettings"
+import PassportView from "./pages/passport/PassportView"
+import StaffQueue from "./pages/passport/StaffQueue"
 import NotificationCenter from "./pages/notifications/NotificationCenter"
 import NotificationPreferencesScreen from "./pages/notifications/NotificationPreferencesScreen"
 import SavedSearches from "./pages/notifications/SavedSearches"
@@ -65,6 +69,12 @@ type Page =
   | "create-marketplace"
   | "requests"
   | "my-requests"
+  | "passport"
+  | "passport-me"
+  | "passport-settings"
+  | "passport-edit"
+  | "passport-privacy"
+  | "staff-queue"
   | "borrow"
   | "borrow-item"
   | "borrow-create"
@@ -185,6 +195,32 @@ function EditBorrowItemRoute({
   )
 }
 
+/**
+ * Resolves the signed-in member's own passport id, so the profile route can
+ * be linked to without the caller having to know their own id.
+ */
+function OwnPassportRoute({
+  viewerId,
+  onNavigate
+}: {
+  viewerId: string | null
+  onNavigate: (page: string, id?: string) => void
+}) {
+  const [userId, setUserId] = useState<string | null>(null)
+  useEffect(() => {
+    if (viewerId) setUserId(viewerId)
+    else void api.auth.me().then(me => setUserId(me.id)).catch(() => undefined)
+  }, [viewerId])
+  if (!userId) {
+    return (
+      <main className="mx-auto w-full max-w-3xl px-6 py-16">
+        <Alert tone="info">Loading your passport…</Alert>
+      </main>
+    )
+  }
+  return <PassportView userId={userId} viewerId={userId} onNavigate={onNavigate} />
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>("landing")
   const [listingId, setListingId] = useState<string | null>(null)
@@ -192,6 +228,7 @@ export default function App() {
   const [profileUserId, setProfileUserId] = useState<string | null>(null)
   const [requestId, setRequestId] = useState<string | null>(null)
   const [disputeId, setDisputeId] = useState<string | null>(null)
+  const [passportUserId, setPassportUserId] = useState<string | null>(null)
   const [isSignedIn, setIsSignedIn] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
   const [viewerId, setViewerId] = useState<string | null>(null)
@@ -217,6 +254,7 @@ export default function App() {
     if (p === "borrow-item" || p === "borrow-edit") setRequestId(id ?? null)
     if (p === "borrow-detail") setRequestId(id ?? null)
     if (p === "borrow-dispute") setDisputeId(id ?? null)
+    if (p === "passport" || p === "passport-me") setPassportUserId(id ?? null)
     setPage(p as Page)
     window.scrollTo({ top: 0, behavior: "instant" })
   }, [])
@@ -443,6 +481,22 @@ export default function App() {
           <SavedSearches onNavigate={navigate} />
         )}
 
+        {page === "passport" && passportUserId && (
+          <PassportView userId={passportUserId} viewerId={viewerId} onNavigate={navigate} />
+        )}
+
+        {page === "passport-me" && isSignedIn && (
+          <OwnPassportRoute viewerId={viewerId} onNavigate={navigate} />
+        )}
+
+        {page === "passport-settings" && isSignedIn && (
+          <PassportSettings onNavigate={navigate} />
+        )}
+
+        {page === "passport-edit" && isSignedIn && <PassportEdit onNavigate={navigate} />}
+
+        {page === "staff-queue" && isSignedIn && <StaffQueue onNavigate={navigate} />}
+
         {page === "borrow" && isSignedIn && <BorrowMarketplace onNavigate={navigate} />}
 
         {page === "borrow-lent" && isSignedIn && <BorrowLists onNavigate={navigate} />}
@@ -572,6 +626,11 @@ export default function App() {
           page !== "notifications" &&
           page !== "notification-preferences" &&
           page !== "saved-searches" &&
+          page !== "passport" &&
+          page !== "passport-me" &&
+          page !== "passport-settings" &&
+          page !== "passport-edit" &&
+          page !== "staff-queue" &&
           page !== "borrow" &&
           page !== "borrow-item" &&
           page !== "borrow-create" &&

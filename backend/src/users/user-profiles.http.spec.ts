@@ -1,4 +1,5 @@
-import { ReviewsService } from '../reviews/reviews.service'
+import { PassportService } from '../passport/passport.service'
+import { ReviewsService } from '../passport/reviews.service'
 import { bootApi } from '../common/testing/http-app'
 import { UserProfilesController } from './user-profiles.controller'
 import { UsersService } from './users.service'
@@ -72,7 +73,7 @@ describe('Public profile HTTP', () => {
     const booted = await bootApi({
       controller: UserProfilesController,
       service: UsersService,
-      extraProviders: [ReviewsService],
+      extraProviders: [ReviewsService, PassportService],
       prisma
     })
     app = booted.app
@@ -121,6 +122,11 @@ describe('Public profile HTTP', () => {
         id: 'review-1',
         rating: 5,
         body: 'Smooth pickup.',
+        // Milestone 8 adds the role context and an edit marker. Both are
+        // neutral: they say what kind of exchange this was, and whether the
+        // text was later revised, and disclose nothing else.
+        context: 'completed an exchange',
+        edited: true,
         createdAt: '2026-08-01T00:00:00.000Z',
         itemTitle: 'Oak chair',
         author: {

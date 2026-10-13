@@ -30,6 +30,12 @@ type Page =
   | "request-create"
   | "request-edit"
   | "request-detail"
+  | "passport"
+  | "passport-me"
+  | "passport-settings"
+  | "passport-edit"
+  | "passport-privacy"
+  | "staff-queue"
   | "borrow"
   | "borrow-item"
   | "borrow-create"
@@ -291,6 +297,12 @@ export default function Navigation({
                         className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#8A9AB5] transition-colors"
                       >
                         Borrowing
+                      </button>
+                      <button
+                        onClick={() => onNavigate("passport-me")}
+                        className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#8A9AB5] transition-colors"
+                      >
+                        My passport
                       </button>
                       <button
                         onClick={onSignOut}

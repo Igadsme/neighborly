@@ -336,6 +336,12 @@ enum QuoteStatus {
   ACCEPTED
 }
 
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  HIDDEN
+}
+
 enum StaffRole {
   MODERATOR
   ADMIN
@@ -346,6 +352,9 @@ enum ReportTargetType {
   USER
   MESSAGE
   COMMUNITY_POST
+  /// Milestone 8: a reported review, so review moderation reuses the
+  /// existing Report and ModerationAction audit surface.
+  REVIEW
 }
 
 enum ReportReason {
@@ -429,6 +438,14 @@ model User {
   borrowConditionReports    BorrowConditionReport[]
   borrowDisputesOpened      BorrowDispute[]
   borrowEvidenceUploaded    BorrowDisputeEvidence[]
+  // Milestone 8 passport and trust.
+  passportPrivacy           PassportPrivacySettings?  @relation("PassportPrivacy")
+  verifications             VerificationRecord[]      @relation("VerificationOwner")
+  verificationsReviewed     VerificationRecord[]      @relation("VerificationReviewer")
+  trustAuditEvents          TrustAuditEvent[]         @relation("TrustAuditOwner")
+  trustAuditActored         TrustAuditEvent[]         @relation("TrustAuditActor")
+  appealsFiled              ModerationAppeal[]        @relation("AppealsFiled")
+  appealsHandled            ModerationAppeal[]        @relation("AppealsHandled")
 }
 
 model Profile {
@@ -861,20 +878,171 @@ model Appointment {
   transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 }
 
+/// One member's review of another, after a qualifying completed exchange.
+///
+/// Publication is deliberately not immediate: a review stays pending until
+/// the other party has also reviewed or the review window closes, so a
+/// one-sided review cannot be used to pressure anyone.
 model Review {
-  id            String      @id @default(uuid()) @db.Uuid
-  transactionId String      @db.Uuid
-  authorId      String      @db.Uuid
-  subjectId     String      @db.Uuid
-  rating        Int
-  body          String
-  createdAt     DateTime    @default(now())
-  transaction   Transaction @relation(fields: [transactionId], references: [id])
-  author        User        @relation("ReviewAuthor", fields: [authorId], references: [id])
-  subject       User        @relation("ReviewSubject", fields: [subjectId], references: [id])
+  id             String       @id @default(uuid()) @db.Uuid
+  transactionId  String       @db.Uuid
+  authorId       String       @db.Uuid
+  subjectId      String       @db.Uuid
+  /// The author's role in the exchange, recorded so a public summary can say
+  /// "lenders" rather than making the reader infer it.
+  authorRole     String?
+  rating         Int
+  body           String
+  status         ReviewStatus @default(PENDING)
+  publishedAt    DateTime?
+  /// When an automatic publication becomes due. Set once, at submission.
+  windowClosesAt DateTime?
+  editedAt       DateTime?
+  /// A moderator hid this review. The row is kept; nothing is deleted.
+  hiddenAt       DateTime?
+  hiddenReason   String?
+  /// Rolling window after which edits are refused, so a review cannot be
+  /// rewritten to answer a later dispute.
+  editableUntil  DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  transaction    Transaction  @relation(fields: [transactionId], references: [id])
+  author         User         @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  subject        User         @relation("ReviewSubject", fields: [subjectId], references: [id], onDelete: Cascade)
 
-  @@index([subjectId, createdAt])
-  @@index([transactionId])
+  /// One review per author per transaction, enforced by the database rather
+  /// than only by the service.
+  @@unique([transactionId, authorId])
+  @@index([subjectId, status, createdAt])
+  @@index([status, windowClosesAt])
+}
+
+/// What a member chooses to show on their passport. Everything defaults to
+/// visible except exact location, which is never available.
+model PassportPrivacySettings {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @unique @db.Uuid
+  showRatings       Boolean  @default(true)
+  showTenure        Boolean  @default(true)
+  showNeighborhood  Boolean  @default(true)
+  showCity          Boolean  @default(true)
+  showTrustSignals  Boolean  @default(true)
+  showContributions Boolean  @default(true)
+  /// Public leaderboards are opt-in, never opt-out.
+  leaderboardOptIn  Boolean  @default(false)
+  /// Days a member has to leave a review before it auto-publishes.
+  reviewWindowDays  Int      @default(14)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation("PassportPrivacy", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum VerificationMethod {
+  EMAIL
+  /// Awarded by the system from verified activity records. Not a claim the
+  /// member can make about themselves.
+  VERIFIED_ACTIVITY
+  /// A staff-reviewed method that exists in this product. No government ID,
+  /// selfie, or biometric data is collected anywhere in this milestone.
+  COMMUNITY_REFERENCE
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+}
+
+/// A verification claim and its decision. Only methods the product actually
+/// supports are represented; nothing here implies a third-party check.
+model VerificationRecord {
+  id           String             @id @default(uuid()) @db.Uuid
+  userId       String             @db.Uuid
+  method       VerificationMethod
+  status       VerificationStatus @default(PENDING)
+  /// Why it was submitted, in the member's own words.
+  statement    String?
+  /// Staff decision note. Never shown to the member's public profile.
+  reviewNote   String?
+  reviewedById String?            @db.Uuid
+  decidedAt    DateTime?
+  revokedAt    DateTime?
+  /// Set when the member has been told why a pending request was refused.
+  respondedAt  DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  user         User               @relation("VerificationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy   User?              @relation("VerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([userId, method])
+  @@index([status, createdAt])
+}
+
+/// Append-only. Every trust-affecting decision leaves a record, so a member can
+/// be told why their passport changed.
+model TrustAuditEvent {
+  id        String         @id @default(uuid()) @db.Uuid
+  userId    String         @db.Uuid
+  kind      TrustAuditKind
+  /// What changed, in words. Deliberately human-readable so the audit trail
+  /// is useful without a join.
+  detail    String
+  /// The review or verification record that caused this, when there was one.
+  refId     String?        @db.Uuid
+  actorId   String?        @db.Uuid
+  createdAt DateTime       @default(now())
+  user      User           @relation("TrustAuditOwner", fields: [userId], references: [id], onDelete: Cascade)
+  actor     User?          @relation("TrustAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([kind, createdAt])
+}
+
+enum TrustAuditKind {
+  REVIEW_PUBLISHED
+  REVIEW_HIDDEN
+  REVIEW_RESTORED
+  VERIFICATION_APPROVED
+  VERIFICATION_REJECTED
+  VERIFICATION_REVOKED
+  TRUST_RECALCULATED
+  APPEAL_RESOLVED
+}
+
+/// A member's challenge to a moderation decision.
+model ModerationAppeal {
+  id          String            @id @default(uuid()) @db.Uuid
+  userId      String            @db.Uuid
+  subjectType AppealSubjectType
+  subjectId   String            @db.Uuid
+  reason      String
+  status      AppealStatus      @default(SUBMITTED)
+  resolution  String?
+  handledById String?           @db.Uuid
+  resolvedAt  DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  user        User              @relation("AppealsFiled", fields: [userId], references: [id], onDelete: Cascade)
+  handledBy   User?             @relation("AppealsHandled", fields: [handledById], references: [id], onDelete: SetNull)
+
+  /// One open appeal per subject per member: re-submitting refreshes nothing,
+  /// it collides, which stops an appeal queue from being flooded.
+  @@unique([userId, subjectType, subjectId])
+  @@index([status, createdAt])
+}
+
+enum AppealSubjectType {
+  REVIEW
+  VERIFICATION
+  REPORT
+}
+
+enum AppealStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  RESOLVED
+  REJECTED
 }
 
 model PriceHistory {

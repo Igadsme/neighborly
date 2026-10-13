@@ -47,10 +47,17 @@ import type {
   BorrowableItem,
   BorrowableItemInput,
   BorrowRequest,
+  VerificationRecord,
   BorrowRequestInput,
+  AppealRow,
+  MyReview,
   NotificationPage,
+  Passport,
+  PassportPrivacy,
   NotificationPreferences,
   RequestMatch,
+  ReviewableExchange,
+  ReviewRow,
   RequestPage,
   RequestQuery,
   RequestStatus,
@@ -523,6 +530,97 @@ export const api = {
       }),
     deleteSavedSearch: (id: string) =>
       request<void>(`/listings/saved-searches/${id}`, { method: "DELETE" }),
+  },
+  passport: {
+    member: (userId: string) => request<Passport>(`/passport/members/${userId}`),
+    me: () => request<Passport>("/passport/me"),
+    updateMe: (input: { displayName?: string; bio?: string; neighborhood?: string; city?: string }) =>
+      request<unknown>("/passport/me", { method: "PATCH", body: JSON.stringify(input) }),
+    privacy: () => request<PassportPrivacy>("/passport/privacy"),
+    updatePrivacy: (input: Partial<PassportPrivacy>) =>
+      request<PassportPrivacy>("/passport/privacy", { method: "PATCH", body: JSON.stringify(input) }),
+    auditTrail: () =>
+      request<Array<{ id: string; kind: string; detail: string; createdAt: string }>>("/passport/me/audit"),
+    leaderboard: () =>
+      request<
+        Array<{
+          userId: string
+          displayName: string
+          avatarUrl?: string | null
+          completedBorrowings: number
+          borrowingsAsLender: number
+          completedExchanges: number
+        }>
+      >("/passport/leaderboard"),
+
+    verifications: () =>
+      request<{ records: VerificationRecord[]; emailVerified: boolean }>("/passport/me/verifications"),
+    submitVerification: (input: { method: string; statement?: string }) =>
+      request<VerificationRecord>("/passport/verifications", {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+
+    myAppeals: () => request<AppealRow[]>("/passport/me/appeals"),
+    submitAppeal: (input: { subjectType: string; subjectId: string; reason: string }) =>
+      request<AppealRow>("/passport/appeals", { method: "POST", body: JSON.stringify(input) }),
+
+    reviews: {
+      mine: () => request<MyReview[]>("/reviews/mine"),
+      reviewable: () => request<ReviewableExchange[]>("/reviews/reviewable"),
+      subject: (userId: string) => request<ReviewRow[]>(`/reviews/subjects/${userId}`),
+      create: (input: { transactionId: string; subjectId: string; rating: number; body: string }) =>
+        request<MyReview>("/reviews", { method: "POST", body: JSON.stringify(input) }),
+      update: (reviewId: string, input: { rating?: number; body?: string }) =>
+        request<MyReview>(`/reviews/${reviewId}`, { method: "PATCH", body: JSON.stringify(input) }),
+      report: (reviewId: string, input: { reason: string; details?: string }) =>
+        request<unknown>(`/reviews/${reviewId}/report`, { method: "POST", body: JSON.stringify(input) })
+    },
+
+    staff: {
+      pendingVerifications: () =>
+        request<
+          Array<{
+            id: string
+            method: string
+            statement?: string | null
+            createdAt: string
+            user: PublicUserCard
+          }>
+        >("/passport/staff/verifications"),
+      reviewVerification: (recordId: string, input: { status: string; note?: string }) =>
+        request<VerificationRecord>(`/passport/staff/verifications/${recordId}`, {
+          method: "POST",
+          body: JSON.stringify(input)
+        }),
+      reviewQueue: () =>
+        request<
+          Array<{
+            id: string
+            reason: string
+            details?: string | null
+            createdAt: string
+            reporter: PublicUserCard
+            review: { id: string; rating: number; body: string; subjectId: string; status: string } | null
+          }>
+        >("/passport/staff/reviews"),
+      hideReview: (reviewId: string, reason: string) =>
+        request<unknown>(`/passport/staff/reviews/${reviewId}/hide`, {
+          method: "POST",
+          body: JSON.stringify({ reason })
+        }),
+      restoreReview: (reviewId: string, reason: string) =>
+        request<unknown>(`/passport/staff/reviews/${reviewId}/restore`, {
+          method: "POST",
+          body: JSON.stringify({ reason })
+        }),
+      appeals: () => request<Array<AppealRow & { user: PublicUserCard }>>("/passport/staff/appeals"),
+      resolveAppeal: (appealId: string, input: { status: string; resolution?: string }) =>
+        request<AppealRow>(`/passport/staff/appeals/${appealId}`, {
+          method: "POST",
+          body: JSON.stringify(input)
+        })
+    }
   },
   borrow: {
     listItems: (query: BorrowItemQuery = {}) => {

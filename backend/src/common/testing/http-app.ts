@@ -5,6 +5,7 @@ import { AuthGuard } from '../../auth/auth.guard'
 import { PrismaService } from '../../prisma/prisma.service'
 import { stubStorage } from './stub-storage'
 import { OutboxWriter } from '../../events/outbox-writer'
+import { PassportService } from '../../passport/passport.service'
 import { RequestLifecycleService } from '../../requests/request-lifecycle.service'
 
 export const testJwtSecret = 'test-jwt-secret-must-be-32-characters'
@@ -70,6 +71,9 @@ export async function bootApi(options: {
       // The requests controller takes the lifecycle service alongside the
       // offer service; suites that boot it get a shared instance.
       ...requestLifecycleProviders(),
+      // ReviewsService asks PassportService whether the caller is staff, so a
+      // stand-in is supplied the same way the storage double is.
+      { provide: PassportService, useValue: { assertStaff: async () => undefined } },
       // Listing services depend on object storage; these suites never upload.
       stubStorage().provider,
       // Request services write domain events through the outbox.

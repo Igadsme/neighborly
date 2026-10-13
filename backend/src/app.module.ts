@@ -6,7 +6,7 @@ import { HealthModule } from './health/health.module'
 import { ListingsModule } from './listings/listings.module'
 import { PrismaModule } from './prisma/prisma.module'
 import { RequestsModule } from './requests/requests.module'
-import { ReviewsModule } from './reviews/reviews.module'
+import { PassportModule } from './passport/passport.module'
 import { TransactionsModule } from './transactions/transactions.module'
 import { MessagingModule } from './messaging/messaging.module'
 import { UsersModule } from './users/users.module'
@@ -31,7 +31,7 @@ import { NotificationsModule } from './notifications/notifications.module'
     AuthModule,
     ListingsModule,
     RequestsModule,
-    ReviewsModule,
+    PassportModule,
     TransactionsModule,
     MessagingModule,
     UsersModule,

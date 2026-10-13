@@ -412,6 +412,121 @@ export interface BorrowRequestInput {
   message?: string
 }
 
+export type VerificationMethod = "EMAIL" | "VERIFIED_ACTIVITY" | "COMMUNITY_REFERENCE"
+export type VerificationStatus = "PENDING" | "APPROVED" | "REJECTED" | "REVOKED"
+export type ReviewStatus = "PENDING" | "PUBLISHED" | "HIDDEN"
+
+export interface TrustSignal {
+  key: string
+  label: string
+  /** Plain-language reason, so a badge can always be justified. */
+  explanation: string
+  earned: boolean
+  count: number | null
+}
+
+export interface RatingSummary {
+  /** Null when there are too few reviews for an average to mean anything. */
+  average: number | null
+  count: number
+  distribution: Record<"1" | "2" | "3" | "4" | "5", number>
+  tooFewToRate: boolean
+}
+
+export interface PassportVerification {
+  method: VerificationMethod
+  label: string
+  explanation: string
+  decidedAt?: string | null
+}
+
+export interface Passport {
+  id: string
+  displayName: string
+  avatarUrl?: string | null
+  bio?: string | null
+  memberSince?: string | null
+  accountAgeDays?: number | null
+  neighborhood?: string | null
+  city?: string | null
+  counts: {
+    completedExchanges: number
+    completedBorrowings: number
+    borrowingsAsLender: number
+    borrowingsAsBorrower: number
+  }
+  rating: RatingSummary | null
+  trustSignals: TrustSignal[]
+  verifications: PassportVerification[]
+  isSelf: boolean
+  withdrawn: boolean
+}
+
+export interface PassportPrivacy {
+  showRatings: boolean
+  showTenure: boolean
+  showNeighborhood: boolean
+  showCity: boolean
+  showTrustSignals: boolean
+  showContributions: boolean
+  leaderboardOptIn: boolean
+  reviewWindowDays: number
+}
+
+export interface ReviewRow {
+  id: string
+  rating: number
+  body: string
+  /** What kind of exchange this was, in the reader's terms. */
+  context: string
+  itemTitle?: string | null
+  createdAt: string
+  edited: boolean
+  author: PublicUserCard
+}
+
+export interface MyReview {
+  id: string
+  transactionId: string
+  subjectId: string
+  rating: number
+  body: string
+  status: ReviewStatus
+  visible: boolean
+  /** Explains why a review is not on the profile yet. */
+  publicationNote: string
+  editableUntil?: string | null
+  createdAt: string
+}
+
+export interface ReviewableExchange {
+  transactionId: string
+  completedAt: string
+  myRole?: string | null
+  counterparty: PublicUserCard | null
+}
+
+export interface VerificationRecord {
+  id: string
+  method: VerificationMethod
+  status: VerificationStatus
+  statement?: string | null
+  label: string
+  explanation: string
+  createdAt: string
+  decidedAt?: string | null
+}
+
+export interface AppealRow {
+  id: string
+  subjectType: string
+  subjectId: string
+  status: string
+  reason: string
+  resolution?: string | null
+  createdAt: string
+}
+
 export type BorrowRequestStatus =
   | "REQUESTED"
   | "APPROVED"
