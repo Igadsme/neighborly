@@ -266,7 +266,11 @@ const probe = `(() => {
     imagesMissingAlt: [...document.querySelectorAll('img')].filter(i => !i.hasAttribute('alt')).length,
     brokenImages: [...document.querySelectorAll('img')].filter(i => i.complete && i.naturalWidth === 0).length,
     smallTargets: small.length,
-    smallSample: small.slice(0,4).map(el => el.tagName.toLowerCase()+':'+(el.textContent||'').trim().slice(0,18)),
+    smallSample: small.slice(0, 4).map(el => ({
+      label: el.tagName.toLowerCase() + ':' + (el.textContent || '').trim().slice(0, 24),
+      height: Math.round(el.getBoundingClientRect().height * 10) / 10,
+      cls: String(el.className || '').slice(0, 70),
+    })),
     focusableCount: focusable.length,
     hasMain: !!document.querySelector('main'),
     dialogsWithoutName: [...document.querySelectorAll('[role="dialog"]')].filter(d => !d.getAttribute('aria-label') && !d.getAttribute('aria-labelledby')).length,
@@ -314,7 +318,7 @@ async function checkRoute(cdp, name, width, height) {
   record(`${name} @${width}px form controls labelled`, snap.unlabelledControls === 0, `${snap.unlabelledControls} unlabelled`)
   record(`${name} @${width}px images have alt`, snap.imagesMissingAlt === 0, `${snap.imagesMissingAlt} missing`)
   record(`${name} @${width}px no broken images`, snap.brokenImages === 0, `${snap.brokenImages} broken`)
-  record(`${name} @${width}px tap targets >= 24px`, snap.smallTargets === 0, snap.smallTargets ? snap.smallSample.join(', ') : 'ok')
+  record(`${name} @${width}px tap targets >= 24px`, snap.smallTargets === 0, snap.smallTargets ? JSON.stringify(snap.smallSample) : 'ok')
   record(`${name} @${width}px exactly one h1`, snap.h1.length === 1, `h1=${snap.h1.length} ${JSON.stringify(snap.h1)}`)
   record(`${name} @${width}px dialogs are named and not falsely modal`, snap.dialogsWithoutName === 0 && snap.nonModalOverlays === 0, `unnamed=${snap.dialogsWithoutName} nonModalOverlays=${snap.nonModalOverlays}`)
 

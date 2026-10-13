@@ -61,15 +61,50 @@ ALTER TABLE "Review"
   ADD COLUMN "editedAt" TIMESTAMP(3),
   ADD COLUMN "hiddenAt" TIMESTAMP(3),
   ADD COLUMN "hiddenReason" TEXT,
-  -- @updatedAt is maintained by the client, so no database default here.
-  -- @updatedAt is maintained by the client, so no database default.
-  ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL;
+  -- `updatedAt` is maintained by Prisma's @updatedAt on the client, so there
+  -- is deliberately no permanent database default.
+  --
+  -- It is nevertheless added WITH a temporary default and then backfilled,
+  -- because adding a NOT NULL column with no default to a table that already
+  -- has rows fails outright:
+  --
+  --   ERROR: column "updatedAt" of relation "Review" contains null values
+  --
+  -- That is not hypothetical. Every installation created before Milestone 8
+  -- already has reviews, so the previous form of this migration could never
+  -- be applied to them; it only ever succeeded on an empty database, which is
+  -- why the milestone test suites never saw the failure. The sequence below
+  -- makes the column addition safe on both an empty and a populated table.
+  --
+  -- The temporary default is dropped immediately afterwards, so the settled
+  -- schema matches schema.prisma exactly (Prisma's @updatedAt supplies the
+  -- value on write). Backfilling from "createdAt" rather than CURRENT_TIMESTAMP
+  -- keeps each row's own history: a review edited over time still reports the
+  -- time it was first written until a real edit updates the column.
+  ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- Reviews written before this milestone were already visible. They are
 -- published now rather than being retroactively withheld.
 UPDATE "Review"
 SET "publishedAt" = "createdAt", "status" = 'PUBLISHED'
 WHERE "publishedAt" IS NULL;
+
+-- Backfill updatedAt from the row's own createdAt, then remove the temporary
+-- default so new rows are not silently stamped with the migration time.
+--
+-- The update is unconditional on purpose. The column was added with a default,
+-- so every pre-existing row already holds the migration's CURRENT_TIMESTAMP and
+-- a `WHERE "updatedAt" IS NULL` guard would match nothing. Restoring each
+-- review's own creation time is what keeps its history accurate: until a real
+-- edit happens, "updated" should not claim the row changed when the schema was
+-- migrated. Rows created after this migration are unaffected because this
+-- statement runs once, inside this migration, before any new write.
+UPDATE "Review"
+SET "updatedAt" = "createdAt";
+
+-- The default existed only to make the ADD COLUMN safe on a populated table.
+-- Dropping it restores the settled schema: Prisma's @updatedAt writes the value.
+ALTER TABLE "Review" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- De-duplicate before adding the constraint, not after. If any pair of
 -- members already reviewed the same transaction twice, the older review is

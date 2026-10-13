@@ -3,7 +3,12 @@ import { TransactionStatus, OfferStatus } from '@prisma/client'
 import { OutboxWriter } from '../events/outbox-writer'
 import { RequestsService } from './requests.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { createOfferFixture, createTestPrisma, INTEGRATION_IDS } from '../common/testing/integration-fixtures'
+import {
+  createCompetingOffersFixture,
+  createOfferFixture,
+  createTestPrisma,
+  INTEGRATION_IDS
+} from '../common/testing/integration-fixtures'
 
 describe('Offer acceptance against real PostgreSQL', () => {
   let prisma: PrismaService
@@ -144,5 +149,87 @@ describe('Offer acceptance against real PostgreSQL', () => {
 
     const reloaded = await prisma.requestOffer.findUniqueOrThrow({ where: { id: offer.id } })
     expect(reloaded.status).toBe(OfferStatus.ACCEPTED)
+  })
+})
+
+/**
+ * Regression coverage for a data-integrity defect found in Milestone 11.
+ *
+ * `acceptOffer` guarded only the offer row. Two different offers on the same
+ * request are two independent rows, so accepting both in parallel let each one
+ * claim itself: two transactions and two conversations were created for a
+ * single request and both offers were left ACCEPTED. The request status update
+ * used `updateMany`, so the second acceptance was a silent no-op instead of a
+ * failure and nothing reported the duplicate.
+ *
+ * The existing tests above accept the *same* offer twice, which the per-offer
+ * guard does handle. These cover the case it did not.
+ */
+describe('two different offers racing to be accepted', () => {
+  let prisma: PrismaService
+  let service: RequestsService
+
+  beforeAll(async () => {
+    prisma = createTestPrisma()
+    await prisma.$connect()
+    service = new RequestsService(prisma, new OutboxWriter(prisma))
+  })
+
+  afterAll(async () => {
+    await prisma.$disconnect()
+  })
+
+  it('produces exactly one exchange when two offers are accepted in parallel', async () => {
+    const { requestId, first, second } = await createCompetingOffersFixture(prisma)
+
+    const outcomes = await Promise.allSettled([
+      service.acceptOffer(INTEGRATION_IDS.requester, first.id, requestId),
+      service.acceptOffer(INTEGRATION_IDS.requester, second.id, requestId)
+    ])
+
+    const accepted = outcomes.filter(o => o.status === 'fulfilled')
+    const refused = outcomes.filter(o => o.status === 'rejected')
+    expect(accepted).toHaveLength(1)
+    expect(refused).toHaveLength(1)
+
+    // Exactly one transaction may exist for this request's offers. Two would
+    // send two counterparties to a handoff for one request.
+    const exchanges = await prisma.transaction.findMany({
+      where: { offerId: { in: [first.id, second.id] } }
+    })
+    expect(exchanges).toHaveLength(1)
+
+    // Only the winning offer is ACCEPTED; the loser must never also be marked
+    // accepted.
+    const reloaded = await prisma.requestOffer.findMany({
+      where: { id: { in: [first.id, second.id] } }
+    })
+    expect(reloaded.filter(o => o.status === OfferStatus.ACCEPTED)).toHaveLength(1)
+
+    // A single conversation: two would duplicate the thread the counterparties
+    // use to arrange the handoff.
+    const conversationIds = new Set(exchanges.map(e => e.conversationId))
+    expect(conversationIds.size).toBe(1)
+  })
+
+  it('reports the second acceptance as a failure rather than silently succeeding', async () => {
+    const { requestId, first, second } = await createCompetingOffersFixture(
+      prisma,
+      '50000000-0000-4000-8000-00000000000a',
+      '60000000-0000-4000-8000-00000000001a',
+      '60000000-0000-4000-8000-00000000001b'
+    )
+
+    await service.acceptOffer(INTEGRATION_IDS.requester, first.id, requestId)
+
+    // A later, sequential accept must fail loudly. Before the fix this quietly
+    // created a second exchange.
+    await expect(service.acceptOffer(INTEGRATION_IDS.requester, second.id, requestId)).rejects.toThrow(
+      'already been fulfilled'
+    )
+    const exchanges = await prisma.transaction.findMany({
+      where: { offerId: { in: [first.id, second.id] } }
+    })
+    expect(exchanges).toHaveLength(1)
   })
 })

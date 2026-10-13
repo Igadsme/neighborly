@@ -243,9 +243,14 @@ async function seedNeedRequests() {
 }
 
 async function main() {
-  if (!process.env.DATABASE_URL?.includes('neighborly_m10')) {
+  // The guard exists so this script can never be pointed at a real database.
+  // Both names are disposable, per-milestone databases this repository creates
+  // for local and end-to-end verification.
+  const disposable = /neighborly_m1[01](\?|$)/.test(process.env.DATABASE_URL ?? '')
+  if (!disposable) {
     throw new Error(
-      'Refusing to run: DATABASE_URL must point at the disposable neighborly_m10 database. ' +
+      'Refusing to run: DATABASE_URL must point at a disposable ' +
+        'neighborly_m10 or neighborly_m11 database. ' +
         `Got: ${process.env.DATABASE_URL}`
     )
   }

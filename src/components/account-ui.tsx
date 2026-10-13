@@ -64,14 +64,17 @@ export function inputClass(error?: string | null) {
 
 export function primaryButton() {
   return [
-    "w-full rounded-xl bg-[#2D6A4F] px-5 py-3 font-semibold text-white transition",
+    // min-h-11 keeps the control at a comfortable touch height. Vertical
+    // padding alone produced a 23px control at the inherited font size, below
+    // the 24px minimum target size, which the browser suite now checks.
+    "w-full min-h-11 rounded-xl bg-[#2D6A4F] px-5 py-3 font-semibold text-white transition",
     "hover:bg-[#245640] disabled:cursor-not-allowed disabled:opacity-60",
   ].join(" ")
 }
 
 export function secondaryButton() {
   return [
-    "w-full rounded-xl border border-[#D8DED8] bg-white px-5 py-3 font-semibold text-[#1B2A4A] transition",
+    "w-full min-h-11 rounded-xl border border-[#D8DED8] bg-white px-5 py-3 font-semibold text-[#1B2A4A] transition",
     "hover:bg-[#F4F6F2] disabled:cursor-not-allowed disabled:opacity-60",
   ].join(" ")
 }

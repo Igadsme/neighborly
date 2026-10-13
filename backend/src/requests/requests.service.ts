@@ -287,13 +287,42 @@ export class RequestsService {
     if (!negotiableOfferStatuses.includes(offer.status)) throw new BadRequestException('Offer is no longer acceptable')
 
     return this.prisma.$transaction(async tx => {
-      // Atomic claim: the UPDATE locks the offer row and only succeeds while
-      // the offer is still negotiable, so competing accepts cannot both win.
+      /*
+       * Claim the offer first, then the request.
+       *
+       * The offer guard alone is not enough: two different offers on the same
+       * request are two independent rows, so both could claim themselves and
+       * both would create a transaction and a conversation for one request. The
+       * request row is the contended resource, so it has to be claimed too, and
+       * that claim decides the winner.
+       *
+       * The order matters for the error the caller sees. Claiming the offer
+       * first means a repeat acceptance of an offer that is already accepted
+       * reports "Offer is no longer acceptable", which is what it did before
+       * and what callers rely on. Only when the offer is genuinely negotiable
+       * but the request is already taken does the request-level guard fire.
+       */
       const claimed = await tx.requestOffer.updateMany({
         where: { id: offerId, status: { in: negotiableOfferStatuses } },
         data: { status: OfferStatus.ACCEPTED }
       })
       if (claimed.count === 0) throw new BadRequestException('Offer is no longer acceptable')
+
+      // Atomic compare-and-set on the contended resource: the row is locked and
+      // re-checked, so exactly one acceptance can move the request out of
+      // PUBLISHED and the losers see zero rows affected.
+      const claimedRequest = await tx.needRequest.updateMany({
+        where: { id: offer.requestId, status: 'PUBLISHED' },
+        data: {
+          status: 'FULFILLED',
+          statusChangedAt: new Date(),
+          fulfilledAt: new Date(),
+          updatedAt: new Date()
+        }
+      })
+      if (claimedRequest.count === 0) {
+        throw new BadRequestException('That request has already been fulfilled')
+      }
       try {
         const conversation = await tx.conversation.create({
           data: {
@@ -321,13 +350,8 @@ export class RequestsService {
           data: { transactionId: transaction.id, toStatus: TransactionStatus.ACCEPTED }
         })
 
-        // The request is satisfied by this acceptance. The conditional write
-        // means a concurrent accept that already fulfilled it is a no-op
-        // rather than an error, so exactly one exchange wins.
-        await tx.needRequest.updateMany({
-          where: { id: offer.requestId, status: 'PUBLISHED' },
-          data: { status: 'FULFILLED', statusChangedAt: new Date(), fulfilledAt: new Date(), updatedAt: new Date() }
-        })
+        // The request was claimed above, so this event is always recorded exactly
+        // once for the acceptance that actually won.
         await tx.requestStatusEvent.create({
           data: {
             requestId: offer.requestId,

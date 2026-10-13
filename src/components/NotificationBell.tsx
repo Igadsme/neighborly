@@ -97,7 +97,9 @@ export default function NotificationBell({ onNavigate }: NotificationBellProps) 
             <p className="text-sm font-semibold text-[#1B2A4A]">Notifications</p>
             <button
               type="button"
-              className="text-xs text-[#2D6A4F] disabled:opacity-50"
+              // px-2 and min-h-11 give this text button a real hit area; at
+              // 16px tall it was below the 24px minimum target size.
+              className="min-h-11 px-2 -mr-2 rounded-lg text-xs text-[#2D6A4F] hover:bg-[#F0FBF3] disabled:opacity-50"
               disabled={unread === 0}
               onClick={async () => {
                 await api.notifications.markAllRead().catch(() => undefined)

@@ -28,9 +28,11 @@ export class CreateMissionDto {
   @IsEnum(MissionCategory)
   category!: MissionCategory
 
+  @Type(() => Date)
   @IsDate()
   startAt!: Date
 
+  @Type(() => Date)
   @IsDate()
   endAt!: Date
 
@@ -102,10 +104,12 @@ export class UpdateMissionDto {
   capacity?: number
 
   @IsOptional()
+  @Type(() => Date)
   @IsDate()
   startAt?: Date
 
   @IsOptional()
+  @Type(() => Date)
   @IsDate()
   endAt?: Date
 
