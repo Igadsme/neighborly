@@ -160,7 +160,7 @@ export default function MissionFeed({ onNavigate, canOrganize }: MissionFeedProp
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="font-display text-lg font-semibold text-[#1B2A4A]">{mission.title}</h2>
-                  <p className="text-xs text-[#8A9AB5]">
+                  <p className="text-xs text-[#5C6E8A]">
                     {CATEGORIES.find(entry => entry.id === mission.category)?.label ?? mission.category}
                     {" · "}
                     {new Date(mission.startAt).toLocaleString()}

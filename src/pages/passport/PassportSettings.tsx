@@ -196,7 +196,7 @@ export default function PassportSettings({ onNavigate }: { onNavigate: (page: st
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm text-[#2D6A4F]" aria-label={`${review.rating} out of 5`}>
                         {"★".repeat(review.rating)}
-                        <span className="text-[#C5CCDA]">{"★".repeat(5 - review.rating)}</span>
+                        <span className="text-[#5C6E8A]">{"★".repeat(5 - review.rating)}</span>
                       </span>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
@@ -211,7 +211,7 @@ export default function PassportSettings({ onNavigate }: { onNavigate: (page: st
                     <p className="mt-1 whitespace-pre-wrap text-sm text-[#1B2A4A]">{review.body}</p>
                     {/* The reason a review is not visible is always stated,
                         so nobody is left guessing. */}
-                    <p className="mt-1 text-xs text-[#8A9AB5]">{review.publicationNote}</p>
+                    <p className="mt-1 text-xs text-[#5C6E8A]">{review.publicationNote}</p>
                   </li>
                 ))}
               </ul>
@@ -271,7 +271,7 @@ export default function PassportSettings({ onNavigate }: { onNavigate: (page: st
                 />
                 List me on the public neighbor leaderboard
               </label>
-              <p className="-mt-2 text-xs text-[#8A9AB5]">
+              <p className="-mt-2 text-xs text-[#5C6E8A]">
                 Off by default. Only verified activity counts toward a leaderboard.
               </p>
 
@@ -317,7 +317,7 @@ export default function PassportSettings({ onNavigate }: { onNavigate: (page: st
                     : "Not confirmed yet."}
                 </p>
                 {!records.emailVerified && (
-                  <p className="mt-1 text-xs text-[#8A9AB5]">
+                  <p className="mt-1 text-xs text-[#5C6E8A]">
                     Confirm from account settings. It cannot be granted from this page.
                   </p>
                 )}
@@ -343,7 +343,7 @@ export default function PassportSettings({ onNavigate }: { onNavigate: (page: st
                   </div>
                   <p className="mt-1 text-xs text-[#5A6B85]">{record.explanation}</p>
                   {record.statement && (
-                    <p className="mt-1 text-xs text-[#8A9AB5]">Your note: {record.statement}</p>
+                    <p className="mt-1 text-xs text-[#5C6E8A]">Your note: {record.statement}</p>
                   )}
                 </div>
               ))}
@@ -465,7 +465,7 @@ function ReviewComposer({
           exchange.counterparty?.profile?.firstName ||
           "a neighbor"}
       </p>
-      <p className="text-xs text-[#8A9AB5]">
+      <p className="text-xs text-[#5C6E8A]">
         Completed {new Date(exchange.completedAt).toLocaleDateString()}
       </p>
       <Field id={`rating-${exchange.transactionId}`} label="Rating">
@@ -494,7 +494,7 @@ function ReviewComposer({
       <button type="submit" className={primaryButton()} disabled={busy}>
         {busy ? "Saving…" : "Write review"}
       </button>
-      <p className="text-xs text-[#8A9AB5]">
+      <p className="text-xs text-[#5C6E8A]">
         Your review appears once they review too, or after your publication window closes. It is not
         a way to pressure anyone.
       </p>

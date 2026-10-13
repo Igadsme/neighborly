@@ -20,6 +20,14 @@ artifacts/backups/
 !artifacts/docker-release-verification/*.log
 artifacts/docker-release-verification/._*
 artifacts/docker-release-verification/browser-smoke/.chrome-profile/
+
+# Milestone 10 browser verification. The JSON report is committed as the
+# record of what was measured; the screenshots are regenerable binaries of
+# more than a megabyte, so they are produced on demand rather than stored.
+# Re-create with:
+#   CHECK_OUT=artifacts/milestone10-browser node scripts/milestone10-browser-check.mjs
+artifacts/milestone10-browser/._*
+artifacts/milestone10-browser/*.png
 .claude-replay.*
 .tmp-*
 /.figma/design-context/

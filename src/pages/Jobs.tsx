@@ -117,7 +117,7 @@ export default function Jobs() {
           <p className="text-white/70 text-lg mb-6">Full-time, part-time, freelance, and one-time work in Atlanta.</p>
           <div className="flex gap-3 max-w-2xl">
             <div className="relative flex-1">
-              <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#C5CCDA]" />
+              <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5C6E8A]" />
               <input
                 type="text"
                 value={searchQuery}
@@ -189,7 +189,7 @@ export default function Jobs() {
         <div className="flex gap-6">
           {/* Job list */}
           <div className="flex-1 md:w-80 md:flex-shrink-0">
-            <p className="text-sm text-[#8A9AB5] mb-4">
+            <p className="text-sm text-[#5C6E8A] mb-4">
               {loading ? 'Loading jobs…' : error ? 'Jobs could not be loaded.' : <><span className="font-bold text-[#1B2A4A]">{rows.length}</span> jobs in Atlanta</>}
             </p>
             {loading ? (
@@ -219,7 +219,7 @@ export default function Jobs() {
                               <Icon name="bookmark" size={14} className={saved.includes(job.id) ? 'fill-[#2D6A4F] stroke-[#2D6A4F]' : 'stroke-[#C5CCDA]'} />
                             </button>
                           </div>
-                          <p className="text-xs text-[#8A9AB5]">{job.company}</p>
+                          <p className="text-xs text-[#5C6E8A]">{job.company}</p>
                         </div>
                       </div>
 
@@ -230,7 +230,7 @@ export default function Jobs() {
                         {job.verified && <Badge variant="green" size="sm">✓ Verified</Badge>}
                       </div>
 
-                      <div className="flex items-center justify-between text-xs text-[#8A9AB5]">
+                      <div className="flex items-center justify-between text-xs text-[#5C6E8A]">
                         <span>{job.location} · {job.posted}</span>
                         <span className="font-semibold text-[#2D6A4F]">{job.salary}</span>
                       </div>
@@ -244,7 +244,7 @@ export default function Jobs() {
               <div className="py-12 text-center">
                 <div className="text-4xl mb-3">💼</div>
                 <p className="font-semibold text-[#1B2A4A]">No jobs match your filters</p>
-                <p className="text-sm text-[#8A9AB5] mt-1">Try removing some filters.</p>
+                <p className="text-sm text-[#5C6E8A] mt-1">Try removing some filters.</p>
               </div>
             )}
           </div>
@@ -264,7 +264,7 @@ export default function Jobs() {
                     <h2 className="font-display text-2xl font-semibold text-[#1B2A4A]">{selectedJob.title}</h2>
                     <p className="text-[#5C6E8A]">{selectedJob.company}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-[#8A9AB5]">{selectedJob.location}</span>
+                      <span className="text-xs text-[#5C6E8A]">{selectedJob.location}</span>
                       <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-md ${remoteColors[selectedJob.remote] ?? 'bg-[#F5F4EF] text-[#5C6E8A]'}`}>{selectedJob.remote}</span>
                     </div>
                   </div>
@@ -277,15 +277,15 @@ export default function Jobs() {
                 <div className="grid grid-cols-3 gap-3 mb-5">
                   <div className="bg-[#F0FBF3] rounded-xl p-3 text-center">
                     <p className="font-bold text-[#2D6A4F]">{selectedJob.salary}</p>
-                    <p className="text-xs text-[#8A9AB5]">Compensation</p>
+                    <p className="text-xs text-[#5C6E8A]">Compensation</p>
                   </div>
                   <div className="bg-[#DDEEFF] rounded-xl p-3 text-center">
                     <p className="font-bold text-[#2B5F8E]">{selectedJob.type}</p>
-                    <p className="text-xs text-[#8A9AB5]">Job type</p>
+                    <p className="text-xs text-[#5C6E8A]">Job type</p>
                   </div>
                   <div className="bg-[#FEF3C7] rounded-xl p-3 text-center">
                     <p className="font-bold text-[#92400E]">{selectedJob.level}</p>
-                    <p className="text-xs text-[#8A9AB5]">Experience</p>
+                    <p className="text-xs text-[#5C6E8A]">Experience</p>
                   </div>
                 </div>
 
@@ -311,7 +311,7 @@ export default function Jobs() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-[#8A9AB5] mb-5 p-3 bg-[#F5F4EF] rounded-xl">
+                <div className="flex items-center justify-between text-xs text-[#5C6E8A] mb-5 p-3 bg-[#F5F4EF] rounded-xl">
                   <span>📅 Posted {selectedJob.posted}</span>
                   <span>⏰ Deadline: {selectedJob.deadline}</span>
                   {selectedJob.verified && <span className="text-[#2D6A4F] font-semibold">✓ Verified employer</span>}
@@ -339,7 +339,7 @@ export default function Jobs() {
                   </button>
                 </div>
                 {shareNote && <p className="text-xs text-[#A63D27] text-center mt-2" role="alert">{shareNote}</p>}
-                <p className="text-xs text-[#C5CCDA] text-center mt-3">
+                <p className="text-xs text-[#5C6E8A] text-center mt-3">
                   🔒 Apply through Neighborly — your info stays private until you decide to share it.
                 </p>
               </div>

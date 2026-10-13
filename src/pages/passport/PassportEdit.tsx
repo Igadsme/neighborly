@@ -117,7 +117,7 @@ export default function PassportEdit({ onNavigate }: { onNavigate: (page: string
           </Field>
         </div>
 
-        <p className="text-xs text-[#8A9AB5]">
+        <p className="text-xs text-[#5C6E8A]">
           Your exact location is never published and cannot be set here. Trust signals and
           verification are derived from your activity and reviewed by moderators, not typed in.
         </p>

@@ -272,8 +272,8 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
         <div className="flex items-start justify-between mb-6">
           <div>
             <h1 className="font-display text-3xl font-semibold text-[#1B2A4A]">Community</h1>
-            <div className="flex items-center gap-1.5 mt-1 text-sm text-[#8A9AB5]">
-              <Icon name="mapPin" size={12} className="text-[#E8694A]" />
+            <div className="flex items-center gap-1.5 mt-1 text-sm text-[#5C6E8A]">
+              <Icon name="mapPin" size={12} className="text-[#B94C2A]" />
               Inman Park + nearby neighborhoods
             </div>
           </div>
@@ -287,15 +287,15 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
         <div className="grid grid-cols-3 gap-3 mb-6">
           <div className="bg-white rounded-2xl border border-[#E8E6DF] p-3 text-center">
             <p className="font-bold font-display text-[#1B2A4A] text-xl">{loading ? '…' : neighbors == null ? '—' : neighbors.toLocaleString()}</p>
-            <p className="text-xs text-[#8A9AB5]">Neighbors active</p>
+            <p className="text-xs text-[#5C6E8A]">Neighbors active</p>
           </div>
           <div className="bg-white rounded-2xl border border-[#E8E6DF] p-3 text-center">
             <p className="font-bold font-display text-[#2D6A4F] text-xl">{loading ? '…' : posts.length}</p>
-            <p className="text-xs text-[#8A9AB5]">Posts this week</p>
+            <p className="text-xs text-[#5C6E8A]">Posts this week</p>
           </div>
           <div className="bg-white rounded-2xl border border-[#E8E6DF] p-3 text-center">
-            <p className="font-bold font-display text-[#E8694A] text-xl">{loading ? '…' : events.length}</p>
-            <p className="text-xs text-[#8A9AB5]">Upcoming events</p>
+            <p className="font-bold font-display text-[#B94C2A] text-xl">{loading ? '…' : events.length}</p>
+            <p className="text-xs text-[#5C6E8A]">Upcoming events</p>
           </div>
         </div>
 
@@ -353,7 +353,7 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                   className="flex items-center gap-3 bg-white border border-[#E8E6DF] rounded-2xl p-4 mb-5 cursor-pointer hover:border-[#2D6A4F]/40 transition-colors"
                 >
                   <div className="w-9 h-9 rounded-full bg-[#D8F3DC] flex items-center justify-center text-sm font-bold text-[#2D6A4F] flex-shrink-0">{initial}</div>
-                  <span className="text-sm text-[#C5CCDA]">Share something with your neighborhood...</span>
+                  <span className="text-sm text-[#5C6E8A]">Share something with your neighborhood...</span>
                   <div className="ml-auto flex gap-2">
                     {['📢', '🎭', '🔍', '🎁'].map(emoji => (
                       <span key={emoji} className="text-base">{emoji}</span>
@@ -365,7 +365,7 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                   <div className="py-16 text-center">
                     <div className="text-4xl mb-3">💬</div>
                     <p className="font-semibold text-[#1B2A4A]">No posts yet</p>
-                    <p className="text-sm text-[#8A9AB5] mt-1">Be the first to share something with the neighborhood.</p>
+                    <p className="text-sm text-[#5C6E8A] mt-1">Be the first to share something with the neighborhood.</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -379,10 +379,10 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                             <div className="flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="font-semibold text-sm text-[#1B2A4A]">{post.author.name}</p>
-                                <span className="text-[#C5CCDA] text-xs">·</span>
-                                <span className="text-xs text-[#8A9AB5]">{post.author.neighborhood}</span>
-                                <span className="text-[#C5CCDA] text-xs">·</span>
-                                <span className="text-xs text-[#C5CCDA]">{post.postedAt}</span>
+                                <span className="text-[#5C6E8A] text-xs">·</span>
+                                <span className="text-xs text-[#5C6E8A]">{post.author.neighborhood}</span>
+                                <span className="text-[#5C6E8A] text-xs">·</span>
+                                <span className="text-xs text-[#5C6E8A]">{post.postedAt}</span>
                               </div>
                               <div className="mt-0.5">
                                 <Badge variant={config.badge} size="sm">{config.emoji} {config.label}</Badge>
@@ -406,17 +406,17 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                                   {emoji}
                                 </button>
                               ))}
-                              <span className="text-xs text-[#8A9AB5] ml-1">{post.reactions.like + post.reactions.love + post.reactions.wow}</span>
+                              <span className="text-xs text-[#5C6E8A] ml-1">{post.reactions.like + post.reactions.love + post.reactions.wow}</span>
                             </div>
 
-                            <button onClick={() => void openReplies(post.id)} className="flex items-center gap-1.5 text-xs text-[#8A9AB5] hover:text-[#1B2A4A] transition-colors ml-2">
+                            <button onClick={() => void openReplies(post.id)} className="flex items-center gap-1.5 text-xs text-[#5C6E8A] hover:text-[#1B2A4A] transition-colors ml-2">
                               <Icon name="message" size={13} />
                               {post.replies} replies
                             </button>
 
                             <button
                               onClick={() => setActionError("Sharing a link isn't available in this version.")}
-                              className="flex items-center gap-1.5 text-xs text-[#8A9AB5] hover:text-[#1B2A4A] transition-colors ml-auto"
+                              className="flex items-center gap-1.5 text-xs text-[#5C6E8A] hover:text-[#1B2A4A] transition-colors ml-auto"
                             >
                               <Icon name="share" size={13} />
                               Share
@@ -424,7 +424,7 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                           </div>
                           {replyFor === post.id && (
                             <div className="mt-3 pt-3 border-t border-[#F5F4EF] space-y-2">
-                              {(comments[post.id] ?? []).length === 0 && <p className="text-xs text-[#8A9AB5]">No replies yet.</p>}
+                              {(comments[post.id] ?? []).length === 0 && <p className="text-xs text-[#5C6E8A]">No replies yet.</p>}
                               {(comments[post.id] ?? []).map((comment) => (
                                 <p key={comment.id} className="text-sm text-[#5C6E8A]">
                                   <span className="font-semibold text-[#1B2A4A]">{personName(comment.author)}</span> {comment.body}
@@ -459,7 +459,7 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                   <div className="py-16 text-center">
                     <div className="text-4xl mb-3">🎭</div>
                     <p className="font-semibold text-[#1B2A4A]">No upcoming events</p>
-                    <p className="text-sm text-[#8A9AB5] mt-1">Neighborhood events will show up here.</p>
+                    <p className="text-sm text-[#5C6E8A] mt-1">Neighborhood events will show up here.</p>
                   </div>
                 ) : (
                   <div className="grid md:grid-cols-2 gap-5">
@@ -479,12 +479,12 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                           <div className="p-4">
                             <div className="flex items-center justify-between mb-3">
                               <div>
-                                <p className="text-sm font-semibold text-[#E8694A]">{event.date}</p>
-                                <p className="text-xs text-[#8A9AB5]">{event.time}</p>
+                                <p className="text-sm font-semibold text-[#B94C2A]">{event.date}</p>
+                                <p className="text-xs text-[#5C6E8A]">{event.time}</p>
                               </div>
                               <div className="text-right">
                                 <p className="text-sm font-semibold text-[#1B2A4A]">{event.attending}</p>
-                                <p className="text-xs text-[#8A9AB5]">attending</p>
+                                <p className="text-xs text-[#5C6E8A]">attending</p>
                               </div>
                             </div>
                             <button
@@ -518,7 +518,7 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                   <div className="py-16 text-center">
                     <div className="text-4xl mb-3">🔍</div>
                     <p className="font-semibold text-[#1B2A4A]">Nothing lost or found</p>
-                    <p className="text-sm text-[#8A9AB5] mt-1">Reports from neighbors will show up here.</p>
+                    <p className="text-sm text-[#5C6E8A] mt-1">Reports from neighbors will show up here.</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -534,11 +534,11 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                               <Badge variant={item.type === 'lost' ? 'coral' : 'green'} size="sm">
                                 {item.type === 'lost' ? '❌ Lost' : '✅ Found'}
                               </Badge>
-                              <span className="text-xs text-[#C5CCDA]">{item.posted}</span>
+                              <span className="text-xs text-[#5C6E8A]">{item.posted}</span>
                             </div>
                             <p className="font-semibold text-sm text-[#1B2A4A] mb-1">{item.item}</p>
-                            <p className="text-xs text-[#8A9AB5] mb-3">
-                              <Icon name="mapPin" size={10} className="inline text-[#E8694A]" /> {item.neighborhood} · Posted by {item.contact}
+                            <p className="text-xs text-[#5C6E8A] mb-3">
+                              <Icon name="mapPin" size={10} className="inline text-[#B94C2A]" /> {item.neighborhood} · Posted by {item.contact}
                             </p>
                             <Button variant="outline" size="xs" disabled={contactingId === item.id} onClick={() => void contactAuthor(item.id, item.authorId, item.item)}>
                               {contactingId === item.id ? 'Contacting...' : `Contact ${item.contact}`}
@@ -564,7 +564,7 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                   <div className="py-16 text-center">
                     <div className="text-4xl mb-3">🎁</div>
                     <p className="font-semibold text-[#1B2A4A]">No giveaways right now</p>
-                    <p className="text-sm text-[#8A9AB5] mt-1">Free items from neighbors will show up here.</p>
+                    <p className="text-sm text-[#5C6E8A] mt-1">Free items from neighbors will show up here.</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -575,8 +575,8 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-0.5">
                               <p className="font-semibold text-sm text-[#1B2A4A]">{giveaway.poster.name}</p>
-                              <span className="text-xs text-[#C5CCDA]">·</span>
-                              <span className="text-xs text-[#8A9AB5]">{giveaway.neighborhood} · {giveaway.time}</span>
+                              <span className="text-xs text-[#5C6E8A]">·</span>
+                              <span className="text-xs text-[#5C6E8A]">{giveaway.neighborhood} · {giveaway.time}</span>
                             </div>
                             <p className="text-sm text-[#5C6E8A] mb-3">{giveaway.item}</p>
                             <div className="flex items-center gap-2">
@@ -639,7 +639,7 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
               <div className="text-center py-8">
                 <div className="text-4xl mb-3">🎉</div>
                 <p className="font-semibold text-[#1B2A4A]">Post published!</p>
-                <p className="text-sm text-[#8A9AB5]">Your neighbors will see it in their feed.</p>
+                <p className="text-sm text-[#5C6E8A]">Your neighbors will see it in their feed.</p>
               </div>
             ) : (
               <>
@@ -659,8 +659,8 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                 />
                 <InlineAlert message={postError} />
                 <div className="flex items-center justify-between mt-3">
-                  <div className="flex items-center gap-2 text-xs text-[#8A9AB5]">
-                    <Icon name="mapPin" size={11} className="text-[#E8694A]" />
+                  <div className="flex items-center gap-2 text-xs text-[#5C6E8A]">
+                    <Icon name="mapPin" size={11} className="text-[#B94C2A]" />
                     Posting to Inman Park + nearby
                   </div>
                   <Button variant="primary" size="sm" onClick={() => void submitPost()} disabled={!newPost.trim() || posting}>
@@ -688,7 +688,7 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
               <div className="text-center py-8">
                 <div className="text-4xl mb-3">🎉</div>
                 <p className="font-semibold text-[#1B2A4A]">Published</p>
-                <p className="text-sm text-[#8A9AB5]">Neighbors can see it now.</p>
+                <p className="text-sm text-[#5C6E8A]">Neighbors can see it now.</p>
               </div>
             ) : (
               <>

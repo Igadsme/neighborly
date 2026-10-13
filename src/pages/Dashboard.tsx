@@ -269,7 +269,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="font-display text-3xl font-semibold text-[#1B2A4A]">My dashboard</h1>
-            <p className="text-[#8A9AB5] mt-1">{profileLabel}</p>
+            <p className="text-[#5C6E8A] mt-1">{profileLabel}</p>
           </div>
           <Button variant="primary" size="sm" onClick={() => onNavigate('create')}>
             <Icon name="plus" size={13} />
@@ -318,7 +318,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             <SectionHeader title="Pending offers" subtitle="Respond within 24 hours to keep your response rate high" />
             <div className="space-y-3 mb-8">
               {offersLoading ? (
-                <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">Loading offers…</div>
+                <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">Loading offers…</div>
               ) : offersError ? (
                 <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D]">
                   Offers could not be loaded. {offersError}
@@ -338,7 +338,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       {offerThumb(offer)}
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-1">{offer.requestTitle}</p>
-                        <p className="text-xs text-[#8A9AB5]">
+                        <p className="text-xs text-[#5C6E8A]">
                           {firstName(offer.offerer)} offered{' '}
                           {offer.amountCents == null ? (
                             offer.message
@@ -353,7 +353,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       <div className="flex gap-2 flex-shrink-0">
                         <button disabled={actingId === offer.offerId} onClick={() => void runOfferAction(offer, 'accept')} className="px-3 py-1.5 bg-[#2D6A4F] text-white text-xs font-semibold rounded-lg hover:bg-[#1B4332] transition-colors disabled:opacity-40">Accept</button>
                         <button disabled={actingId === offer.offerId} onClick={() => counterFromDashboard(offer)} className="px-3 py-1.5 bg-white border border-[#E8E6DF] text-[#5C6E8A] text-xs font-semibold rounded-lg hover:bg-[#F5F4EF] transition-colors disabled:opacity-40">Counter</button>
-                        <button disabled={actingId === offer.offerId} onClick={() => void runOfferAction(offer, 'reject')} className="px-3 py-1.5 bg-white border border-[#E8E6DF] text-[#E8694A] text-xs font-semibold rounded-lg hover:bg-[#FDE8E0] transition-colors disabled:opacity-40">Decline</button>
+                        <button disabled={actingId === offer.offerId} onClick={() => void runOfferAction(offer, 'reject')} className="px-3 py-1.5 bg-white border border-[#E8E6DF] text-[#B94C2A] text-xs font-semibold rounded-lg hover:bg-[#FDE8E0] transition-colors disabled:opacity-40">Decline</button>
                       </div>
                     </div>
                     {offerAlert(offer.offerId)}
@@ -371,12 +371,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                   </div>
                   <div className="flex-1">
                     <p className="font-semibold text-sm text-[#1B2A4A]">{meetup.with}</p>
-                    <p className="text-xs text-[#8A9AB5] mt-0.5">{meetup.date}{meetup.time ? ` at ${meetup.time}` : ''}</p>
+                    <p className="text-xs text-[#5C6E8A] mt-0.5">{meetup.date}{meetup.time ? ` at ${meetup.time}` : ''}</p>
                     <div className="flex items-center gap-1 text-xs text-[#5C6E8A] mt-1">
-                      <Icon name="mapPin" size={10} className="text-[#E8694A]" />
+                      <Icon name="mapPin" size={10} className="text-[#B94C2A]" />
                       {meetup.location}
                     </div>
-                    <p className="text-xs text-[#C5CCDA] mt-0.5">Re: {meetup.listing}</p>
+                    <p className="text-xs text-[#5C6E8A] mt-0.5">Re: {meetup.listing}</p>
                   </div>
                   <button onClick={() => onNavigate('messages', meetup.conversationId ?? undefined)} className="text-xs font-semibold text-[#4A7FB5] flex-shrink-0">Message</button>
                 </Card>
@@ -386,7 +386,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             <SectionHeader title="Reviews to complete" subtitle="Leave reviews for recent transactions" />
             <div className="space-y-3">
               {offersLoading ? (
-                <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">Loading offers…</div>
+                <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">Loading offers…</div>
               ) : reviewPrompts.length === 0 ? (
                 <EmptyState
                   title="No reviews waiting"
@@ -400,7 +400,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                   <Card key={prompt.transactionId} className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF]" />
                     <div className="flex-1">
-                      <p className="text-xs text-[#8A9AB5]">Transaction complete</p>
+                      <p className="text-xs text-[#5C6E8A]">Transaction complete</p>
                       <p className="font-semibold text-sm text-[#1B2A4A]">{prompt.title}</p>
                     </div>
                     <div className="flex items-center gap-4">
@@ -409,7 +409,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       </Button>
                       <button
                         onClick={() => setSkippedReviews((ids) => [...ids, prompt.transactionId])}
-                        className="text-sm text-[#8A9AB5] hover:text-[#1B2A4A]"
+                        className="text-sm text-[#5C6E8A] hover:text-[#1B2A4A]"
                       >
                         Skip
                       </button>
@@ -452,19 +452,19 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       <Badge variant={listingStatus[listing.id] === 'SOLD' ? 'gray' : listingStatus[listing.id] === 'ARCHIVED' ? 'amber' : listingStatus[listing.id] === 'DRAFT' ? 'blue' : 'green'} size="sm">
                         {listingStatus[listing.id] === 'ARCHIVED' ? 'Paused' : listingStatus[listing.id] === 'SOLD' ? 'Sold' : listingStatus[listing.id] === 'DRAFT' ? 'Draft' : 'Active'}
                       </Badge>
-                      <span className="text-xs text-[#8A9AB5]">Posted {listing.postedAt}</span>
+                      <span className="text-xs text-[#5C6E8A]">Posted {listing.postedAt}</span>
                     </div>
                     <div className="grid grid-cols-4 gap-2">
                       {[
                         { label: 'Views', value: '—', icon: 'eye', color: 'text-[#4A7FB5]' },
-                        { label: 'Saves', value: '—', icon: 'heart', color: 'text-[#E8694A]' },
+                        { label: 'Saves', value: '—', icon: 'heart', color: 'text-[#B94C2A]' },
                         { label: 'Messages', value: '—', icon: 'message', color: 'text-[#2D6A4F]' },
                         { label: 'Offers', value: '—', icon: 'dollar', color: 'text-[#D97706]' },
                       ].map(stat => (
                         <div key={stat.label} title="Not tracked yet" className="bg-[#F5F4EF] rounded-xl p-2 text-center">
                           <Icon name={stat.icon} size={12} className={`mx-auto mb-0.5 ${stat.color}`} />
                           <p className="font-bold text-sm text-[#1B2A4A]">{stat.value}</p>
-                          <p className="text-[9px] text-[#8A9AB5]">{stat.label}</p>
+                          <p className="text-[9px] text-[#5C6E8A]">{stat.label}</p>
                         </div>
                       ))}
                     </div>
@@ -485,7 +485,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     <button
                       disabled={actingListingId === listing.id || listingStatus[listing.id] === 'SOLD' || listingStatus[listing.id] === 'DRAFT'}
                       onClick={() => void runListingAction(listing.id, 'sold')}
-                      className="ml-auto text-xs text-[#C5CCDA] hover:text-[#E8694A] transition-colors disabled:opacity-40"
+                      className="ml-auto text-xs text-[#5C6E8A] hover:text-[#B94C2A] transition-colors disabled:opacity-40"
                     >
                       {listingStatus[listing.id] === 'SOLD' ? 'Sold' : 'Mark sold'}
                     </button>
@@ -495,7 +495,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               </Card>
               )
             })}
-            <button onClick={() => onNavigate('create')} className="w-full py-4 border-2 border-dashed border-[#E8E6DF] rounded-2xl text-sm text-[#8A9AB5] hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-all flex items-center justify-center gap-2">
+            <button onClick={() => onNavigate('create')} className="w-full py-4 border-2 border-dashed border-[#E8E6DF] rounded-2xl text-sm text-[#5C6E8A] hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-all flex items-center justify-center gap-2">
               <Icon name="plus" size={16} />
               Post a new listing
             </button>
@@ -516,7 +516,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               ))}
             </div>
             {offersLoading ? (
-              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">Loading offers…</div>
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">Loading offers…</div>
             ) : offersError ? (
               <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D]">
                 Offers could not be loaded. {offersError}
@@ -537,16 +537,16 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     {offerThumb(offer)}
                     <div className="flex-1">
                       <p className="font-semibold text-sm text-[#1B2A4A]">{offer.requestTitle}</p>
-                      <p className="text-xs text-[#8A9AB5]">{firstName(offer.offerer)} · {relativeTime(offer.createdAt)}</p>
+                      <p className="text-xs text-[#5C6E8A]">{firstName(offer.offerer)} · {relativeTime(offer.createdAt)}</p>
                       {offer.amountCents == null ? (
-                        <p className="text-xs text-[#8A9AB5] mt-1">{offer.message}</p>
+                        <p className="text-xs text-[#5C6E8A] mt-1">{offer.message}</p>
                       ) : (
                         <div className="flex items-center gap-2 mt-1">
                           <span className="font-bold text-[#1B2A4A]">${dollars(offer.amountCents)}</span>
                           {offer.budgetCents != null && (
                             <>
-                              <span className="text-xs text-[#C5CCDA]">of</span>
-                              <span className="text-sm text-[#8A9AB5]">${dollars(offer.budgetCents)}</span>
+                              <span className="text-xs text-[#5C6E8A]">of</span>
+                              <span className="text-sm text-[#5C6E8A]">${dollars(offer.budgetCents)}</span>
                             </>
                           )}
                         </div>
@@ -579,7 +579,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 <span className="text-xl flex-shrink-0">{item.icon}</span>
                 <div className="flex-1">
                   <p className="text-sm text-[#1B2A4A]">{item.text}</p>
-                  <p className="text-xs text-[#C5CCDA] mt-0.5">{item.time}</p>
+                  <p className="text-xs text-[#5C6E8A] mt-0.5">{item.time}</p>
                 </div>
                 {item.type === 'message' && <button onClick={() => onNavigate('messages')} className="text-xs text-[#4A7FB5] font-medium flex-shrink-0">Reply →</button>}
                 {item.type === 'offer' && <button onClick={() => setActiveTab('Offers')} className="text-xs text-[#2D6A4F] font-medium flex-shrink-0">View offer →</button>}
@@ -605,14 +605,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               <div className="w-12 h-12 rounded-lg bg-[#E8E6DF] flex-shrink-0" />
               <div>
                 <p className="text-xs font-semibold text-[#1B2A4A] line-clamp-1">{reviewing.title}</p>
-                <p className="text-xs text-[#8A9AB5]">Transaction complete</p>
+                <p className="text-xs text-[#5C6E8A]">Transaction complete</p>
               </div>
             </div>
             {reviewSubmitted ? (
               <div className="text-center py-4">
                 <div className="text-3xl mb-2">✅</div>
                 <p className="font-semibold text-[#1B2A4A]">Review submitted</p>
-                <p className="text-sm text-[#8A9AB5]">Thanks for rating your neighbor.</p>
+                <p className="text-sm text-[#5C6E8A]">Thanks for rating your neighbor.</p>
               </div>
             ) : (
               <>

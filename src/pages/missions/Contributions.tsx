@@ -66,7 +66,7 @@ export default function Contributions({ onNavigate }: { onNavigate: (page: strin
                 <dd className="text-2xl font-semibold text-[#1B2A4A]">{record.badges.length}</dd>
               </div>
             </dl>
-            <p className="mt-3 text-xs text-[#8A9AB5]">
+            <p className="mt-3 text-xs text-[#5C6E8A]">
               A mission counts once attendance was confirmed by someone other than the person being
               credited, and only after the organizer completed it. Joining is never enough.
             </p>
@@ -83,7 +83,7 @@ export default function Contributions({ onNavigate }: { onNavigate: (page: strin
                   <p className="text-sm font-semibold text-[#1B2A4A]">{badge.label}</p>
                   <p className="mt-1 text-xs text-[#5A6B85]">{badge.explanation}</p>
                   {badge.awardedAt && (
-                    <p className="mt-1 text-xs text-[#8A9AB5]">
+                    <p className="mt-1 text-xs text-[#5C6E8A]">
                       Earned {new Date(badge.awardedAt).toLocaleDateString()}
                     </p>
                   )}
@@ -130,7 +130,7 @@ export default function Contributions({ onNavigate }: { onNavigate: (page: strin
                       {row.status.toLowerCase().replace(/_/g, " ")}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-[#8A9AB5]">
+                  <p className="mt-1 text-xs text-[#5C6E8A]">
                     {new Date(row.mission.startAt).toLocaleDateString()}
                     {row.verifiedAt ? ` · verified ${new Date(row.verifiedAt).toLocaleDateString()}` : ""}
                   </p>

@@ -265,7 +265,7 @@ export default function MissionManage({ missionId, onNavigate }: MissionManagePr
                     </>
                   )}
                   {row.status === "CONFIRMED" && (
-                    <p className="text-xs text-[#8A9AB5]">Has not checked in yet.</p>
+                    <p className="text-xs text-[#5C6E8A]">Has not checked in yet.</p>
                   )}
                 </div>
               </li>

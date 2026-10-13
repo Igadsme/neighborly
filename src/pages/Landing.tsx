@@ -210,33 +210,43 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             </span>
           </div>
           <nav className="hidden md:flex items-center gap-6">
+            {/*
+              These read as inline text links, so they carry no visual
+              padding. Vertical padding gives each one a 44px hit area for
+              touch without changing how the row looks.
+            */}
             <button
+              type="button"
               onClick={() => openSignIn("explore")}
-              className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
+              className="py-3 text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Browse
             </button>
             <button
+              type="button"
               onClick={() => openSignIn("services")}
-              className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
+              className="py-3 text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Services
             </button>
             <button
+              type="button"
               onClick={() => openSignIn("housing")}
-              className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
+              className="py-3 text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Housing
             </button>
             <button
+              type="button"
               onClick={() => openSignIn("jobs")}
-              className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
+              className="py-3 text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Jobs
             </button>
             <button
+              type="button"
               onClick={() => openSignIn("home")}
-              className="text-sm font-semibold text-[#1B2A4A] hover:text-[#2D6A4F]"
+              className="py-3 text-sm font-semibold text-[#1B2A4A] hover:text-[#2D6A4F]"
             >
               Sign in
             </button>
@@ -288,7 +298,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 <Icon
                   name="search"
                   size={18}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8A9AB5] pointer-events-none"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5C6E8A] pointer-events-none"
                 />
                 <input
                   type="text"
@@ -296,14 +306,14 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   placeholder="What are you looking for?"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full h-13 pl-11 pr-4 bg-white text-[#1B2A4A] rounded-xl text-sm placeholder:text-[#C5CCDA] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/30 shadow-lg"
+                  className="w-full h-13 pl-11 pr-4 bg-white text-[#1B2A4A] rounded-xl text-sm placeholder:text-[#5C6E8A] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/30 shadow-lg"
                 />
               </div>
               <div className="relative">
                 <Icon
                   name="mapPin"
                   size={15}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#E8694A] pointer-events-none"
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#B94C2A] pointer-events-none"
                 />
                 <select aria-label="City" className="h-13 pl-9 pr-8 bg-white text-[#1B2A4A] rounded-xl text-sm font-medium focus:outline-none appearance-none cursor-pointer shadow-lg border-0">
                   <option>Atlanta, GA</option>
@@ -349,7 +359,13 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           </div>
 
           {/* Listing preview card */}
-          <div className="hidden lg:block w-80 flex-shrink-0">
+          {/*
+            The badge is positioned against this wrapper. It was previously
+            `absolute` with no positioned ancestor, so it resolved against a
+            distant section and rendered over the page header. It also sits
+            outside the `overflow-hidden` panel so the offset is not clipped.
+          */}
+          <div className="hidden lg:block w-80 flex-shrink-0 relative">
             <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
               {preview[0] && mediaSrc(preview[0].images[0], "w=600&h=400&fit=crop&auto=format") ? (
                 <img
@@ -366,7 +382,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                     <p className="font-semibold text-[#1B2A4A] text-sm leading-tight">
                       {previewState === "loading" ? "Loading listings…" : preview[0]?.title ?? "No published listings yet"}
                     </p>
-                    <p className="text-xs text-[#8A9AB5] mt-0.5">
+                    <p className="text-xs text-[#5C6E8A] mt-0.5">
                       {preview[0] ? `${preview[0].neighborhood} · Nearby` : previewState === "error" ? "Listings could not be loaded." : "Published listings will show up here"}
                     </p>
                   </div>
@@ -386,6 +402,10 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 </div>
                 <div className="flex items-center gap-2 pt-3 border-t border-[#F5F4EF]">
                   <Avatar
+                    // `listingFromApi` normalises the API seller into
+                    // {name, avatar, rating}, so these fields are populated
+                    // for real listings rather than falling back to
+                    // placeholders.
                     src={preview[0]?.seller.avatar || ""}
                     name={preview[0]?.seller.name || "Neighbor"}
                     size="sm"
@@ -394,7 +414,17 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                     <p className="text-xs font-semibold text-[#1B2A4A]">
                       {preview[0]?.seller.name || "Neighbor"}
                     </p>
-                    <p className="text-[11px] text-[#8A9AB5]">No rating yet</p>
+                    {/*
+                      A rating is only stated when the data provides one.
+                      A hardcoded "No rating yet" would assert something about
+                      a real member that the app cannot verify.
+                    */}
+                    {typeof preview[0]?.seller.rating === "number" &&
+                      preview[0].seller.rating > 0 && (
+                        <p className="text-[11px] text-[#5C6E8A]">
+                          Rated {preview[0].seller.rating.toFixed(1)}
+                        </p>
+                      )}
                   </div>
                   <button
                     onClick={() => openSignIn(preview[0] ? "listing" : "explore", preview[0]?.id)}
@@ -404,9 +434,9 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   </button>
                 </div>
               </div>
-              <div className="absolute -top-3 -right-3 bg-[#FDE8E0] rounded-2xl px-3 py-2 text-xs font-semibold text-[#C4512D] shadow-md">
-                Published listing
               </div>
+            <div className="absolute -top-3 -right-3 bg-[#FDE8E0] rounded-2xl px-3 py-2 text-xs font-semibold text-[#B94C2A] shadow-md">
+              Published listing
             </div>
           </div>
         </div>
@@ -435,7 +465,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
               <p className="font-semibold text-[#1B2A4A] text-sm">
                 {cat.label}
               </p>
-              <p className="text-xs text-[#8A9AB5] mt-0.5">
+              <p className="text-xs text-[#5C6E8A] mt-0.5">
                 {tileCount(cat.label)}
               </p>
             </button>
@@ -453,7 +483,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             <h2 className="font-display text-4xl font-semibold text-white mb-3">
               Simple. Safe. Local.
             </h2>
-            <p className="text-[#8A9AB5] text-lg">
+            <p className="text-[#5C6E8A] text-lg">
               Three steps to find, connect, and exchange with neighbors.
             </p>
           </div>
@@ -468,7 +498,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   <h3 className="font-display text-xl font-semibold text-white mb-3">
                     {step.title}
                   </h3>
-                  <p className="text-[#8A9AB5] leading-relaxed">{step.desc}</p>
+                  <p className="text-[#5C6E8A] leading-relaxed">{step.desc}</p>
                 </div>
               </div>
             ))}
@@ -513,7 +543,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   <h4 className="font-semibold text-[#1B2A4A] text-sm mb-1">
                     {point.title}
                   </h4>
-                  <p className="text-xs text-[#8A9AB5] leading-relaxed">
+                  <p className="text-xs text-[#5C6E8A] leading-relaxed">
                     {point.desc}
                   </p>
                 </div>
@@ -530,7 +560,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             <h2 className="font-display text-3xl font-semibold text-[#1B2A4A]">
               Popular near Atlanta
             </h2>
-            <p className="text-[#8A9AB5] mt-1">
+            <p className="text-[#5C6E8A] mt-1">
               Recently published listings
             </p>
           </div>
@@ -539,9 +569,9 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           </Button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-          {previewState === "loading" && <p className="text-sm text-[#8A9AB5] col-span-full">Loading listings…</p>}
+          {previewState === "loading" && <p className="text-sm text-[#5C6E8A] col-span-full">Loading listings…</p>}
           {previewState === "error" && <p className="text-sm text-[#A63D27] col-span-full" role="alert">Listings could not be loaded.</p>}
-          {previewState === "empty" && <p className="text-sm text-[#8A9AB5] col-span-full">No published listings yet.</p>}
+          {previewState === "empty" && <p className="text-sm text-[#5C6E8A] col-span-full">No published listings yet.</p>}
           {preview.map((listing) => {
             const photo = mediaSrc(listing.images[0], "w=400&h=300&fit=crop&auto=format")
             return (
@@ -573,7 +603,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                       `$${listing.price.toLocaleString()}`
                     )}
                   </span>
-                  <span className="text-xs text-[#8A9AB5]">
+                  <span className="text-xs text-[#5C6E8A]">
                     {listing.distance}
                   </span>
                 </div>
@@ -652,7 +682,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
               Browse listings
             </Button>
           </div>
-          <p className="text-xs text-[#C5CCDA] mt-6">
+          <p className="text-xs text-[#5C6E8A] mt-6">
             No credit card required. Free to join and browse.
           </p>
         </div>
@@ -676,7 +706,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   Neighborly
                 </span>
               </div>
-              <p className="text-sm text-[#8A9AB5] leading-relaxed max-w-xs">
+              <p className="text-sm text-[#5C6E8A] leading-relaxed max-w-xs">
                 Everything local. Everyone accountable. Atlanta&apos;s trusted
                 community marketplace.
               </p>
@@ -707,12 +737,15 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 <ul className="space-y-2">
                   {col.links.map((link) => (
                     <li key={link}>
-                      <a
-                        href="#"
-                        className="text-sm text-[#8A9AB5] hover:text-[#2D6A4F] transition-colors"
-                      >
+                      {/*
+                        These footer entries have no destination in this
+                        product. Rendering them as `href="#"` links would
+                        create controls that look actionable and do nothing,
+                        so they are shown as text until the pages exist.
+                      */}
+                      <span className="inline-block py-1 text-sm text-[#5C6E8A]">
                         {link}
-                      </a>
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -720,10 +753,10 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             ))}
           </div>
           <div className="pt-8 border-t border-[#E8E6DF] flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-xs text-[#C5CCDA]">
+            <p className="text-xs text-[#5C6E8A]">
               © 2026 Neighborly, Inc. Atlanta, GA. All rights reserved.
             </p>
-            <div className="flex items-center gap-4 text-xs text-[#C5CCDA]">
+            <div className="flex items-center gap-4 text-xs text-[#5C6E8A]">
               <span>🌎 Atlanta</span>
               <span>·</span>
               <span>{categoryCounts ? `${Object.values(categoryCounts).reduce((total, count) => total + count, 0).toLocaleString()} published listings` : "Listing counts loading"}</span>
@@ -744,13 +777,13 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 <h2 className="font-display text-2xl font-semibold text-[#1B2A4A]">
                   Welcome back
                 </h2>
-                <p className="text-sm text-[#8A9AB5] mt-1">
+                <p className="text-sm text-[#5C6E8A] mt-1">
                   Sign in to continue to Neighborly.
                 </p>
               </div>
               <button
                 onClick={() => setSignInOpen(false)}
-                className="text-[#8A9AB5] hover:text-[#1B2A4A]"
+                className="text-[#5C6E8A] hover:text-[#1B2A4A]"
                 aria-label="Close sign in"
               >
                 ×

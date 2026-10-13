@@ -173,7 +173,7 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
                 <div className="flex items-center gap-2 mb-0.5">
                   <h1 className="font-display text-2xl font-semibold text-[#1B2A4A]">{name}</h1>
                 </div>
-                <p className="text-[#8A9AB5] text-sm">{desktopPlace} · Member since {since}</p>
+                <p className="text-[#5C6E8A] text-sm">{desktopPlace} · Member since {since}</p>
               </div>
             </div>
             <div className="flex gap-2 pb-2">
@@ -195,7 +195,7 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
             <div className="flex items-center gap-2 mb-0.5">
               <h1 className="font-display text-2xl font-semibold text-[#1B2A4A]">{name}</h1>
             </div>
-            <p className="text-[#8A9AB5] text-sm">{area} · Member since {since}</p>
+            <p className="text-[#5C6E8A] text-sm">{area} · Member since {since}</p>
           </div>
         </div>
 
@@ -210,7 +210,7 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
             <div key={stat.label} className={`${stat.bg} rounded-2xl p-4 text-center`}>
               <div className="text-2xl mb-1">{stat.icon}</div>
               <p className={`font-bold text-lg font-display ${stat.color}`}>{stat.value}</p>
-              <p className="text-xs text-[#8A9AB5] font-medium">{stat.label}</p>
+              <p className="text-xs text-[#5C6E8A] font-medium">{stat.label}</p>
             </div>
           ))}
         </div>
@@ -248,7 +248,7 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as 'listings' | 'reviews' | 'sold')}
-              className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-white text-[#1B2A4A] shadow-sm' : 'text-[#8A9AB5] hover:text-[#1B2A4A]'}`}
+              className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-white text-[#1B2A4A] shadow-sm' : 'text-[#5C6E8A] hover:text-[#1B2A4A]'}`}
             >
               {tab.label}
             </button>
@@ -258,7 +258,7 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
         {/* Listings tab */}
         {activeTab === 'listings' && (
           activeListings.length === 0 ? (
-            <p className="text-sm text-[#8A9AB5] text-center py-8">No active listings yet.</p>
+            <p className="text-sm text-[#5C6E8A] text-center py-8">No active listings yet.</p>
           ) : (
             <div className="listing-grid">
               {activeListings.map(listing => (
@@ -281,17 +281,17 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
                       <span key={star} className={profile.ratingAverage != null && star <= Math.round(profile.ratingAverage) ? 'text-[#F59E0B]' : 'text-[#E8E6DF]'}>★</span>
                     ))}
                   </div>
-                  <p className="text-xs text-[#8A9AB5]">{profile.reviewCount} reviews</p>
+                  <p className="text-xs text-[#5C6E8A]">{profile.reviewCount} reviews</p>
                 </div>
                 <div className="flex-1">
                   {ratingBreakdown(reviews).map(({ stars, percent }) => (
                     <div key={stars} className="flex items-center gap-2 mb-1">
-                      <span className="text-xs text-[#8A9AB5] w-4">{stars}</span>
+                      <span className="text-xs text-[#5C6E8A] w-4">{stars}</span>
                       <span className="text-[#F59E0B] text-xs">★</span>
                       <div className="flex-1 h-2 bg-[#F5F4EF] rounded-full overflow-hidden">
                         <div className="h-full bg-[#F59E0B] rounded-full" style={{ width: `${percent}%` }} />
                       </div>
-                      <span className="text-xs text-[#8A9AB5] w-8 text-right">{percent}%</span>
+                      <span className="text-xs text-[#5C6E8A] w-8 text-right">{percent}%</span>
                     </div>
                   ))}
                 </div>
@@ -299,7 +299,7 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
             </div>
 
             {reviews.length === 0 ? (
-              <p className="text-sm text-[#8A9AB5] text-center py-8">No reviews yet.</p>
+              <p className="text-sm text-[#5C6E8A] text-center py-8">No reviews yet.</p>
             ) : (
               <div className="space-y-4">
                 {reviews.map((review) => (
@@ -309,7 +309,7 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
                           <p className="font-semibold text-sm text-[#1B2A4A]">{personName(review.author)}</p>
-                          <span className="text-xs text-[#C5CCDA]">{relativeTime(review.createdAt)}</span>
+                          <span className="text-xs text-[#5C6E8A]">{relativeTime(review.createdAt)}</span>
                         </div>
                         <div className="flex items-center gap-2 mb-2">
                           <div className="flex">
@@ -317,8 +317,8 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
                           </div>
                           {review.itemTitle && (
                             <>
-                              <span className="text-xs text-[#C5CCDA]">·</span>
-                              <span className="text-xs text-[#8A9AB5]">{review.itemTitle}</span>
+                              <span className="text-xs text-[#5C6E8A]">·</span>
+                              <span className="text-xs text-[#5C6E8A]">{review.itemTitle}</span>
                             </>
                           )}
                         </div>
@@ -335,7 +335,7 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
         {/* Sold tab */}
         {activeTab === 'sold' && (
           soldListings.length === 0 ? (
-            <p className="text-sm text-[#8A9AB5] text-center py-8">No sold listings yet.</p>
+            <p className="text-sm text-[#5C6E8A] text-center py-8">No sold listings yet.</p>
           ) : (
             <div className="listing-grid">
               {soldListings.map(listing => (
@@ -354,14 +354,14 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
         <div className="text-center mt-8">
           <button
             onClick={() => void reportProfile()}
-            className="text-xs font-medium transition-colors text-[#C5CCDA] hover:text-[#8A9AB5]"
+            className="text-xs font-medium transition-colors text-[#5C6E8A] hover:text-[#5C6E8A]"
           >
             Report this profile
           </button>
           {userId && (
             <button
               onClick={() => void toggleBlock()}
-              className="block mx-auto mt-2 text-xs font-medium transition-colors text-[#C5CCDA] hover:text-[#8A9AB5]"
+              className="block mx-auto mt-2 text-xs font-medium transition-colors text-[#5C6E8A] hover:text-[#5C6E8A]"
             >
               {blocked ? 'Unblock this profile' : 'Block this profile'}
             </button>

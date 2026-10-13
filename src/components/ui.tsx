@@ -167,16 +167,32 @@ export function Avatar({
       .slice(0, 2)
       .toUpperCase() || "??"
 
+  // A bare Unsplash photo id is expanded to a sized image; an absolute URL
+  // (a member's real uploaded avatar) is used as-is. Resizing is applied via
+  // query parameters for Unsplash and left to the stored asset for uploads.
+  const resolved = !src
+    ? null
+    : /^https?:\/\//.test(src)
+      ? src
+      : `https://images.unsplash.com/${src}?w=80&h=80&fit=crop&auto=format`
+
   return (
     <div className={`relative flex-shrink-0 ${className}`}>
-      {src ? (
+      {resolved ? (
         <img
-          src={`https://images.unsplash.com/${src}?w=80&h=80&fit=crop&auto=format`}
-          alt={name}
+          src={resolved}
+          alt={name ?? ""}
+          loading="lazy"
+          decoding="async"
           className={`${sizes[size]} rounded-full object-cover bg-[#EEF0F5]`}
         />
       ) : (
         <div
+          // The initials are decorative when an image is absent only if a name
+          // is also rendered nearby; they are the sole content otherwise, so
+          // the group is named rather than left as unlabelled initials.
+          role={name ? "img" : undefined}
+          aria-label={name ? `${name}'s avatar` : undefined}
           className={`${sizes[size]} rounded-full bg-[#D8F3DC] text-[#2D6A4F] flex items-center justify-center font-semibold`}
         >
           {initials}
@@ -185,6 +201,9 @@ export function Avatar({
       {verified && (
         <span
           className={`absolute -bottom-0.5 -right-0.5 ${badgeSizes[size]} bg-[#2D6A4F] rounded-full flex items-center justify-center`}
+          // The tick is decorative: the surrounding context already states
+          // that the member is verified.
+          aria-hidden="true"
         >
           <svg viewBox="0 0 10 10" fill="white" className="w-2/3 h-2/3">
             <path
@@ -215,10 +234,18 @@ export function StarRating({
 }) {
   const sizes = { xs: "text-xs", sm: "text-sm", md: "text-base" }
   return (
-    <div className={`flex items-center gap-1 ${sizes[size]}`}>
-      <span className="text-[#F59E0B]">★</span>
+    <div
+      className={`flex items-center gap-1 ${sizes[size]}`}
+      // The star glyph is decorative; the accessible name states the rating in
+      // words so the value is not conveyed by shape or colour alone.
+      role="img"
+      aria-label={`Rated ${rating.toFixed(1)} out of 5${count !== undefined ? ` from ${count} reviews` : ""}`}
+    >
+      <span className="text-[#B45309]" aria-hidden="true">
+        ★
+      </span>
       <span className="font-semibold text-[#1B2A4A]">{rating.toFixed(1)}</span>
-      {count !== undefined && <span className="text-[#8A9AB5]">({count})</span>}
+      {count !== undefined && <span className="text-[#5C6E8A]">({count})</span>}
     </div>
   )
 }
@@ -291,7 +318,7 @@ export function Input({
         </label>
       )}
       {icon && (
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9AB5] pointer-events-none">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5C6E8A] pointer-events-none">
           {icon}
         </span>
       )}
@@ -302,10 +329,10 @@ export function Input({
         onChange={(e) => onChange?.(e.target.value)}
         className={`w-full ${sizes[size]} ${icon ? "pl-10" : ""} ${
           iconRight ? "pr-10" : ""
-        } bg-white border border-[#E8E6DF] rounded-xl text-[#1B2A4A] placeholder:text-[#C5CCDA] focus:outline-none focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10 transition-all`}
+        } bg-white border border-[#E8E6DF] rounded-xl text-[#1B2A4A] placeholder:text-[#5C6E8A] focus:outline-none focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10 transition-all`}
       />
       {iconRight && (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A9AB5]">
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5C6E8A]">
           {iconRight}
         </span>
       )}
@@ -333,7 +360,7 @@ export function SearchBar({
   const heights = { md: "h-12", lg: "h-14" }
   return (
     <div className={`relative flex items-center ${className}`}>
-      <span className="absolute left-4 text-[#8A9AB5] pointer-events-none">
+      <span className="absolute left-4 text-[#5C6E8A] pointer-events-none">
         <svg
           width="18"
           height="18"
@@ -354,7 +381,7 @@ export function SearchBar({
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && onSearch?.()}
-        className={`w-full ${heights[size]} pl-11 pr-28 bg-white border border-[#E8E6DF] rounded-full text-[#1B2A4A] placeholder:text-[#C5CCDA] focus:outline-none focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10 transition-all text-sm shadow-[0_2px_8px_rgba(27,42,74,0.06)]`}
+        className={`w-full ${heights[size]} pl-11 pr-28 bg-white border border-[#E8E6DF] rounded-full text-[#1B2A4A] placeholder:text-[#5C6E8A] focus:outline-none focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10 transition-all text-sm shadow-[0_2px_8px_rgba(27,42,74,0.06)]`}
       />
       <button
         onClick={onSearch}
@@ -472,7 +499,7 @@ export function ListingCard({
             onError={() => setImgErr(true)}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-[#C5CCDA]">
+          <div className="w-full h-full flex items-center justify-center text-[#5C6E8A]">
             <svg
               width="32"
               height="32"
@@ -570,7 +597,7 @@ export function ListingCard({
           </span>
         </div>
 
-        <div className="flex items-center gap-1 text-xs text-[#8A9AB5] mb-3">
+        <div className="flex items-center gap-1 text-xs text-[#5C6E8A] mb-3">
           <svg
             width="10"
             height="10"
@@ -639,7 +666,7 @@ export function TabBar({
           className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             active === tab
               ? "bg-white text-[#1B2A4A] shadow-sm"
-              : "text-[#8A9AB5] hover:text-[#1B2A4A]"
+              : "text-[#5C6E8A] hover:text-[#1B2A4A]"
           }`}
         >
           {tab}
@@ -671,7 +698,7 @@ export function SectionHeader({
           {title}
         </h2>
         {subtitle && (
-          <p className="text-sm text-[#8A9AB5] mt-0.5">{subtitle}</p>
+          <p className="text-sm text-[#5C6E8A] mt-0.5">{subtitle}</p>
         )}
       </div>
       {action && actionLabel && (
@@ -815,7 +842,7 @@ export function StatCard({
 }) {
   const colors = {
     green: "bg-[#D8F3DC] text-[#2D6A4F]",
-    coral: "bg-[#FDE8E0] text-[#E8694A]",
+    coral: "bg-[#FDE8E0] text-[#B94C2A]",
     blue: "bg-[#DDEEFF] text-[#4A7FB5]",
     amber: "bg-[#FEF3C7] text-[#D97706]",
   }
@@ -832,10 +859,10 @@ export function StatCard({
         <p className="text-2xl font-bold font-display text-[#1B2A4A]">
           {value}
         </p>
-        <p className="text-xs font-semibold text-[#8A9AB5] uppercase tracking-wide">
+        <p className="text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide">
           {label}
         </p>
-        {sub && <p className="text-xs text-[#8A9AB5] mt-0.5">{sub}</p>}
+        {sub && <p className="text-xs text-[#5C6E8A] mt-0.5">{sub}</p>}
       </div>
     </Card>
   )
@@ -859,7 +886,7 @@ export function EmptyState({
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       {icon && (
-        <div className="w-14 h-14 rounded-2xl bg-[#F5F4EF] flex items-center justify-center mb-4 text-[#C5CCDA]">
+        <div className="w-14 h-14 rounded-2xl bg-[#F5F4EF] flex items-center justify-center mb-4 text-[#5C6E8A]">
           {icon}
         </div>
       )}
@@ -867,7 +894,7 @@ export function EmptyState({
         {title}
       </h3>
       {description && (
-        <p className="text-sm text-[#8A9AB5] max-w-xs">{description}</p>
+        <p className="text-sm text-[#5C6E8A] max-w-xs">{description}</p>
       )}
       {action && actionLabel && (
         <Button variant="primary" size="sm" className="mt-5" onClick={action}>
@@ -890,7 +917,7 @@ export function LoadState({
 }) {
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+      <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
         {loadingLabel}
       </div>
     )

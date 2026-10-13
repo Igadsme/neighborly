@@ -473,7 +473,7 @@ export default function BorrowDetail({ requestId, onNavigate }: BorrowDetailProp
                   · {report.condition.replace(/_/g, " ")}
                   {report.notes ? ` · ${report.notes}` : ""}
                 </span>
-                <p className="mt-1 text-xs text-[#8A9AB5]">
+                <p className="mt-1 text-xs text-[#5C6E8A]">
                   Recorded by {report.reportedBy?.profile?.firstName ?? "a neighbor"} on{" "}
                   {date(report.createdAt)}
                 </p>

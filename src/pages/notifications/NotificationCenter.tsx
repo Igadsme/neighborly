@@ -126,7 +126,7 @@ export default function NotificationCenter({ onNavigate }: NotificationCenterPro
                   )}
                 </div>
                 {row.body && <p className="mt-1 text-sm text-[#5A6B85]">{row.body}</p>}
-                <p className="mt-2 text-xs text-[#8A9AB5]">{new Date(row.createdAt).toLocaleString()}</p>
+                <p className="mt-2 text-xs text-[#5C6E8A]">{new Date(row.createdAt).toLocaleString()}</p>
               </button>
             </li>
           ))}

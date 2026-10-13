@@ -81,7 +81,7 @@ export default function PassportView({ userId, viewerId, onNavigate }: PassportV
                 "Location not shared"}
             </p>
             {passport.memberSince && (
-              <p className="text-xs text-[#8A9AB5]">
+              <p className="text-xs text-[#5C6E8A]">
                 Neighbor since{" "}
                 {new Date(passport.memberSince).toLocaleDateString(undefined, {
                   month: "long",
@@ -145,7 +145,7 @@ export default function PassportView({ userId, viewerId, onNavigate }: PassportV
         ) : (
           <div className="rounded-2xl border border-[#E8E6DF] bg-white p-4">
             <p className="text-2xl font-semibold text-[#1B2A4A]">{passport.rating.average}</p>
-            <p className="text-xs text-[#8A9AB5]">from {passport.rating.count} published reviews</p>
+            <p className="text-xs text-[#5C6E8A]">from {passport.rating.count} published reviews</p>
             <ul className="mt-2 space-y-1">
               {(["5", "4", "3", "2", "1"] as const).map(star => {
                 const count = passport.rating!.distribution[star]
@@ -242,10 +242,10 @@ export default function PassportView({ userId, viewerId, onNavigate }: PassportV
                   </p>
                   <span className="text-sm text-[#2D6A4F]" aria-label={`${review.rating} out of 5`}>
                     {"★".repeat(review.rating)}
-                    <span className="text-[#C5CCDA]">{"★".repeat(5 - review.rating)}</span>
+                    <span className="text-[#5C6E8A]">{"★".repeat(5 - review.rating)}</span>
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-[#8A9AB5]">
+                <p className="mt-1 text-xs text-[#5C6E8A]">
                   {review.context}
                   {review.itemTitle ? ` · ${review.itemTitle}` : ""} ·{" "}
                   {new Date(review.createdAt).toLocaleDateString()}

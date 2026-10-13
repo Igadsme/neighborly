@@ -112,7 +112,7 @@ export default function NotificationPreferencesScreen({
           {GROUPS.map(group => (
             <fieldset key={group.title} className="rounded-2xl border border-[#E8E6DF] bg-white p-5">
               <legend className="px-1 text-sm font-semibold text-[#1B2A4A]">{group.title}</legend>
-              <p className="mb-3 text-xs text-[#8A9AB5]">{group.hint}</p>
+              <p className="mb-3 text-xs text-[#5C6E8A]">{group.hint}</p>
               <div className="space-y-2">
                 {group.fields.map(field => (
                   <label key={field.key} className="flex items-center gap-2 text-sm text-[#1B2A4A]">

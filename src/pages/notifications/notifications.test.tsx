@@ -1,9 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import NotificationCenter from "./NotificationCenter"
-import { routeFor } from "../../lib/routes"
 import NotificationPreferencesScreen from "./NotificationPreferencesScreen"
 import SavedSearches from "./SavedSearches"
+import { routeFor } from "../../lib/routes"
 
 const listingId = "22222222-2222-4222-8222-222222222222"
 
@@ -63,7 +65,47 @@ describe("routeFor", () => {
   it("maps each kind of link the backend produces", () => {
     expect(routeFor(`/listings/${listingId}`)).toEqual(["listing", listingId])
     expect(routeFor("/requests/r-1/offers")).toEqual(["request-detail", "r-1"])
-    expect(routeFor("/transactions/t-1")).toEqual(["transactions", "t-1"])
+    // Transactions have no dedicated screen; they resolve to the dashboard
+    // that actually lists completed exchanges and pending offers.
+    expect(routeFor("/transactions/t-1")).toEqual(["dashboard"])
+  })
+
+  it("routes borrowing notifications to the borrow request", () => {
+    expect(routeFor("/borrow/requests/b-1")).toEqual(["borrow-detail", "b-1"])
+  })
+
+  it("routes dispute notifications to the dispute centre", () => {
+    expect(routeFor("/borrow/disputes/d-9")).toEqual(["borrow-dispute", "d-9"])
+  })
+
+  it("routes mission notifications to the mission or its organizer dashboard", () => {
+    expect(routeFor("/missions/m-1")).toEqual(["mission-detail", "m-1"])
+    expect(routeFor("/missions/m-1/manage")).toEqual(["mission-manage", "m-1"])
+    expect(routeFor("/missions/contributions")).toEqual(["mission-contributions"])
+  })
+
+  it("resolves every mapped route to a page App actually renders", () => {
+    // A link that maps to a page name with no matching screen renders a blank
+    // page, so each target must exist as a `page === "..."` branch.
+    const renderedPages = readFileSync(
+      resolve(process.cwd(), "src/App.tsx"),
+      "utf8"
+    )
+    const links = [
+      "/listings/l-1",
+      "/requests/r-1",
+      "/transactions/t-1",
+      "/borrow/requests/b-1",
+      "/borrow/disputes/d-1",
+      "/missions/m-1",
+      "/missions/m-1/manage",
+      "/missions/contributions",
+      "/unknown",
+    ]
+    for (const link of links) {
+      const [page] = routeFor(link)
+      expect(renderedPages).toContain(`page === "${page}"`)
+    }
   })
 
   it("falls back to the notification list rather than a dead route", () => {

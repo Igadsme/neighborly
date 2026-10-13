@@ -202,7 +202,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
-        <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+        <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
           Loading listing…
         </div>
       </div>
@@ -248,7 +248,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
 
       {/* Breadcrumb */}
       <div className="bg-white border-b border-[#E8E6DF]">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 flex items-center gap-2 text-sm text-[#8A9AB5]">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 flex items-center gap-2 text-sm text-[#5C6E8A]">
           <button onClick={() => onNavigate('explore')} className="hover:text-[#2D6A4F] transition-colors">Explore</button>
           <Icon name="chevronRight" size={12} />
           <span>{listing.category || 'Listing'}</span>
@@ -318,7 +318,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                     )}
                   </button>
                 ))}
-                <button className="w-20 h-20 rounded-xl border-2 border-dashed border-[#E8E6DF] flex flex-col items-center justify-center text-[#C5CCDA] hover:border-[#2D6A4F]/30 transition-colors">
+                <button className="w-20 h-20 rounded-xl border-2 border-dashed border-[#E8E6DF] flex flex-col items-center justify-center text-[#5C6E8A] hover:border-[#2D6A4F]/30 transition-colors">
                   <Icon name="camera" size={16} />
                   <span className="text-[9px] mt-1">Video</span>
                 </button>
@@ -331,7 +331,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                 <h1 className="font-display text-2xl md:text-3xl font-semibold text-[#1B2A4A] leading-tight">{listing.title}</h1>
                 <div className="text-right flex-shrink-0">
                   <p className="text-3xl font-bold text-[#1B2A4A]">{listing.isFree ? 'Free' : listing.price != null ? `$${listing.price.toLocaleString()}` : 'OBO'}</p>
-                  <p className="text-xs text-[#8A9AB5]">or best offer</p>
+                  <p className="text-xs text-[#5C6E8A]">or best offer</p>
                 </div>
               </div>
 
@@ -341,8 +341,8 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                 {listing.deliveryAvailable && <Badge variant="blue">Delivery</Badge>}
               </div>
 
-              <div className="flex flex-wrap items-center gap-4 text-sm text-[#8A9AB5]">
-                <span className="flex items-center gap-1"><Icon name="mapPin" size={13} className="text-[#E8694A]" />{[listing.neighborhood, listing.city].filter(Boolean).join(', ')} · {listing.distance}</span>
+              <div className="flex flex-wrap items-center gap-4 text-sm text-[#5C6E8A]">
+                <span className="flex items-center gap-1"><Icon name="mapPin" size={13} className="text-[#B94C2A]" />{[listing.neighborhood, listing.city].filter(Boolean).join(', ')} · {listing.distance}</span>
                 <span className="flex items-center gap-1"><Icon name="calendar" size={13} />Posted {listing.postedAt}</span>
                 <span className="flex items-center gap-1"><Icon name="eye" size={13} />{fromApi ? '—' : listing.views} views</span>
                 <span className="flex items-center gap-1"><Icon name="heart" size={13} />{fromApi ? '—' : listing.saves} saves</span>
@@ -374,7 +374,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
               <div className="grid grid-cols-2 gap-3">
                 {detailRows.map(({ label, value }) => (
                   <div key={label} className="flex flex-col">
-                    <span className="text-xs font-semibold text-[#8A9AB5] uppercase tracking-wide">{label}</span>
+                    <span className="text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide">{label}</span>
                     <span className="text-sm text-[#1B2A4A] mt-0.5">{value}</span>
                   </div>
                 ))}
@@ -389,15 +389,15 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                   <div className="w-9 h-9 rounded-full bg-[#D8F3DC] flex items-center justify-center"><Icon name="mapPin" size={15} className="text-[#2D6A4F]" /></div>
                   <div>
                     <p className="font-medium text-sm text-[#1B2A4A]">{listing.pickupAvailable ? 'Pickup available' : 'Pickup — not available'}</p>
-                    <p className="text-xs text-[#8A9AB5]">{listing.neighborhood || 'Nearby'} — seller can help load</p>
+                    <p className="text-xs text-[#5C6E8A]">{listing.neighborhood || 'Nearby'} — seller can help load</p>
                   </div>
                   {listing.pickupAvailable && <Icon name="check" size={14} className="ml-auto text-[#2D6A4F]" />}
                 </div>
                 <div className={`flex items-center gap-3 p-3 rounded-xl ${listing.deliveryAvailable ? 'bg-[#F0FBF3]' : 'bg-[#F5F4EF] opacity-50'}`}>
-                  <div className="w-9 h-9 rounded-full bg-[#EEF0F5] flex items-center justify-center"><Icon name="truck" size={15} className="text-[#8A9AB5]" /></div>
+                  <div className="w-9 h-9 rounded-full bg-[#EEF0F5] flex items-center justify-center"><Icon name="truck" size={15} className="text-[#5C6E8A]" /></div>
                   <div>
                     <p className="font-medium text-sm text-[#1B2A4A]">{listing.deliveryAvailable ? 'Delivery available' : 'Delivery — not available'}</p>
-                    <p className="text-xs text-[#8A9AB5]">{listing.deliveryAvailable ? 'Seller offers delivery' : 'Seller does not offer delivery'}</p>
+                    <p className="text-xs text-[#5C6E8A]">{listing.deliveryAvailable ? 'Seller offers delivery' : 'Seller does not offer delivery'}</p>
                   </div>
                 </div>
               </div>
@@ -406,7 +406,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
             {/* Safety */}
             <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 mb-6">
               <div className="flex items-center gap-2 mb-3">
-                <Icon name="shield" size={16} className="text-[#E8694A]" />
+                <Icon name="shield" size={16} className="text-[#B94C2A]" />
                 <h2 className="font-semibold text-[#1B2A4A]">Neighborly Safety Check</h2>
               </div>
               <p className="text-sm text-[#5C6E8A] mb-4">This listing passed our automated safety review. Here are nearby safe meetup spots:</p>
@@ -418,7 +418,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-[#8A9AB5] mt-3">⚠️ Never pay via gift cards, wire transfer, or apps like Zelle/Venmo to strangers. Always meet in person for large items.</p>
+              <p className="text-xs text-[#5C6E8A] mt-3">⚠️ Never pay via gift cards, wire transfer, or apps like Zelle/Venmo to strangers. Always meet in person for large items.</p>
             </div>
 
             {/* Reviews */}
@@ -426,7 +426,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
               <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-4">Seller reviews</h2>
               <div className="space-y-4">
                 {fromApi && (
-                  <p className="text-sm text-[#8A9AB5]">Seller reviews appear after completed exchanges.</p>
+                  <p className="text-sm text-[#5C6E8A]">Seller reviews appear after completed exchanges.</p>
                 )}
                 {!fromApi && [
                   { name: 'Priya P.', avatar: 'photo-1494790108755-2616b612b77c', rating: 5, date: '2 weeks ago', text: 'Marcus was super responsive, item was exactly as described. Smooth pickup!' },
@@ -439,8 +439,8 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <p className="font-semibold text-sm text-[#1B2A4A]">{review.name}</p>
-                          <span className="text-[#8A9AB5] text-xs">·</span>
-                          <span className="text-xs text-[#8A9AB5]">{review.date}</span>
+                          <span className="text-[#5C6E8A] text-xs">·</span>
+                          <span className="text-xs text-[#5C6E8A]">{review.date}</span>
                         </div>
                         <div className="flex mb-1">
                           {[...Array(review.rating)].map((_, i) => <span key={i} className="text-[#F59E0B] text-xs">★</span>)}
@@ -457,9 +457,9 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
             <div>
               <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-4">Similar listings</h2>
               {relatedError && <p className="text-sm text-[#C4512D] mb-3">{relatedError}</p>}
-              {relatedLoading && <p className="text-sm text-[#8A9AB5]">Loading similar listings…</p>}
+              {relatedLoading && <p className="text-sm text-[#5C6E8A]">Loading similar listings…</p>}
               {!relatedLoading && !relatedError && relatedListings.length === 0 && (
-                <p className="text-sm text-[#8A9AB5]">No similar listings yet.</p>
+                <p className="text-sm text-[#5C6E8A]">No similar listings yet.</p>
               )}
               <div className="grid grid-cols-2 gap-4">
                 {relatedListings.map(l => (
@@ -476,12 +476,12 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
               <div className="bg-white rounded-3xl border border-[#E8E6DF] shadow-md p-6">
                 <div className="flex items-baseline justify-between mb-1">
                   <span className="text-3xl font-bold text-[#1B2A4A]">{listing.isFree ? 'Free' : listing.price != null ? `$${listing.price.toLocaleString()}` : 'OBO'}</span>
-                  <button onClick={() => void toggleSaved()} className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${saved ? 'text-[#E8694A]' : 'text-[#8A9AB5] hover:text-[#E8694A]'}`}>
+                  <button onClick={() => void toggleSaved()} className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${saved ? 'text-[#B94C2A]' : 'text-[#5C6E8A] hover:text-[#B94C2A]'}`}>
                     <Icon name="heart" size={15} className={saved ? 'fill-[#E8694A] stroke-[#E8694A]' : ''} />
                     {saved ? 'Saved' : 'Save'}
                   </button>
                 </div>
-                <p className="text-xs text-[#8A9AB5] mb-5">or best offer · {listing.neighborhood} · {listing.distance}</p>
+                <p className="text-xs text-[#5C6E8A] mb-5">or best offer · {listing.neighborhood} · {listing.distance}</p>
                 {saveError && <p className="text-xs text-[#C4512D] mb-3">{saveError}</p>}
 
                 <div className="space-y-3">
@@ -497,7 +497,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                     <div className="p-4 bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl animate-fade-in">
                       <p className="text-xs font-semibold text-[#1B2A4A] mb-2">Your offer</p>
                       <div className="relative mb-3">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9AB5] text-sm">$</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5C6E8A] text-sm">$</span>
                         <input
                           type="number"
                           placeholder="e.g. 575"
@@ -514,15 +514,15 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                 </div>
 
                 <div className="mt-5 pt-5 border-t border-[#F5F4EF] space-y-2">
-                  <div className="flex items-center gap-2 text-xs text-[#8A9AB5]">
+                  <div className="flex items-center gap-2 text-xs text-[#5C6E8A]">
                     <Icon name="shield" size={12} className="text-[#2D6A4F]" />
                     Neighborly buyer protection
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-[#8A9AB5]">
+                  <div className="flex items-center gap-2 text-xs text-[#5C6E8A]">
                     <Icon name="mapPin" size={12} className="text-[#2D6A4F]" />
                     Safe meetup spots suggested
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-[#8A9AB5]">
+                  <div className="flex items-center gap-2 text-xs text-[#5C6E8A]">
                     <Icon name="message" size={12} className="text-[#2D6A4F]" />
                     Secure in-app messaging only
                   </div>
@@ -535,7 +535,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                   <Avatar src={listing.seller.avatar} name={listing.seller.name} size="lg" verified={listing.seller.verified} />
                   <div>
                     <p className="font-semibold text-[#1B2A4A]">{listing.seller.name}</p>
-                    <p className="text-xs text-[#8A9AB5]">{listing.seller.neighborhood}{listing.seller.memberSince ? ` · Member since ${listing.seller.memberSince}` : ''}</p>
+                    <p className="text-xs text-[#5C6E8A]">{listing.seller.neighborhood}{listing.seller.memberSince ? ` · Member since ${listing.seller.memberSince}` : ''}</p>
                     <div className="flex items-center gap-2 mt-1">
                       {listing.seller.rating > 0 && (
                         <StarRating rating={listing.seller.rating} count={listing.seller.reviews} size="xs" />
@@ -547,15 +547,15 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                 <div className="grid grid-cols-3 gap-2 mb-4">
                   <div className="bg-[#F5F4EF] rounded-xl p-2 text-center">
                     <p className="font-bold text-[#1B2A4A] text-sm">{fromApi ? '—' : listing.seller.transactions}</p>
-                    <p className="text-[9px] text-[#8A9AB5]">Sales</p>
+                    <p className="text-[9px] text-[#5C6E8A]">Sales</p>
                   </div>
                   <div className="bg-[#F5F4EF] rounded-xl p-2 text-center">
                     <p className="font-bold text-[#1B2A4A] text-sm">{fromApi || !listing.seller.responseTime ? '—' : listing.seller.responseTime}</p>
-                    <p className="text-[9px] text-[#8A9AB5]">Response</p>
+                    <p className="text-[9px] text-[#5C6E8A]">Response</p>
                   </div>
                   <div className="bg-[#F5F4EF] rounded-xl p-2 text-center">
                     <p className="font-bold text-[#2D6A4F] text-sm">{fromApi ? '—' : '4.9★'}</p>
-                    <p className="text-[9px] text-[#8A9AB5]">Rating</p>
+                    <p className="text-[9px] text-[#5C6E8A]">Rating</p>
                   </div>
                 </div>
 
@@ -573,7 +573,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
               {/* Report */}
               <button
                 onClick={() => void reportListing()}
-                className="w-full text-xs font-medium text-center py-2 transition-colors text-[#C5CCDA] hover:text-[#8A9AB5]"
+                className="w-full text-xs font-medium text-center py-2 transition-colors text-[#5C6E8A] hover:text-[#5C6E8A]"
               >
                 Report this listing
               </button>
@@ -616,14 +616,14 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
               </div>
               <div>
                 <p className="text-xs font-semibold text-[#1B2A4A] line-clamp-1">{listing.title}</p>
-                <p className="text-xs text-[#8A9AB5]">{listing.isFree ? 'Free' : listing.price != null ? `$${listing.price.toLocaleString()}` : 'OBO'}</p>
+                <p className="text-xs text-[#5C6E8A]">{listing.isFree ? 'Free' : listing.price != null ? `$${listing.price.toLocaleString()}` : 'OBO'}</p>
               </div>
             </div>
             {messageSent ? (
               <div className="text-center py-4">
                 <div className="text-3xl mb-2">✅</div>
                 <p className="font-semibold text-[#1B2A4A]">Message sent!</p>
-                <p className="text-sm text-[#8A9AB5]">Redirecting to messages...</p>
+                <p className="text-sm text-[#5C6E8A]">Redirecting to messages...</p>
               </div>
             ) : (
               <>

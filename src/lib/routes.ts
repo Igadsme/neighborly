@@ -2,15 +2,45 @@
  * Translates an API-provided link into the app's own routing vocabulary.
  *
  * Notifications and alerts carry links the backend builds, so the mapping
- * lives in one place rather than being re-derived by each screen. A link that
- * matches nothing falls back to the notification list instead of a dead page.
+ * lives in one place rather than being re-derived by each screen.
+ *
+ * Every link the backend currently emits must map to a page that actually
+ * renders, otherwise tapping a notification lands the user on a blank screen.
+ * A link that matches nothing falls back to the notification list, which is a
+ * real destination, rather than a route that renders nothing.
  */
 export function routeFor(link: string): [page: string, id?: string] {
-  const listing = link.match(/^\/listings\/([^/?]+)/)
-  if (listing) return ["listing", listing[1]]
-  const request = link.match(/^\/requests\/([^/?]+)/)
-  if (request) return ["request-detail", request[1]]
-  const transaction = link.match(/^\/transactions\/([^/?]+)/)
-  if (transaction) return ["transactions", transaction[1]]
+  const id = (pattern: RegExp): string | undefined => link.match(pattern)?.[1]
+
+  const listing = id(/^\/listings\/([^/?]+)/)
+  if (listing) return ["listing", listing]
+
+  const request = id(/^\/requests\/([^/?]+)/)
+  if (request) return ["request-detail", request]
+
+  // Transactions have no dedicated screen; completed exchanges, pending
+  // offers and meetups are all shown on the dashboard.
+  if (/^\/transactions\/[^/?]+/.test(link)) return ["dashboard"]
+
+  // Borrowing: `/borrow/requests/<id>` is a single borrow request, and
+  // `/borrow/disputes/<id>` opens the dispute centre focused on that dispute.
+  const borrowRequest = id(/^\/borrow\/requests\/([^/?]+)/)
+  if (borrowRequest) return ["borrow-detail", borrowRequest]
+
+  const dispute = id(/^\/borrow\/disputes\/([^/?]+)/)
+  if (dispute) return ["borrow-dispute", dispute]
+
+  // Missions: `/missions/contributions` is a fixed screen, `/missions/<id>`
+  // is a mission, and `/missions/<id>/manage` is the organizer dashboard for
+  // that mission.
+  if (/^\/missions\/contributions/.test(link)) return ["mission-contributions"]
+  const missionManage = id(/^\/missions\/([^/?]+)\/manage/)
+  if (missionManage) return ["mission-manage", missionManage]
+  const mission = id(/^\/missions\/([^/?]+)/)
+  if (mission) return ["mission-detail", mission]
+
+  // `/borrow` and other bare area links open the area's landing screen.
+  if (/^\/borrow\/?$/.test(link)) return ["borrow-lent"]
+
   return ["notifications"]
 }

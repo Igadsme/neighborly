@@ -234,7 +234,7 @@ export default function MissionDetailPage({ missionId, onNavigate }: MissionDeta
           noValidate
         >
           <h2 className="text-sm font-semibold text-[#1B2A4A]">Report this mission</h2>
-          <p className="text-xs text-[#8A9AB5]">
+          <p className="text-xs text-[#5C6E8A]">
             Reports go to moderators. Who reported is never shown to the organizer.
           </p>
           <label className="block text-sm text-[#1B2A4A]" htmlFor="report-reason">

@@ -1,0 +1,77 @@
+{
+  "url": "http://localhost:4173",
+  "viewports": [
+    "320",
+    "375",
+    "390",
+    "768",
+    "1024",
+    "1440"
+  ],
+  "structure": {
+    "hasMain": true,
+    "mainId": "main-content",
+    "mainTabIndex": "-1",
+    "h1Count": 1,
+    "headings": [
+      "H1:Your neighborhoodhas moreto of",
+      "H2:Everything local. All in one p",
+      "H2:Simple. Safe. Local.",
+      "H3:Discover something nearby",
+      "H3:Connect with confidence",
+      "H3:Meet, exchange, or book safely"
+    ],
+    "landmarks": [
+      "main",
+      "div[status]",
+      "header",
+      "nav",
+      "div[img]",
+      "p[alert]",
+      "footer"
+    ],
+    "imagesMissingAlt": 0,
+    "imageCount": 4,
+    "buttonsWithoutName": 0,
+    "buttonCount": 21,
+    "inputsWithoutLabel": 0,
+    "inputCount": 2,
+    "lang": "en",
+    "title": "Neighborly — Your local community marketplace"
+  },
+  "keyboard": {
+    "count": 24,
+    "small": 0,
+    "smallSample": []
+  },
+  "timings": {
+    "fcp": 104,
+    "lcp": null,
+    "cls": 0,
+    "domContentLoaded": 19
+  },
+  "reducedMotion": {
+    "duration": "1e-05s",
+    "scroll": "auto"
+  },
+  "problems": {
+    "consoleErrors": [
+      "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+      "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+      "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+      "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+      "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+      "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+    ],
+    "failedRequests": [
+      "net::ERR_CONNECTION_REFUSED",
+      "net::ERR_CONNECTION_REFUSED",
+      "net::ERR_CONNECTION_REFUSED",
+      "net::ERR_CONNECTION_REFUSED",
+      "net::ERR_CONNECTION_REFUSED",
+      "net::ERR_CONNECTION_REFUSED"
+    ]
+  },
+  "passed": 31,
+  "failed": 0
+}

@@ -73,7 +73,7 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
             <h1 className="font-display text-3xl font-semibold text-[#1B2A4A]">
               Saved items
             </h1>
-            <p className="text-[#8A9AB5] mt-1">
+            <p className="text-[#5C6E8A] mt-1">
               {savedListings.length} items saved · {savedSearches.length} saved
               searches
             </p>
@@ -117,14 +117,14 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
                     className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
                       activeCollection === col.id
                         ? "bg-white/20 text-white"
-                        : "bg-[#F5F4EF] text-[#8A9AB5]"
+                        : "bg-[#F5F4EF] text-[#5C6E8A]"
                     }`}
                   >
                     {savedListings.length}
                   </span>
                 </button>
               ))}
-              <button className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-dashed border-[#E8E6DF] text-[#C5CCDA] hover:border-[#2D6A4F]/30 hover:text-[#2D6A4F] transition-all bg-white">
+              <button className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-dashed border-[#E8E6DF] text-[#5C6E8A] hover:border-[#2D6A4F]/30 hover:text-[#2D6A4F] transition-all bg-white">
                 <Icon name="plus" size={12} />
                 New collection
               </button>
@@ -157,7 +157,7 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
             )}
 
             {loading ? (
-              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
                 Loading saved items…
               </div>
             ) : error ? (
@@ -194,7 +194,7 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
                       className={`absolute top-2 left-2 text-xs font-semibold px-2 py-1 rounded-lg border transition-all ${
                         comparingIds.includes(listing.id)
                           ? "bg-[#1B2A4A] text-white border-[#1B2A4A]"
-                          : "bg-white/90 text-[#8A9AB5] border-[#E8E6DF] hover:border-[#1B2A4A]"
+                          : "bg-white/90 text-[#5C6E8A] border-[#E8E6DF] hover:border-[#1B2A4A]"
                       }`}
                     >
                       {comparingIds.includes(listing.id)
@@ -220,7 +220,7 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
         {activeTab === "Saved Searches" && (
           <div className="space-y-3">
             {loading ? (
-              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
                 Loading saved searches…
               </div>
             ) : savedSearches.length === 0 ? (
@@ -243,13 +243,13 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
                         <Icon
                           name="search"
                           size={13}
-                          className="text-[#8A9AB5]"
+                          className="text-[#5C6E8A]"
                         />
                         <p className="font-semibold text-sm text-[#1B2A4A]">
                           &quot;{search.query}&quot;
                         </p>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-[#8A9AB5]">
+                      <div className="flex items-center gap-3 text-xs text-[#5C6E8A]">
                         <span className="flex items-center gap-1">
                           <Icon name="mapPin" size={10} />
                           {typeof search.filters.neighborhood === "string"
@@ -338,17 +338,17 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
                         <span className="text-lg font-bold text-[#1B2A4A]">
                           ${listing.price?.toLocaleString()}
                         </span>
-                        <span className="text-sm text-[#C5CCDA] line-through">
+                        <span className="text-sm text-[#5C6E8A] line-through">
                           ${((listing.price || 0) + 100).toLocaleString()}
                         </span>
                         <Badge variant="coral" size="sm">
                           ↓ $100 off
                         </Badge>
                       </div>
-                      <p className="text-xs text-[#8A9AB5] mt-1">
+                      <p className="text-xs text-[#5C6E8A] mt-1">
                         {listing.neighborhood} · {listing.distance}
                       </p>
-                      <p className="text-xs text-[#E8694A] font-medium mt-1">
+                      <p className="text-xs text-[#B94C2A] font-medium mt-1">
                         Price dropped {listing.postedAt}
                       </p>
                     </div>
@@ -363,7 +363,7 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
               subtitle="New items matching your saved searches"
               className="mt-8"
             />
-            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 text-sm text-[#8A9AB5]">
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 text-sm text-[#5C6E8A]">
               New-match alerts will appear here once saved-search notifications
               are enabled.
             </div>

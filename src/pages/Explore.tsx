@@ -171,7 +171,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
           {/* Search input */}
           <div className="relative mb-3">
-            <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8A9AB5] pointer-events-none" />
+            <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5C6E8A] pointer-events-none" />
             <input
               type="text"
               value={query}
@@ -180,7 +180,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
               onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
               onKeyDown={e => { if (e.key === 'Enter') { setSearched(true); setShowSuggestions(false); setSearchNonce((n) => n + 1) } }}
               placeholder="Search for anything nearby..."
-              className="w-full h-12 pl-12 pr-40 bg-[#F5F4EF] rounded-2xl text-sm text-[#1B2A4A] placeholder:text-[#C5CCDA] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#2D6A4F]/20 transition-all"
+              className="w-full h-12 pl-12 pr-40 bg-[#F5F4EF] rounded-2xl text-sm text-[#1B2A4A] placeholder:text-[#5C6E8A] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#2D6A4F]/20 transition-all"
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
               <button onClick={() => onNavigate('map')} className="flex items-center gap-1.5 text-xs font-semibold text-[#4A7FB5] bg-[#DDEEFF] px-3 py-1.5 rounded-lg hover:bg-[#90BEE5]/30 transition-colors">
@@ -195,14 +195,14 @@ export default function Explore({ onNavigate }: ExploreProps) {
             {/* Suggestions dropdown */}
             {showSuggestions && !searched && (
               <div className="absolute top-14 left-0 right-0 bg-white border border-[#E8E6DF] rounded-2xl shadow-xl z-50 p-4">
-                <p className="text-xs font-semibold text-[#8A9AB5] uppercase tracking-wide mb-3">Recent searches</p>
+                <p className="text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide mb-3">Recent searches</p>
                 {recentSearches.map(s => (
                   <button key={s} onClick={() => { setQuery(s); setSearched(true); setShowSuggestions(false); setSearchNonce((n) => n + 1) }} className="flex items-center gap-3 w-full p-2 rounded-xl hover:bg-[#F5F4EF] text-sm text-[#1B2A4A] text-left">
-                    <Icon name="search" size={13} className="text-[#C5CCDA]" />
+                    <Icon name="search" size={13} className="text-[#5C6E8A]" />
                     {s}
                   </button>
                 ))}
-                <p className="text-xs font-semibold text-[#8A9AB5] uppercase tracking-wide mb-3 mt-4">Try searching for</p>
+                <p className="text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide mb-3 mt-4">Try searching for</p>
                 {suggestedSearches.map(s => (
                   <button key={s} onClick={() => { setQuery(s); setSearched(true); setShowSuggestions(false); setSearchNonce((n) => n + 1) }} className="flex items-center gap-3 w-full p-2 rounded-xl hover:bg-[#F5F4EF] text-sm text-[#2D6A4F] text-left">
                     <Icon name="zap" size={13} className="text-[#52B788]" />
@@ -230,7 +230,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
               <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 sticky top-40">
                 <div className="flex items-center justify-between mb-5">
                   <h3 className="font-semibold text-[#1B2A4A]">Filters</h3>
-                  <button className="text-xs text-[#E8694A] font-medium hover:underline">Clear all</button>
+                  <button className="text-xs text-[#B94C2A] font-medium hover:underline">Clear all</button>
                 </div>
 
                 {/* Price range */}
@@ -244,7 +244,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
                       onChange={e => setMinPrice(e.target.value)}
                       className="flex-1 h-9 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-lg text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F]"
                     />
-                    <span className="flex items-center text-[#C5CCDA] text-sm">–</span>
+                    <span className="flex items-center text-[#5C6E8A] text-sm">–</span>
                     <input
                       type="number"
                       placeholder="Max"
@@ -268,7 +268,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
                     onChange={e => setDistance(parseInt(e.target.value))}
                     className="w-full"
                   />
-                  <div className="flex justify-between text-xs text-[#C5CCDA] mt-1">
+                  <div className="flex justify-between text-xs text-[#5C6E8A] mt-1">
                     <span>1 mi</span><span>25 mi</span><span>50 mi</span>
                   </div>
                 </div>
@@ -361,7 +361,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
                     <button
                       key={v}
                       onClick={() => v === 'map' ? onNavigate('map') : setView(v)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${view === v ? 'bg-[#2D6A4F] text-white' : 'text-[#8A9AB5] hover:text-[#1B2A4A]'}`}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${view === v ? 'bg-[#2D6A4F] text-white' : 'text-[#5C6E8A] hover:text-[#1B2A4A]'}`}
                     >
                       <Icon name={v === 'grid' ? 'grid' : v === 'list' ? 'list' : 'map'} size={14} />
                     </button>
@@ -381,7 +381,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
 
             {/* Grid */}
             {loading ? (
-              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
                 Loading listings…
               </div>
             ) : loadError ? (
@@ -407,15 +407,15 @@ export default function Explore({ onNavigate }: ExploreProps) {
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           {listing.condition && <Badge variant="navy" size="sm">{listing.condition}</Badge>}
-                          <span className="text-xs text-[#8A9AB5]">{listing.neighborhood} · {listing.distance}</span>
+                          <span className="text-xs text-[#5C6E8A]">{listing.neighborhood} · {listing.distance}</span>
                         </div>
                         <p className="text-sm text-[#5C6E8A] mt-2 line-clamp-2">{listing.description}</p>
                         <div className="flex items-center gap-3 mt-3">
-                          <div className="flex items-center gap-1.5 text-xs text-[#8A9AB5]">
+                          <div className="flex items-center gap-1.5 text-xs text-[#5C6E8A]">
                             <Icon name="eye" size={12} />
                             {listing.views} views
                           </div>
-                          <div className="flex items-center gap-1.5 text-xs text-[#8A9AB5]">
+                          <div className="flex items-center gap-1.5 text-xs text-[#5C6E8A]">
                             <Icon name="heart" size={12} />
                             {listing.saves} saves
                           </div>
@@ -433,7 +433,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
               <div className="py-20 text-center">
                 <div className="text-5xl mb-4">🔍</div>
                 <h3 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">No results found</h3>
-                <p className="text-[#8A9AB5] max-w-sm mx-auto mb-6">Try adjusting your filters or searching in a wider radius. We can alert you when something matching your search is posted.</p>
+                <p className="text-[#5C6E8A] max-w-sm mx-auto mb-6">Try adjusting your filters or searching in a wider radius. We can alert you when something matching your search is posted.</p>
                 <div className="flex items-center justify-center gap-3">
                   <Button variant="primary" size="sm" onClick={() => { setFreeOnly(false); setVerifiedOnly(false); setMaxPrice(''); setMinPrice(''); setCategory('All'); setOffset(0) }}>Clear filters</Button>
                   <Button variant="outline" size="sm" onClick={() => void saveAlert()}>Save this search</Button>

@@ -129,7 +129,7 @@ export default function CommunityModeration({ onNavigate }: { onNavigate: (page:
                 Reported for {String(row.reason).toLowerCase().replace(/_/g, " ")}
               </p>
               {row.details && <p className="mt-1 text-sm text-[#5A6B85]">{row.details}</p>}
-              <p className="mt-1 text-xs text-[#8A9AB5]">
+              <p className="mt-1 text-xs text-[#5C6E8A]">
                 Reported by{" "}
                 {row.reporter?.profile?.displayName || row.reporter?.profile?.firstName || "a neighbor"}
                 {" · "}
@@ -138,7 +138,7 @@ export default function CommunityModeration({ onNavigate }: { onNavigate: (page:
 
               {row.mission && (
                 <>
-                  <p className="mt-2 text-xs text-[#8A9AB5]">
+                  <p className="mt-2 text-xs text-[#5C6E8A]">
                     {row.mission.status.toLowerCase()} · {row.mission.confirmedCount} of{" "}
                     {row.mission.capacity} places taken · organized by{" "}
                     {row.mission.organizer?.profile?.displayName ||

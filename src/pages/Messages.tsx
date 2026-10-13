@@ -294,11 +294,11 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
             </button>
           </div>
           <div className="relative">
-            <Icon name="search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#C5CCDA]" />
+            <Icon name="search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5C6E8A]" />
             <input
               type="text"
               placeholder="Search messages..."
-              className="w-full h-9 pl-9 pr-3 bg-[#F5F4EF] rounded-xl text-sm text-[#1B2A4A] placeholder:text-[#C5CCDA] focus:outline-none"
+              className="w-full h-9 pl-9 pr-3 bg-[#F5F4EF] rounded-xl text-sm text-[#1B2A4A] placeholder:text-[#5C6E8A] focus:outline-none"
             />
           </div>
           <div className="flex gap-1 mt-3">
@@ -306,7 +306,7 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${filter === f ? 'bg-[#2D6A4F] text-white' : 'text-[#8A9AB5] hover:text-[#1B2A4A]'}`}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${filter === f ? 'bg-[#2D6A4F] text-white' : 'text-[#5C6E8A] hover:text-[#1B2A4A]'}`}
               >
                 {f}
               </button>
@@ -316,7 +316,7 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
 
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 m-4 text-center text-sm text-[#8A9AB5]">Loading messages…</div>
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 m-4 text-center text-sm text-[#5C6E8A]">Loading messages…</div>
           ) : loadError ? (
             <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 m-4 text-sm text-[#C4512D]">{loadError}</div>
           ) : conversations.length === 0 ? (
@@ -352,10 +352,10 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
                       <p className="font-semibold text-sm text-[#1B2A4A]">{name}</p>
-                      <span className="text-xs text-[#C5CCDA] flex-shrink-0">{relativeTime(latest?.createdAt ?? conv.updatedAt)}</span>
+                      <span className="text-xs text-[#5C6E8A] flex-shrink-0">{relativeTime(latest?.createdAt ?? conv.updatedAt)}</span>
                     </div>
-                    <p className="text-xs text-[#8A9AB5] mb-1 truncate">Re: {title ?? 'Conversation'}</p>
-                    <p className={`text-xs truncate ${unread ? 'font-semibold text-[#1B2A4A]' : 'text-[#8A9AB5]'}`}>{latest?.body ?? 'No messages yet'}</p>
+                    <p className="text-xs text-[#5C6E8A] mb-1 truncate">Re: {title ?? 'Conversation'}</p>
+                    <p className={`text-xs truncate ${unread ? 'font-semibold text-[#1B2A4A]' : 'text-[#5C6E8A]'}`}>{latest?.body ?? 'No messages yet'}</p>
                   </div>
                   {unread && (
                     <span className="w-5 h-5 bg-[#E8694A] text-white text-[10px] font-bold rounded-full flex items-center justify-center flex-shrink-0">1</span>
@@ -370,13 +370,13 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
       {activeConversation && (
         <div className={`flex-1 flex flex-col ${selected ? 'flex' : 'hidden md:flex'}`}>
           <div className="flex items-center gap-3 p-4 bg-white border-b border-[#E8E6DF]">
-            <button className="md:hidden text-[#8A9AB5] mr-1" onClick={() => setSelected('')}>
+            <button className="md:hidden text-[#5C6E8A] mr-1" onClick={() => setSelected('')}>
               <Icon name="chevronRight" size={18} className="rotate-180" />
             </button>
             <Avatar name={personName(otherOf(activeConversation)?.user)} size="md" />
             <div className="flex-1">
               <p className="font-semibold text-sm text-[#1B2A4A]">{personName(otherOf(activeConversation)?.user)}</p>
-              <div className="flex items-center gap-2 text-xs text-[#8A9AB5]">
+              <div className="flex items-center gap-2 text-xs text-[#5C6E8A]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#74C69D]" />
                 Active{otherOf(activeConversation)?.user?.profile?.neighborhood ? ` · ${otherOf(activeConversation)?.user?.profile?.neighborhood}` : ''}
               </div>
@@ -395,11 +395,11 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
                 type="button"
                 aria-label="Report this conversation"
                 onClick={() => void reportConversation()}
-                className="w-8 h-8 rounded-full hover:bg-[#F5F4EF] flex items-center justify-center text-[#8A9AB5] transition-colors"
+                className="w-8 h-8 rounded-full hover:bg-[#F5F4EF] flex items-center justify-center text-[#5C6E8A] transition-colors"
               >
                 <Icon name="shield" size={16} />
               </button>
-              <button className="w-8 h-8 rounded-full hover:bg-[#F5F4EF] flex items-center justify-center text-[#8A9AB5] transition-colors">
+              <button className="w-8 h-8 rounded-full hover:bg-[#F5F4EF] flex items-center justify-center text-[#5C6E8A] transition-colors">
                 <Icon name="sliders" size={16} />
               </button>
             </div>
@@ -412,11 +412,11 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
                 <div key={step} className="flex items-center">
                   <div className={`flex flex-col items-center ${i < transactionSteps.length - 1 ? 'flex-1' : ''}`}>
                     <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold border-2 ${
-                      i <= filledStep ? 'bg-[#2D6A4F] border-[#2D6A4F] text-white' : 'bg-white border-[#E8E6DF] text-[#C5CCDA]'
+                      i <= filledStep ? 'bg-[#2D6A4F] border-[#2D6A4F] text-white' : 'bg-white border-[#E8E6DF] text-[#5C6E8A]'
                     }`}>
                       {i <= filledStep ? '✓' : i + 1}
                     </div>
-                    <p className="text-[8px] text-[#8A9AB5] mt-0.5 text-center hidden md:block leading-tight max-w-[60px]">{step}</p>
+                    <p className="text-[8px] text-[#5C6E8A] mt-0.5 text-center hidden md:block leading-tight max-w-[60px]">{step}</p>
                   </div>
                   {i < transactionSteps.length - 1 && (
                     <div className={`flex-1 h-0.5 mx-1 ${i < filledStep ? 'bg-[#2D6A4F]' : 'bg-[#E8E6DF]'}`} />
@@ -429,7 +429,7 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
           <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#F5F4EF]">
             <div className="flex items-center gap-3 py-2">
               <div className="flex-1 h-px bg-[#E8E6DF]" />
-              <span className="text-xs text-[#C5CCDA] font-medium">Today</span>
+              <span className="text-xs text-[#5C6E8A] font-medium">Today</span>
               <div className="flex-1 h-px bg-[#E8E6DF]" />
             </div>
 
@@ -456,7 +456,7 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
                     <div className={`px-4 py-2.5 text-sm leading-relaxed ${mine ? 'msg-bubble-sent' : 'msg-bubble-recv'}`}>
                       {msg.body}
                     </div>
-                    <span className="text-[10px] text-[#C5CCDA] mt-1 px-1">
+                    <span className="text-[10px] text-[#5C6E8A] mt-1 px-1">
                       {relativeTime(msg.createdAt)}
                       {/* Read receipt, shown only on messages the viewer sent. */}
                       {mine && msg.readAt && (
@@ -474,20 +474,20 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
               <div className="flex justify-center">
                 <div className="bg-white rounded-2xl border border-[#E8E6DF] p-4 max-w-xs w-full shadow-sm">
                   <div className="flex items-center gap-2 mb-3">
-                    <Icon name="dollar" size={14} className="text-[#E8694A]" />
+                    <Icon name="dollar" size={14} className="text-[#B94C2A]" />
                     <span className="text-xs font-semibold text-[#1B2A4A] uppercase tracking-wide">Offer received</span>
                   </div>
                   {offer.amountCents == null ? (
-                    <p className="text-sm text-[#8A9AB5] mb-1">{offer.message}</p>
+                    <p className="text-sm text-[#5C6E8A] mb-1">{offer.message}</p>
                   ) : (
                     <p className="text-xl font-bold text-[#1B2A4A] mb-1">${dollars(offer.amountCents)}</p>
                   )}
-                  <p className="text-xs text-[#8A9AB5] mb-3">For: {linked?.request.title}</p>
+                  <p className="text-xs text-[#5C6E8A] mb-3">For: {linked?.request.title}</p>
                   {negotiable ? (
                     <div className="flex gap-2">
                       <button disabled={acting} onClick={() => void decideOffer('accept')} className="flex-1 py-2 bg-[#2D6A4F] text-white text-xs font-semibold rounded-xl hover:bg-[#1B4332] transition-colors disabled:opacity-40">Accept</button>
                       <button disabled={acting} onClick={armCounter} className="flex-1 py-2 border border-[#E8E6DF] text-[#5C6E8A] text-xs font-semibold rounded-xl hover:bg-[#F5F4EF] transition-colors disabled:opacity-40">Counter</button>
-                      <button disabled={acting} onClick={() => void decideOffer('reject')} className="flex-1 py-2 border border-[#E8E6DF] text-[#E8694A] text-xs font-semibold rounded-xl hover:bg-[#FDE8E0] transition-colors disabled:opacity-40">Decline</button>
+                      <button disabled={acting} onClick={() => void decideOffer('reject')} className="flex-1 py-2 border border-[#E8E6DF] text-[#B94C2A] text-xs font-semibold rounded-xl hover:bg-[#FDE8E0] transition-colors disabled:opacity-40">Decline</button>
                     </div>
                   ) : (
                     <Badge variant={offerBadge(offer.status).variant}>{offerBadge(offer.status).label}</Badge>
@@ -527,7 +527,7 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
               ))}
             </div>
             <div className="flex items-end gap-2">
-              <button className="w-9 h-9 flex-shrink-0 rounded-full bg-[#F5F4EF] flex items-center justify-center text-[#8A9AB5] hover:bg-[#EEF0F5] transition-colors">
+              <button className="w-9 h-9 flex-shrink-0 rounded-full bg-[#F5F4EF] flex items-center justify-center text-[#5C6E8A] hover:bg-[#EEF0F5] transition-colors">
                 <Icon name="camera" size={16} />
               </button>
               <div className="flex-1 relative">
@@ -549,7 +549,7 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
                 <Icon name="send" size={14} />
               </button>
             </div>
-            <p className="text-[10px] text-[#C5CCDA] text-center mt-2">
+            <p className="text-[10px] text-[#5C6E8A] text-center mt-2">
               🔒 Messages are secure. Never share personal contact info or pay outside Neighborly.
             </p>
           </div>

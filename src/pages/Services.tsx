@@ -184,14 +184,14 @@ export default function Services({ onNavigate }: ServicesProps) {
         <h1 className="font-display text-4xl md:text-5xl font-semibold text-white mb-3">Local services</h1>
         <p className="text-white/70 text-lg mb-6 max-w-xl mx-auto">Hire trusted neighbors for cleaning, moving, tutoring, repairs, and more.</p>
         <div className="relative max-w-lg mx-auto">
-          <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#C5CCDA]" />
+          <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5C6E8A]" />
           <input
             type="text"
             value={searchDraft}
             onChange={e => setSearchDraft(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') setQuery(searchDraft) }}
             placeholder="What service do you need?"
-            className="w-full h-13 pl-12 pr-36 bg-white rounded-2xl text-sm text-[#1B2A4A] placeholder:text-[#C5CCDA] focus:outline-none shadow-md"
+            className="w-full h-13 pl-12 pr-36 bg-white rounded-2xl text-sm text-[#1B2A4A] placeholder:text-[#5C6E8A] focus:outline-none shadow-md"
           />
           <button
             onClick={() => setQuery(searchDraft)}
@@ -219,7 +219,7 @@ export default function Services({ onNavigate }: ServicesProps) {
               className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all ${activeCategory === cat.label ? 'bg-[#2D6A4F] text-white border-[#2D6A4F]' : 'bg-white text-[#5C6E8A] border-[#E8E6DF] hover:border-[#2D6A4F]/30'}`}
             >
               {cat.emoji} {cat.label}
-              <span className={`text-xs ${activeCategory === cat.label ? 'text-white/70' : 'text-[#C5CCDA]'}`}>({categoryCounts[cat.label] ?? 0})</span>
+              <span className={`text-xs ${activeCategory === cat.label ? 'text-white/70' : 'text-[#5C6E8A]'}`}>({categoryCounts[cat.label] ?? 0})</span>
             </button>
           ))}
         </div>
@@ -232,7 +232,7 @@ export default function Services({ onNavigate }: ServicesProps) {
           <div className="py-20 text-center">
             <div className="text-5xl mb-4">🔧</div>
             <h3 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">No services match your search</h3>
-            <p className="text-[#8A9AB5]">Try another category or keyword.</p>
+            <p className="text-[#5C6E8A]">Try another category or keyword.</p>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -275,7 +275,7 @@ export default function Services({ onNavigate }: ServicesProps) {
                       <Avatar src={svc.avatar} name={svc.providerName} size="sm" verified />
                       <div>
                         <p className="font-semibold text-sm text-[#1B2A4A]">{svc.providerName}</p>
-                        <p className="text-xs text-[#8A9AB5]">{svc.location}</p>
+                        <p className="text-xs text-[#5C6E8A]">{svc.location}</p>
                       </div>
                     </div>
 
@@ -283,8 +283,8 @@ export default function Services({ onNavigate }: ServicesProps) {
 
                     <div className="flex items-center gap-2 mb-3">
                       <StarRating rating={svc.rating} count={svc.reviews} size="sm" />
-                      <span className="text-[#C5CCDA]">·</span>
-                      <span className="text-xs text-[#8A9AB5]">{svc.availability}</span>
+                      <span className="text-[#5C6E8A]">·</span>
+                      <span className="text-xs text-[#5C6E8A]">{svc.availability}</span>
                     </div>
 
                     {/* Tags */}
@@ -297,7 +297,7 @@ export default function Services({ onNavigate }: ServicesProps) {
                     {/* Price + CTA */}
                     <div className="flex items-center justify-between pt-3 border-t border-[#F5F4EF]">
                       <div>
-                        <span className="text-xs text-[#8A9AB5]">Starting at</span>
+                        <span className="text-xs text-[#5C6E8A]">Starting at</span>
                         <p className="font-bold text-[#1B2A4A]">${svc.startingPrice.toLocaleString()}</p>
                       </div>
                       <div className="flex gap-2">
@@ -345,7 +345,7 @@ export default function Services({ onNavigate }: ServicesProps) {
               <Avatar src={bookingService.avatar} name={bookingService.providerName} size="sm" verified />
               <div>
                 <p className="font-semibold text-sm text-[#1B2A4A]">{bookingService.providerName}</p>
-                <p className="text-xs text-[#8A9AB5]">{bookingService.title} · from ${bookingService.startingPrice.toLocaleString()}</p>
+                <p className="text-xs text-[#5C6E8A]">{bookingService.title} · from ${bookingService.startingPrice.toLocaleString()}</p>
               </div>
             </div>
 
@@ -353,7 +353,7 @@ export default function Services({ onNavigate }: ServicesProps) {
               <div className="text-center py-8">
                 <div className="text-4xl mb-3">✅</div>
                 <p className="font-semibold text-[#1B2A4A]">Request sent!</p>
-                <p className="text-sm text-[#8A9AB5]">You&apos;ll hear back within {bookingService.availability}</p>
+                <p className="text-sm text-[#5C6E8A]">You&apos;ll hear back within {bookingService.availability}</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -395,7 +395,7 @@ export default function Services({ onNavigate }: ServicesProps) {
                     className="w-full h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F]"
                   />
                 </div>
-                <p className="text-xs text-[#8A9AB5] flex items-center gap-1.5">
+                <p className="text-xs text-[#5C6E8A] flex items-center gap-1.5">
                   <Icon name="shield" size={11} className="text-[#2D6A4F]" />
                   Your contact info is only shared after the provider accepts your request.
                 </p>
@@ -422,7 +422,7 @@ export default function Services({ onNavigate }: ServicesProps) {
               <div className="text-center py-8">
                 <div className="text-4xl mb-3">🎉</div>
                 <p className="font-semibold text-[#1B2A4A]">Service published</p>
-                <p className="text-sm text-[#8A9AB5]">Neighbors can request a quote.</p>
+                <p className="text-sm text-[#5C6E8A]">Neighbors can request a quote.</p>
               </div>
             ) : (
               <div className="space-y-3">

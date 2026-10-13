@@ -190,7 +190,7 @@ export default function StaffQueue({ onNavigate }: StaffQueueProps) {
                     Reported for {String(row.reason).toLowerCase().replace(/_/g, " ")}
                   </p>
                   {row.details && <p className="mt-1 text-sm text-[#5A6B85]">{row.details}</p>}
-                  <p className="mt-1 text-xs text-[#8A9AB5]">
+                  <p className="mt-1 text-xs text-[#5C6E8A]">
                     Reported by {row.reporter?.profile?.displayName || row.reporter?.profile?.firstName || "a neighbor"}{" "}
                     · {new Date(row.createdAt).toLocaleDateString()}
                   </p>
@@ -241,7 +241,7 @@ export default function StaffQueue({ onNavigate }: StaffQueueProps) {
                     for {String(row.method).toLowerCase().replace(/_/g, " ")}
                   </p>
                   {row.statement && <p className="mt-1 text-sm text-[#5A6B85]">{row.statement}</p>}
-                  <p className="mt-1 text-xs text-[#8A9AB5]">
+                  <p className="mt-1 text-xs text-[#5C6E8A]">
                     {new Date(row.createdAt).toLocaleDateString()}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">

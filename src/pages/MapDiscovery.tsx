@@ -141,7 +141,7 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
           {/* Search bar */}
           <div className="flex gap-2">
             <div className="flex-1 relative">
-              <Icon name="search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9AB5] pointer-events-none" />
+              <Icon name="search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5C6E8A] pointer-events-none" />
               <input
                 type="text"
                 value={searchText}
@@ -212,9 +212,9 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
             </svg>
 
             {/* Road labels */}
-            <div className="absolute top-[27%] left-2 text-[8px] text-[#8A9AB5] font-medium bg-white/80 px-1 rounded">I-285</div>
-            <div className="absolute top-[47%] left-1 text-[8px] text-[#8A9AB5] font-medium bg-white/80 px-1 rounded">Ponce de Leon Ave</div>
-            <div className="absolute top-2 left-[47%] text-[8px] text-[#8A9AB5] font-medium bg-white/80 px-1 rounded">Peachtree St</div>
+            <div className="absolute top-[27%] left-2 text-[8px] text-[#5C6E8A] font-medium bg-white/80 px-1 rounded">I-285</div>
+            <div className="absolute top-[47%] left-1 text-[8px] text-[#5C6E8A] font-medium bg-white/80 px-1 rounded">Ponce de Leon Ave</div>
+            <div className="absolute top-2 left-[47%] text-[8px] text-[#5C6E8A] font-medium bg-white/80 px-1 rounded">Peachtree St</div>
 
             {/* BeltLine label */}
             <div className="absolute top-[35%] left-[24%] text-[7px] text-[#2D6A4F] font-semibold bg-[#D8F3DC]/90 px-1 rounded rotate-12">BeltLine Trail</div>
@@ -318,7 +318,7 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="font-semibold text-[#1B2A4A]">{loading ? 'Listings nearby' : `${visible.length} listings nearby`}</h2>
-              <p className="text-xs text-[#8A9AB5]">Within 5 miles of Inman Park</p>
+              <p className="text-xs text-[#5C6E8A]">Within 5 miles of Inman Park</p>
             </div>
             <div className="flex items-center gap-2">
               <button className="w-8 h-8 rounded-lg bg-[#F5F4EF] flex items-center justify-center">
@@ -353,7 +353,7 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
               </div>
               <div className="flex-1">
                 <p className="font-semibold text-sm text-[#1B2A4A] leading-tight">{selectedListing.title}</p>
-                <p className="text-xs text-[#8A9AB5] mt-0.5">{selectedListing.category}</p>
+                <p className="text-xs text-[#5C6E8A] mt-0.5">{selectedListing.category}</p>
                 <div className="flex items-center justify-between mt-2">
                   <span className="font-bold text-[#1B2A4A]">
                     {selectedListing.price === null ? <span className="text-[#2D6A4F]">Free</span> : `$${selectedListing.price}`}
@@ -377,7 +377,7 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {(loading || error) && <LoadState loading={loading} error={error} loadingLabel="Loading listings…" />}
           {!loading && !error && visible.length === 0 && (
-            <p className="text-sm text-[#8A9AB5] text-center py-8">No listings nearby.</p>
+            <p className="text-sm text-[#5C6E8A] text-center py-8">No listings nearby.</p>
           )}
           {visible.map(pin => {
             const isSelected = selectedPin === pin.id
@@ -399,7 +399,7 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-1">{pin.title}</p>
-                  <p className="text-xs text-[#8A9AB5] mt-0.5">{pin.category}</p>
+                  <p className="text-xs text-[#5C6E8A] mt-0.5">{pin.category}</p>
                   <div className="flex items-center justify-between mt-1.5">
                     <span className="font-bold text-sm text-[#1B2A4A]">
                       {pin.price === null ? <span className="text-[#2D6A4F] font-bold">Free</span> : `$${pin.price}`}

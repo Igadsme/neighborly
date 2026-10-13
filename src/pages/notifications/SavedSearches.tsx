@@ -224,7 +224,7 @@ export default function SavedSearches({ onNavigate }: SavedSearchesProps) {
                   <p className="text-sm font-semibold text-[#1B2A4A]">
                     {alert.listing?.title ?? "A listing you saved is no longer available"}
                   </p>
-                  <p className="mt-1 text-xs text-[#8A9AB5]">
+                  <p className="mt-1 text-xs text-[#5C6E8A]">
                     {new Date(alert.createdAt).toLocaleString()}
                   </p>
                 </button>
