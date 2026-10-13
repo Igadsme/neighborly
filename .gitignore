@@ -5,7 +5,12 @@ node_modules/
 dist/
 build/
 .cache/
+# Real environment files hold secrets and are never committed. The templates
+# that document which variables exist contain no secrets and must be tracked,
+# or an operator cannot discover a required setting.
 .env*
+!.env.example
+!**/.env.example
 .vite/
 vite.config.*.timestamp-*
 *.tsbuildinfo
@@ -42,6 +47,12 @@ artifacts/milestone10-auth/*.png
 #   CHECK_OUT=artifacts/milestone11-auth node scripts/milestone10-auth-check.mjs
 artifacts/milestone11-auth/._*
 artifacts/milestone11-auth/*.png
+
+# Same policy for the Milestone 12 verification pass.
+# Re-create with:
+#   CHECK_OUT=artifacts/milestone12-check node scripts/milestone10-auth-check.mjs
+artifacts/milestone12-check/._*
+artifacts/milestone12-check/*.png
 .claude-replay.*
 .tmp-*
 /.figma/design-context/

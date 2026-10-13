@@ -64,3 +64,75 @@ describe('envValidationSchema', () => {
     expect(error).toBeUndefined()
   })
 })
+
+describe('background worker intervals', () => {
+  const base = {
+    NODE_ENV: 'test',
+    CORS_ORIGIN: 'http://localhost:4173',
+    JWT_SECRET: 'x'.repeat(40),
+    DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/neighborly_test'
+  }
+
+  it('accepts the overdue sweep interval', () => {
+    expect(
+      envValidationSchema.validate({ ...base, BORROW_OVERDUE_POLL_MS: '300000' }, { allowUnknown: true }).error
+    ).toBeUndefined()
+  })
+
+  it('rejects a non-numeric or non-positive interval rather than silently disabling the sweep', () => {
+    // An unvalidated value becomes NaN, and Number.isFinite(NaN) is false, so
+    // the interval would never be scheduled and the overdue sweep would simply
+    // never run. Failing at boot is the intended outcome.
+    for (const bad of ['soon', '0', '-1', '']) {
+      expect(
+        envValidationSchema.validate({ ...base, BORROW_OVERDUE_POLL_MS: bad }, { allowUnknown: true }).error
+      ).toBeDefined()
+    }
+  })
+})
+
+describe('production cookie and transport safety', () => {
+  const production = {
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgresql://u:p@db.internal:5432/neighborly?schema=public',
+    REDIS_URL: 'rediss://cache.internal:6380',
+    JWT_SECRET: '7f3c9a1e2b4d6f80a1b2c3d4e5f60718293a4b5c6d7e8f9',
+    JWT_REFRESH_SECRET: '9e8d7c6b5a4938271605f4e3d2c1b0a99887766554433221100ffeeddccbbaa',
+    CORS_ORIGIN: 'https://app.example.com',
+    TRUST_PROXY: '1',
+    COOKIE_SECURE: '1'
+  }
+  const validate = (env: Record<string, unknown>) =>
+    envValidationSchema.validate(env, { allowUnknown: true }).error
+
+  it('accepts a correctly configured production environment', () => {
+    expect(validate(production)).toBeUndefined()
+  })
+
+  it('refuses COOKIE_SECURE=0 in production', () => {
+    // The session and refresh cookies are the credentials. A non-Secure cookie
+    // is sent over plain HTTP, so production must not be able to opt out.
+    expect(validate({ ...production, COOKIE_SECURE: '0' })).toBeDefined()
+  })
+
+  it('refuses the console email sender in production', () => {
+    expect(validate({ ...production, EMAIL_SENDER: 'console' })).toBeDefined()
+  })
+
+  it('refuses a wildcard CORS origin', () => {
+    expect(validate({ ...production, CORS_ORIGIN: '*' })).toBeDefined()
+  })
+
+  it('still allows COOKIE_SECURE=0 outside production, for local HTTP', () => {
+    expect(
+      validate({
+        ...production,
+        NODE_ENV: 'development',
+        COOKIE_SECURE: '0',
+        TRUST_PROXY: '0',
+        CORS_ORIGIN: 'http://localhost:4173',
+        REDIS_URL: 'redis://localhost:6379'
+      })
+    ).toBeUndefined()
+  })
+})

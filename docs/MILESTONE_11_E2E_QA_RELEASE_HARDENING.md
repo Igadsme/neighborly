@@ -145,6 +145,23 @@ pnpm exec prisma migrate status   # expect: Database schema is up to date!
 
 Verified working in test case D.
 
+### A testing trap worth recording
+
+The integration suite is **not idempotent against a reused database**. Running it
+twice against the same database produces failures that are not real defects
+(fixture ids collide with rows an earlier run created).
+
+This was verified against the Milestone 10 baseline commit, which fails the same
+way on reuse, so it is pre-existing and not introduced here. It does not affect
+the release gate: `scripts/run-integration-tests.sh` and the GitHub Actions
+`integration` job both start a **fresh** PostgreSQL every run, and both are
+green.
+
+The practical consequence is that a local integration run must be given a clean
+database. The reported 335/335 figures were all produced that way, and every
+figure in this document was checked against a fresh container rather than a
+reused one.
+
 ### Rollback limitations
 
 There is no SQL-level "down" migration in this repository; Prisma applies

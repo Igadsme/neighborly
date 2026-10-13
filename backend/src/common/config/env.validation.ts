@@ -58,7 +58,16 @@ export const envValidationSchema = Joi.object({
   // only value allowed in production. `console` is local development only.
   EMAIL_SENDER: Joi.string().valid('outbox', 'console').default('outbox'),
   // Overrides Secure on auth cookies. Defaults to Secure in production.
-  COOKIE_SECURE: Joi.string().valid('0', '1').optional().allow(''),
+  //
+  // Production must not be allowed to opt out: the session and refresh
+  // cookies are the credentials that keep a member signed in, and a
+  // non-Secure cookie is sent over plain HTTP. `0` is only meaningful for
+  // local HTTP development, so it is refused when NODE_ENV is production.
+  COOKIE_SECURE: Joi.when('NODE_ENV', {
+    is: 'production',
+    then: Joi.string().valid('1').optional().allow(''),
+    otherwise: Joi.string().valid('0', '1').optional().allow('')
+  }),
   CORS_ORIGIN: Joi.string().required().custom(httpOrigins),
   // Set to 1 only when a proxy overwrites X-Forwarded-For. Production must choose.
   TRUST_PROXY: Joi.when('NODE_ENV', {
@@ -95,6 +104,11 @@ export const envValidationSchema = Joi.object({
   REVIEW_PUBLISH_POLL_MS: optionalPositiveInt,
   MISSION_REMINDER_POLL_MS: optionalPositiveInt,
   NOTIFICATION_POLL_MS: optionalPositiveInt,
+  // Read by NotificationDispatcher for the overdue sweep. Validated here so a
+  // typo surfaces at boot rather than silently disabling the sweep: a bad value
+  // becomes NaN, and `Number.isFinite(NaN)` is false, so the interval would
+  // quietly never be scheduled.
+  BORROW_OVERDUE_POLL_MS: optionalPositiveInt,
   RATE_LIMIT_REPORTS: rateLimit,
   SLOW_QUERY_LOG: Joi.string().valid('0', '1').optional().allow(''),
   SLOW_QUERY_MS: Joi.number().integer().min(1).optional()
