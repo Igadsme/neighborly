@@ -92,21 +92,21 @@ export default function BorrowItemScreen({
 
   if (error && !item) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-16 space-y-4">
+      <section className="mx-auto w-full max-w-3xl px-6 py-16 space-y-4">
         <ScreenTitle title="Item unavailable" />
         <Alert tone="error">{error}</Alert>
         <button type="button" className={secondaryButton()} onClick={() => onNavigate("borrow")}>
           Back to borrow
         </button>
-      </main>
+      </section>
     )
   }
 
   if (!item) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-16">
+      <section className="mx-auto w-full max-w-3xl px-6 py-16">
         <Alert tone="info">Loading item…</Alert>
-      </main>
+      </section>
     )
   }
 
@@ -114,7 +114,7 @@ export default function BorrowItemScreen({
   const canRequest = Boolean(viewerId) && !isOwner && item.status === "PUBLISHED"
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
       <header className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-display text-2xl font-semibold text-[#1B2A4A]">{item.title}</h1>
@@ -271,7 +271,7 @@ export default function BorrowItemScreen({
       {!viewerId && (
         <Alert tone="info">Sign in to request this item.</Alert>
       )}
-    </main>
+    </section>
   )
 }
 

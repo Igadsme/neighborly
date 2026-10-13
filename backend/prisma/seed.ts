@@ -382,7 +382,7 @@ async function seedServices() {
       location: 'Metro Atlanta',
       availability: 'Weekends',
       tags: ['Local Moves', 'Loading/Unloading', 'Packing'],
-      imageKey: 'photo-1558618047-3c4f7f7f7b43',
+      imageKey: 'photo-1485965120184-e220f721d03e',
       backgroundCheck: true,
       rating: 4.8,
       reviewCount: 98,

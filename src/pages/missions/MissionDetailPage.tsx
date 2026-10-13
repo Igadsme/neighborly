@@ -56,21 +56,21 @@ export default function MissionDetailPage({ missionId, onNavigate }: MissionDeta
 
   if (error && !mission) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-16 space-y-4">
+      <section className="mx-auto w-full max-w-3xl px-6 py-16 space-y-4">
         <ScreenTitle title="Mission unavailable" />
         <Alert tone="error">{error}</Alert>
         <button type="button" className={secondaryButton()} onClick={() => onNavigate("missions")}>
           Back to missions
         </button>
-      </main>
+      </section>
     )
   }
 
   if (!mission) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-16">
+      <section className="mx-auto w-full max-w-3xl px-6 py-16">
         <Alert tone="info">Loading mission…</Alert>
-      </main>
+      </section>
     )
   }
 
@@ -79,7 +79,7 @@ export default function MissionDetailPage({ missionId, onNavigate }: MissionDeta
   const canJoin = !mission.isOrganizer && mission.status === "PUBLISHED" && !mission.ended
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
       <header>
         <h1 className="font-display text-2xl font-semibold text-[#1B2A4A]">{mission.title}</h1>
         <p className="text-sm text-[#5A6B85]">
@@ -271,6 +271,6 @@ export default function MissionDetailPage({ missionId, onNavigate }: MissionDeta
       <button type="button" className={secondaryButton()} onClick={() => onNavigate("missions")}>
         Back to missions
       </button>
-    </main>
+    </section>
   )
 }

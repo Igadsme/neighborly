@@ -160,7 +160,12 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
           </div>
 
           {/* Filter chips */}
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+          <div
+            className="flex gap-2 scroll-x-focusable scrollbar-hide"
+            tabIndex={0}
+            role="group"
+            aria-label="Map filters"
+          >
             {['All', 'Furniture', 'Electronics', 'Free', 'Vehicles', 'Housing'].map(f => (
               <button
                 key={f}

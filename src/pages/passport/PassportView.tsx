@@ -42,18 +42,18 @@ export default function PassportView({ userId, viewerId, onNavigate }: PassportV
 
   if (error && !passport) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-16 space-y-4">
+      <section className="mx-auto w-full max-w-3xl px-6 py-16 space-y-4">
         <ScreenTitle title="Passport unavailable" />
         <Alert tone="error">{error}</Alert>
-      </main>
+      </section>
     )
   }
 
   if (!passport) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-16">
+      <section className="mx-auto w-full max-w-3xl px-6 py-16">
         <Alert tone="info">Loading passport…</Alert>
-      </main>
+      </section>
     )
   }
 
@@ -62,7 +62,7 @@ export default function PassportView({ userId, viewerId, onNavigate }: PassportV
   const withheld = passport.trustSignals.filter(signal => !signal.earned)
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-4">
           {passport.avatarUrl ? (
@@ -272,7 +272,7 @@ export default function PassportView({ userId, viewerId, onNavigate }: PassportV
           </ul>
         )}
       </section>
-    </main>
+    </section>
   )
 }
 

@@ -62,7 +62,7 @@ export default function MissionManage({ missionId, onNavigate }: MissionManagePr
 
   if (!mission) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-16 space-y-4">
+      <section className="mx-auto w-full max-w-3xl px-6 py-16 space-y-4">
         {error ? (
           <>
             <ScreenTitle title="Mission unavailable" />
@@ -71,13 +71,13 @@ export default function MissionManage({ missionId, onNavigate }: MissionManagePr
         ) : (
           <Alert tone="info">Loading mission…</Alert>
         )}
-      </main>
+      </section>
     )
   }
 
   if (!mission.isOrganizer) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-16 space-y-4">
+      <section className="mx-auto w-full max-w-3xl px-6 py-16 space-y-4">
         <ScreenTitle title="Organizer only" />
         <Alert tone="error">Only the organizer of a mission can manage it.</Alert>
         <button
@@ -87,7 +87,7 @@ export default function MissionManage({ missionId, onNavigate }: MissionManagePr
         >
           View mission
         </button>
-      </main>
+      </section>
     )
   }
 
@@ -95,7 +95,7 @@ export default function MissionManage({ missionId, onNavigate }: MissionManagePr
   const confirmed = roster?.filter(row => row.status !== "WAITLISTED") ?? []
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
       <ScreenTitle title={mission.title} subtitle="Organizer dashboard" />
 
       {error && <Alert tone="error">{error}</Alert>}
@@ -311,6 +311,6 @@ export default function MissionManage({ missionId, onNavigate }: MissionManagePr
       <button type="button" className={secondaryButton()} onClick={() => onNavigate("missions")}>
         Back to missions
       </button>
-    </main>
+    </section>
   )
 }

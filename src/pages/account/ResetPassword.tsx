@@ -62,7 +62,7 @@ export default function ResetPassword({ token, onDone }: ResetPasswordProps) {
 
   if (phase === "invalid") {
     return (
-      <main className="mx-auto w-full max-w-md px-6 py-16 space-y-6">
+      <section className="mx-auto w-full max-w-md px-6 py-16 space-y-6">
         <ScreenTitle title="Reset link unavailable" />
         <Alert tone="error">
           This reset link is missing or has already been used. Request a new one to continue.
@@ -70,13 +70,13 @@ export default function ResetPassword({ token, onDone }: ResetPasswordProps) {
         <button type="button" className={secondaryButton()} onClick={onDone}>
           Request a new link
         </button>
-      </main>
+      </section>
     )
   }
 
   if (phase === "done") {
     return (
-      <main className="mx-auto w-full max-w-md px-6 py-16 space-y-6">
+      <section className="mx-auto w-full max-w-md px-6 py-16 space-y-6">
         <ScreenTitle title="Password updated" />
         <Alert tone="success">
           Your password is changed and every other session has been signed out. Sign in with
@@ -85,12 +85,12 @@ export default function ResetPassword({ token, onDone }: ResetPasswordProps) {
         <button type="button" className={primaryButton()} onClick={onDone}>
           Go to sign in
         </button>
-      </main>
+      </section>
     )
   }
 
   return (
-    <main className="mx-auto w-full max-w-md px-6 py-16">
+    <section className="mx-auto w-full max-w-md px-6 py-16">
       <ScreenTitle title="Choose a new password" subtitle="This ends your other sessions." />
       <form className="mt-8 space-y-5" onSubmit={submit} noValidate>
         <Field
@@ -127,6 +127,6 @@ export default function ResetPassword({ token, onDone }: ResetPasswordProps) {
           {submitting ? "Updating…" : "Update password"}
         </button>
       </form>
-    </main>
+    </section>
   )
 }

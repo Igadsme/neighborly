@@ -90,7 +90,7 @@ export default function NotificationPreferencesScreen({
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-2xl px-6 py-12 space-y-6">
       <ScreenTitle
         title="Notification preferences"
         subtitle="Choose what you hear about. Changes apply to the next event."
@@ -143,6 +143,6 @@ export default function NotificationPreferencesScreen({
           </div>
         </form>
       )}
-    </main>
+    </section>
   )
 }

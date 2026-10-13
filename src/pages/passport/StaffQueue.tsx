@@ -85,7 +85,7 @@ export default function StaffQueue({ onNavigate }: StaffQueueProps) {
   ]
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
       <ScreenTitle
         title="Moderation queue"
         subtitle="Reported reviews, verification requests, and member appeals."
@@ -324,7 +324,7 @@ export default function StaffQueue({ onNavigate }: StaffQueueProps) {
       <button type="button" className={secondaryButton()} onClick={() => onNavigate("home")}>
         Back to Neighborly
       </button>
-    </main>
+    </section>
   )
 }
 

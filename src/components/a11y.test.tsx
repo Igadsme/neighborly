@@ -138,7 +138,7 @@ describe("Menu", () => {
         {() => <button type="button">My listings</button>}
       </Menu>,
     )
-    const trigger = screen.getByRole("button", { name: "Account menu" })
+    const trigger = screen.getByRole("button", { name: /account menu/i })
     expect(trigger.getAttribute("aria-expanded")).toBe("false")
 
     fireEvent.click(trigger)
@@ -152,7 +152,7 @@ describe("Menu", () => {
         {close => <button type="button" onClick={close}>My listings</button>}
       </Menu>,
     )
-    const trigger = screen.getByRole("button", { name: "Account menu" })
+    const trigger = screen.getByRole("button", { name: /account menu/i })
     fireEvent.click(trigger)
 
     fireEvent.keyDown(trigger.parentElement as HTMLElement, { key: "Escape" })
@@ -171,7 +171,7 @@ describe("Menu", () => {
         )}
       </Menu>,
     )
-    const trigger = screen.getByRole("button", { name: "Account menu" })
+    const trigger = screen.getByRole("button", { name: /account menu/i })
     fireEvent.click(trigger)
 
     const container = trigger.parentElement as HTMLElement

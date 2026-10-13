@@ -76,7 +76,7 @@ export default function NotificationCenter({ onNavigate }: NotificationCenterPro
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ScreenTitle
           title="Notifications"
@@ -132,6 +132,6 @@ export default function NotificationCenter({ onNavigate }: NotificationCenterPro
           ))}
         </ul>
       )}
-    </main>
+    </section>
   )
 }

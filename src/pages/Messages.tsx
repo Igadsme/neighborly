@@ -84,9 +84,23 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
         api.transactions.list(),
         api.requests.list({ limit: 50 }).then(page => page.items),
       ])
-      const details = await Promise.all(
-        summaries.filter((request) => request.offers.length > 0).map((request) => api.requests.get(request.id)),
+      /*
+       * `requests.list()` does not include `offers`, so it arrives as null.
+       * Reading `.length` on it threw and blanked the whole inbox behind
+       * "Messages could not be loaded" even though every API call had
+       * succeeded. Only requests that actually declare offers are fetched,
+       * and each fetch is settled on its own: a request the member cannot
+       * open simply contributes no offer links instead of failing the screen.
+       */
+      const withOffers = summaries.filter(
+        (request) => Array.isArray(request.offers) && request.offers.length > 0,
       )
+      const settled = await Promise.allSettled(
+        withOffers.map((request) => api.requests.get(request.id)),
+      )
+      const details = settled
+        .filter((result) => result.status === "fulfilled")
+        .map((result) => result.value)
       if (!active) return
       setUserId(me.id)
       setConversations(threads)
@@ -289,13 +303,19 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
         <div className="p-4 border-b border-[#E8E6DF]">
           <div className="flex items-center justify-between mb-3">
             <h1 className="font-display text-xl font-semibold text-[#1B2A4A]">Messages</h1>
-            <button className="w-8 h-8 rounded-full bg-[#F5F4EF] flex items-center justify-center hover:bg-[#E8E6DF] transition-colors">
-              <Icon name="plus" size={15} className="text-[#5C6E8A]" />
-            </button>
+            {/*
+              There is no "start a new conversation" endpoint, so the previous
+              "+" button did nothing at all. It is removed rather than left as
+              a control that looks actionable and is inert.
+            */}
           </div>
           <div className="relative">
             <Icon name="search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5C6E8A]" />
+            <label htmlFor="message-search" className="sr-only">
+              Search messages
+            </label>
             <input
+              id="message-search"
               type="text"
               placeholder="Search messages..."
               className="w-full h-9 pl-9 pr-3 bg-[#F5F4EF] rounded-xl text-sm text-[#1B2A4A] placeholder:text-[#5C6E8A] focus:outline-none"
@@ -515,7 +535,12 @@ export default function Messages({ conversationId, onNavigate }: MessagesProps) 
           )}
 
           <div className="p-4 bg-white border-t border-[#E8E6DF]">
-            <div className="flex gap-2 mb-3 overflow-x-auto scrollbar-hide pb-1">
+            <div
+              className="flex gap-2 mb-3 scroll-x-focusable scrollbar-hide pb-1"
+              tabIndex={0}
+              role="group"
+              aria-label="Conversations"
+            >
               {['Is this still available?', 'Can I see it in person?', 'Would you accept $X?', 'When can I pick up?'].map(r => (
                 <button
                   key={r}

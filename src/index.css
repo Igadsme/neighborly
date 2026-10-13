@@ -167,6 +167,23 @@ body {
 }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 
+/*
+ * Horizontal rails (category pills, filter chips).
+ *
+ * A scroll container that is not focusable cannot be scrolled by keyboard,
+ * so the items scrolled off-screen were unreachable without a mouse. These
+ * containers are given a tab stop and a focus ring so they can be scrolled and
+ * the focus is visible.
+ */
+.scroll-x-focusable {
+  overflow-x: auto;
+}
+.scroll-x-focusable:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
 /* Focus ring
  *
  * `:focus-visible` rather than `:focus` so a mouse click does not leave a ring
@@ -358,13 +375,35 @@ body {
 }
 
 /* Range input */
+/*
+ * Range slider.
+ *
+ * The visible track is a thin 4px rule, but the control itself is given a
+ * 24px-tall transparent band so the slider meets the minimum target size.
+ * A transparent background with an inner track drawn via a gradient keeps the
+ * visual weight identical to the previous 4px rule while making the whole
+ * band draggable and clickable.
+ */
 input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
+  height: 24px;
+  background: transparent;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
   height: 4px;
   background: #E8E6DF;
   border-radius: 999px;
-  outline: none;
+}
+
+input[type='range']::-moz-range-track {
+  height: 4px;
+  background: #E8E6DF;
+  border-radius: 999px;
 }
 
 input[type='range']::-webkit-slider-thumb {

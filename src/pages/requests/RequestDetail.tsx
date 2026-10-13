@@ -148,21 +148,21 @@ export default function RequestDetail({ requestId, viewerId, onNavigate }: Reque
 
   if (error && !request) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-16 space-y-6">
+      <section className="mx-auto w-full max-w-3xl px-6 py-16 space-y-6">
         <ScreenTitle title="Request unavailable" />
         <Alert tone="error">{error}</Alert>
         <button type="button" className={secondaryButton()} onClick={() => onNavigate("requests")}>
           Back to requests
         </button>
-      </main>
+      </section>
     )
   }
 
   if (!request) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-16">
+      <section className="mx-auto w-full max-w-3xl px-6 py-16">
         <Alert tone="info">Loading request…</Alert>
-      </main>
+      </section>
     )
   }
 
@@ -171,7 +171,7 @@ export default function RequestDetail({ requestId, viewerId, onNavigate }: Reque
   const canOffer = status === "PUBLISHED" && !owner && viewerId
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
       <header className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-display text-2xl font-semibold text-[#1B2A4A]">{request.title}</h1>
@@ -435,7 +435,7 @@ export default function RequestDetail({ requestId, viewerId, onNavigate }: Reque
           )}
         </section>
       )}
-    </main>
+    </section>
   )
 }
 

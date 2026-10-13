@@ -181,7 +181,7 @@ export default function CreateListingFlow({
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-2xl px-6 py-12 space-y-6">
       <ScreenTitle title="Create a listing" subtitle="Pick a category and the right form appears." />
 
       <fieldset className="space-y-2">
@@ -376,6 +376,6 @@ export default function CreateListingFlow({
           </button>
         </div>
       </form>
-    </main>
+    </section>
   )
 }

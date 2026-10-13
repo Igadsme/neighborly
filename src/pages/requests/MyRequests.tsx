@@ -39,7 +39,7 @@ export default function MyRequests({ onNavigate }: MyRequestsProps) {
   }, [load])
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
       <ScreenTitle
         title="My requests"
         subtitle="Track what you have asked for and the offers you received."
@@ -101,7 +101,7 @@ export default function MyRequests({ onNavigate }: MyRequestsProps) {
           </ul>
         </>
       )}
-    </main>
+    </section>
   )
 }
 

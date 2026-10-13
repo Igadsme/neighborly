@@ -94,7 +94,7 @@ export default function DisputeCenter({ disputeId, onNavigate }: DisputeCenterPr
   }
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
       <ScreenTitle
         title="Disputes"
         subtitle="Reported problems on a borrowing. Only you, the other party, and staff can see them."
@@ -229,6 +229,6 @@ export default function DisputeCenter({ disputeId, onNavigate }: DisputeCenterPr
           )}
         </div>
       )}
-    </main>
+    </section>
   )
 }

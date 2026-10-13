@@ -1,4 +1,5 @@
 import { Injectable, Logger, Module, OnModuleInit } from '@nestjs/common'
+import { AuthModule } from '../auth/auth.module'
 import { BorrowModule } from '../borrow/borrow.module'
 import { MissionsModule } from '../missions/missions.module'
 import { PassportModule } from '../passport/passport.module'
@@ -153,7 +154,10 @@ export class NotificationDispatcher implements OnModuleInit {
 }
 
 @Module({
-  imports: [MessagingModule, BorrowModule, PassportModule, MissionsModule],
+  // AuthModule supplies AuthGuard and JwtService for the controller's guards.
+  // None of the imported modules re-export AuthModule, so it must be imported
+  // here or the application fails to start on dependency resolution.
+  imports: [AuthModule, MessagingModule, BorrowModule, PassportModule, MissionsModule],
   controllers: [NotificationsController],
   providers: [NotificationsService, NotificationWorker, SavedSearchAlertWorker, NotificationDispatcher],
   exports: [NotificationsService, NotificationWorker, SavedSearchAlertWorker, NotificationDispatcher]

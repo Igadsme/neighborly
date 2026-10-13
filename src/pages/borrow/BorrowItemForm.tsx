@@ -98,7 +98,7 @@ export default function BorrowItemForm({
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-2xl px-6 py-12 space-y-6">
       <ScreenTitle
         title={existing ? "Edit your item" : "Lend an item"}
         subtitle="Neighbors borrow it, return it, and you keep ownership throughout."
@@ -250,7 +250,7 @@ export default function BorrowItemForm({
           </button>
         </div>
       </form>
-    </main>
+    </section>
   )
 }
 

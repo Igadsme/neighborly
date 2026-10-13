@@ -28,6 +28,13 @@ artifacts/docker-release-verification/browser-smoke/.chrome-profile/
 #   CHECK_OUT=artifacts/milestone10-browser node scripts/milestone10-browser-check.mjs
 artifacts/milestone10-browser/._*
 artifacts/milestone10-browser/*.png
+
+# Same policy for the authenticated pass: the JSON report is committed as the
+# record of what was measured, the screenshots are regenerable binaries.
+# Re-create with:
+#   CHECK_OUT=artifacts/milestone10-auth node scripts/milestone10-auth-check.mjs
+artifacts/milestone10-auth/._*
+artifacts/milestone10-auth/*.png
 .claude-replay.*
 .tmp-*
 /.figma/design-context/

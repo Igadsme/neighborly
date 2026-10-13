@@ -75,7 +75,7 @@ export default function MissionFeed({ onNavigate, canOrganize }: MissionFeedProp
   ]
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <ScreenTitle
           title="Neighborhood missions"
@@ -245,6 +245,6 @@ export default function MissionFeed({ onNavigate, canOrganize }: MissionFeedProp
           </button>
         </nav>
       )}
-    </main>
+    </section>
   )
 }

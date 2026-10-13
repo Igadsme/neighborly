@@ -300,7 +300,12 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
         </div>
 
         {/* Navigation tabs */}
-        <div className="flex gap-2 mb-6 overflow-x-auto scrollbar-hide pb-1">
+        <div
+          className="flex gap-2 mb-6 scroll-x-focusable scrollbar-hide pb-1"
+          tabIndex={0}
+          role="group"
+          aria-label="Community filters"
+        >
           {[
             { id: 'feed', label: '📰 Feed' },
             { id: 'events', label: '🎭 Events' },

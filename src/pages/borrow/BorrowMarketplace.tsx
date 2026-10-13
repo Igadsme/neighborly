@@ -53,7 +53,7 @@ export default function BorrowMarketplace({ onNavigate }: BorrowMarketplaceProps
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-5xl px-6 py-12 space-y-6">
       <ScreenTitle
         title="Borrow"
         subtitle="Borrow a tool or an item from a neighbor, and lend yours when you are not using it."
@@ -136,7 +136,7 @@ export default function BorrowMarketplace({ onNavigate }: BorrowMarketplaceProps
           </button>
         </nav>
       )}
-    </main>
+    </section>
   )
 }
 

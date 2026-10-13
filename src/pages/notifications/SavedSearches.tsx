@@ -92,7 +92,7 @@ export default function SavedSearches({ onNavigate }: SavedSearchesProps) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12 space-y-8">
+    <section className="mx-auto w-full max-w-3xl px-6 py-12 space-y-8">
       <ScreenTitle
         title="Saved searches"
         subtitle="You are alerted when a new listing matches what you are watching."
@@ -233,7 +233,7 @@ export default function SavedSearches({ onNavigate }: SavedSearchesProps) {
           </ul>
         )}
       </section>
-    </main>
+    </section>
   )
 }
 

@@ -101,7 +101,12 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
         {activeTab === "Saved Listings" && (
           <>
             {/* Collections */}
-            <div className="flex gap-2 mb-6 overflow-x-auto scrollbar-hide pb-1">
+            <div
+              className="flex gap-2 mb-6 scroll-x-focusable scrollbar-hide pb-1"
+              tabIndex={0}
+              role="group"
+              aria-label="Saved categories"
+            >
               {collections.map((col) => (
                 <button
                   key={col.id}

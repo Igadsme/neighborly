@@ -44,7 +44,7 @@ export default function ForgotPassword({ onBack, onSubmitted }: ForgotPasswordPr
   }
 
   return (
-    <main className="mx-auto w-full max-w-md px-6 py-16">
+    <section className="mx-auto w-full max-w-md px-6 py-16">
       <ScreenTitle
         title="Reset your password"
         subtitle="We will email you a link to choose a new one."
@@ -79,7 +79,7 @@ export default function ForgotPassword({ onBack, onSubmitted }: ForgotPasswordPr
           Back to sign in
         </button>
       </div>
-    </main>
+    </section>
   )
 }
 

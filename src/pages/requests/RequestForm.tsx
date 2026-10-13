@@ -156,7 +156,7 @@ export default function RequestForm({
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-2xl px-6 py-12 space-y-6">
       <ScreenTitle
         title={existing ? "Edit request" : "Post what you need"}
         subtitle="Neighbors with what you want can make you an offer."
@@ -342,6 +342,6 @@ export default function RequestForm({
           </button>
         </div>
       </form>
-    </main>
+    </section>
   )
 }

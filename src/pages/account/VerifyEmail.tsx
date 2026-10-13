@@ -40,7 +40,7 @@ export default function VerifyEmail({ token, onDone, onResend }: VerifyEmailProp
   }, [verify])
 
   return (
-    <main className="mx-auto w-full max-w-md px-6 py-16 space-y-6">
+    <section className="mx-auto w-full max-w-md px-6 py-16 space-y-6">
       <ScreenTitle title="Verify your email" subtitle="Confirming your address…" />
       {phase === "verifying" && <Alert tone="info">Checking your verification link…</Alert>}
       {phase === "success" && (
@@ -62,6 +62,6 @@ export default function VerifyEmail({ token, onDone, onResend }: VerifyEmailProp
           </button>
         </>
       )}
-    </main>
+    </section>
   )
 }

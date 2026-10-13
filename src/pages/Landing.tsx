@@ -770,6 +770,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           className="fixed inset-0 z-[60] bg-[#1B2A4A]/50 backdrop-blur-sm flex items-center justify-center px-4"
           role="dialog"
           aria-modal="true"
+          aria-label="Sign in to Neighborly"
         >
           <div className="w-full max-w-md bg-white rounded-3xl border border-[#E8E6DF] shadow-2xl p-6">
             <div className="flex items-start justify-between mb-6">
@@ -790,23 +791,51 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
               </button>
             </div>
             <div className="space-y-4">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email address"
-                className="w-full h-12 px-4 bg-[#F5F4EF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/20"
-              />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                onKeyDown={(e) => e.key === "Enter" && submitSignIn()}
-                className="w-full h-12 px-4 bg-[#F5F4EF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/20"
-              />
+              {/*
+                These fields carry a visible label rather than relying on the
+                placeholder alone. A placeholder disappears on focus and is
+                not reliably announced as the accessible name, so a screen
+                reader user had no way to know which field was which.
+              */}
+              <div>
+                <label
+                  htmlFor="signin-email"
+                  className="block text-sm font-medium text-[#1B2A4A] mb-1.5"
+                >
+                  Email address
+                </label>
+                <input
+                  id="signin-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full h-12 px-4 bg-[#F5F4EF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/20"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="signin-password"
+                  className="block text-sm font-medium text-[#1B2A4A] mb-1.5"
+                >
+                  Password
+                </label>
+                <input
+                  id="signin-password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Your password"
+                  onKeyDown={(e) => e.key === "Enter" && submitSignIn()}
+                  className="w-full h-12 px-4 bg-[#F5F4EF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/20"
+                />
+              </div>
               {signInError && (
-                <p className="text-sm text-[#A63D27]" role="alert">
+                <p className="text-sm text-[#B94C2A]" role="alert">
                   {signInError}
                 </p>
               )}
@@ -825,7 +854,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   setSignInOpen(false)
                   onNavigate("forgot-password")
                 }}
-                className="w-full text-sm text-[#5A6B85] hover:underline"
+                className="w-full min-h-11 text-sm text-[#5A6B85] hover:underline"
               >
                 Forgot your password?
               </button>
@@ -835,7 +864,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   setSignInOpen(false)
                   onNavigate("onboarding")
                 }}
-                className="w-full text-sm text-[#2D6A4F] font-medium hover:underline"
+                className="w-full min-h-11 text-sm text-[#2D6A4F] font-medium hover:underline"
               >
                 New to Neighborly? Create an account
               </button>

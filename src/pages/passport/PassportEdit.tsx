@@ -68,7 +68,7 @@ export default function PassportEdit({ onNavigate }: { onNavigate: (page: string
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-2xl px-6 py-12 space-y-6">
       <ScreenTitle
         title="Edit your passport"
         subtitle="What other neighbors see when they look you up."
@@ -135,6 +135,6 @@ export default function PassportEdit({ onNavigate }: { onNavigate: (page: string
           </button>
         </div>
       </form>
-    </main>
+    </section>
   )
 }

@@ -136,7 +136,7 @@ export default function PassportSettings({ onNavigate }: { onNavigate: (page: st
   ]
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
       <ScreenTitle
         title="Your passport"
         subtitle="What you have said about yourself, and what you have chosen to show."
@@ -435,7 +435,7 @@ export default function PassportSettings({ onNavigate }: { onNavigate: (page: st
       <button type="button" className={secondaryButton()} onClick={() => onNavigate("passport-me")}>
         View my public passport
       </button>
-    </main>
+    </section>
   )
 }
 

@@ -245,8 +245,10 @@ describe("Landing", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close sign in" }))
     fireEvent.click(screen.getByRole("button", { name: "Post a Listing" }))
     const dialog = screen.getByRole("dialog")
-    fireEvent.change(within(dialog).getByPlaceholderText("Email address"), { target: { value: "ada@example.com" } })
-    fireEvent.change(within(dialog).getByPlaceholderText("Password"), { target: { value: "long-enough-password" } })
+    // Queried by label rather than placeholder: the fields now carry real
+    // <label> elements, which is what a screen reader actually announces.
+    fireEvent.change(within(dialog).getByLabelText("Email address"), { target: { value: "ada@example.com" } })
+    fireEvent.change(within(dialog).getByLabelText("Password"), { target: { value: "long-enough-password" } })
     fireEvent.click(within(dialog).getByRole("button", { name: "Sign in" }))
     await waitFor(() => expect(onSignIn).toHaveBeenCalled())
     expect(calls.some((call) => call.includes("/auth/login"))).toBe(true)

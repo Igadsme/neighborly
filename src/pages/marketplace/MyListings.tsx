@@ -85,7 +85,7 @@ export default function MyListings({ onNavigate }: MyListingsProps) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
       <ScreenTitle
         title="My listings"
         subtitle="Draft, publish, pause, archive, restore, or delete your listings."
@@ -178,7 +178,7 @@ export default function MyListings({ onNavigate }: MyListingsProps) {
           )
         })}
       </ul>
-    </main>
+    </section>
   )
 }
 
@@ -259,7 +259,7 @@ function EditListing({ listing, onDone }: EditListingProps) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
       <ScreenTitle title="Edit listing" subtitle={listing.title} />
       <form onSubmit={save} className="space-y-5" noValidate>
         <div>
@@ -315,7 +315,7 @@ function EditListing({ listing, onDone }: EditListingProps) {
           </button>
         </div>
       </form>
-    </main>
+    </section>
   )
 }
 

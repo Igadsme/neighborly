@@ -131,7 +131,7 @@ export default function MissionEditor({ missionId, onNavigate }: MissionEditorPr
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-2xl px-6 py-12 space-y-6">
       <ScreenTitle
         title={editing ? "Edit mission" : "Organize a mission"}
         subtitle={
@@ -287,6 +287,6 @@ export default function MissionEditor({ missionId, onNavigate }: MissionEditorPr
           </button>
         </div>
       </form>
-    </main>
+    </section>
   )
 }

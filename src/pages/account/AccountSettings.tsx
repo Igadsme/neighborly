@@ -48,7 +48,7 @@ export default function AccountSettings({ onSignedOut }: AccountSettingsProps) {
   }, [load])
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12 space-y-8">
+    <section className="mx-auto w-full max-w-3xl px-6 py-12 space-y-8">
       <ScreenTitle title="Account settings" subtitle="Profile, security, and active sessions." />
 
       <nav aria-label="Account settings sections" className="flex flex-wrap gap-2">
@@ -82,7 +82,7 @@ export default function AccountSettings({ onSignedOut }: AccountSettingsProps) {
       {status && tab === "security" && <PasswordTab onSignedOut={onSignedOut} />}
       {status && tab === "sessions" && <SessionsTab status={status} onChanged={load} />}
       {status && tab === "danger" && <DeleteTab onSignedOut={onSignedOut} />}
-    </main>
+    </section>
   )
 }
 

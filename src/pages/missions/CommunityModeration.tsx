@@ -76,7 +76,7 @@ export default function CommunityModeration({ onNavigate }: { onNavigate: (page:
   }
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
       <ScreenTitle
         title="Community moderation"
         subtitle="Reported missions, with the reason each action was taken."
@@ -184,6 +184,6 @@ export default function CommunityModeration({ onNavigate }: { onNavigate: (page:
       <button type="button" className={secondaryButton()} onClick={() => onNavigate("missions")}>
         Back to missions
       </button>
-    </main>
+    </section>
   )
 }

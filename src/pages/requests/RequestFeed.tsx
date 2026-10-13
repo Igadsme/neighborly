@@ -67,7 +67,7 @@ export default function RequestFeed({ onNavigate }: RequestFeedProps) {
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-5xl px-6 py-12 space-y-6">
       <ScreenTitle
         title="I need"
         subtitle="Neighbors post what they are looking for and nearby providers make an offer."
@@ -181,7 +181,7 @@ export default function RequestFeed({ onNavigate }: RequestFeedProps) {
           </button>
         </nav>
       )}
-    </main>
+    </section>
   )
 }
 

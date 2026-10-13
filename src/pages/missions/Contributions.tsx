@@ -34,7 +34,7 @@ export default function Contributions({ onNavigate }: { onNavigate: (page: strin
   const held = new Set(record?.badges.map(badge => badge.code) ?? [])
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
       <ScreenTitle
         title="Community contributions"
         subtitle="Verified participation only. Nothing here is worth anything except the record."
@@ -149,6 +149,6 @@ export default function Contributions({ onNavigate }: { onNavigate: (page: strin
           View my passport
         </button>
       </div>
-    </main>
+    </section>
   )
 }

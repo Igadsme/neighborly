@@ -25,13 +25,19 @@ const sortOptions = [
 const recentSearches = ['used desk under $150', 'iPhone 14', 'moving help', 'room for rent near midtown']
 const suggestedSearches = ['West Elm furniture near Decatur', 'Photography services', 'Free items this week', 'Apartments under $1,500']
 
+// Named so "Clear all" resets to the same state the screen starts in rather
+// than to values invented at the call site.
+const DEFAULT_CONDITION = 'Any'
+const DEFAULT_MAX_PRICE = '150'
+const DEFAULT_DISTANCE = 10
+
 export default function Explore({ onNavigate }: ExploreProps) {
   const [query, setQuery] = useState('Used desk under $150 within 10 miles of Kennesaw')
   const [category, setCategory] = useState('All')
-  const [condition, setCondition] = useState('Any')
+  const [condition, setCondition] = useState(DEFAULT_CONDITION)
   const [minPrice, setMinPrice] = useState('')
-  const [maxPrice, setMaxPrice] = useState('150')
-  const [distance, setDistance] = useState(10)
+  const [maxPrice, setMaxPrice] = useState(DEFAULT_MAX_PRICE)
+  const [distance, setDistance] = useState(DEFAULT_DISTANCE)
   const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [freeOnly, setFreeOnly] = useState(false)
   const [deliveryOnly, setDeliveryOnly] = useState(false)
@@ -143,6 +149,21 @@ export default function Explore({ onNavigate }: ExploreProps) {
     }
   }
 
+  /*
+   * Removes exactly the filter a chip represents, and nothing else, so the
+   * chips stay in step with the controls that produced them.
+   */
+  const clearFilter = (filter: string) => {
+    if (filter === category) setCategory('All')
+    if (filter === condition) setCondition(DEFAULT_CONDITION)
+    if (filter.startsWith('Under $')) setMaxPrice(DEFAULT_MAX_PRICE)
+    if (filter.endsWith('mi radius')) setDistance(DEFAULT_DISTANCE)
+    if (filter === 'Verified sellers') setVerifiedOnly(false)
+    if (filter === 'Free only') setFreeOnly(false)
+    if (filter === 'Delivery available') setDeliveryOnly(false)
+    setSearchNonce(n => n + 1)
+  }
+
   const activeFilters: string[] = []
   if (category !== 'All') activeFilters.push(category)
   if (condition !== 'Any') activeFilters.push(condition)
@@ -169,10 +190,21 @@ export default function Explore({ onNavigate }: ExploreProps) {
       {/* Search header */}
       <div className="bg-white border-b border-[#E8E6DF] sticky top-16 z-40">
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
+          {/*
+            Explore had no level-one heading at all, so a screen-reader user
+            landed on a page whose structure began at <h3> with no indication
+            of what screen they were on. It is visually hidden to keep the
+            existing layout unchanged while giving the page a proper name.
+          */}
+          <h1 className="sr-only">Explore listings</h1>
           {/* Search input */}
           <div className="relative mb-3">
             <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5C6E8A] pointer-events-none" />
+            <label htmlFor="explore-search" className="sr-only">
+              Search listings
+            </label>
             <input
+              id="explore-search"
               type="text"
               value={query}
               onChange={e => { setQuery(e.target.value); setShowSuggestions(true) }}
@@ -183,7 +215,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
               className="w-full h-12 pl-12 pr-40 bg-[#F5F4EF] rounded-2xl text-sm text-[#1B2A4A] placeholder:text-[#5C6E8A] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#2D6A4F]/20 transition-all"
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
-              <button onClick={() => onNavigate('map')} className="flex items-center gap-1.5 text-xs font-semibold text-[#4A7FB5] bg-[#DDEEFF] px-3 py-1.5 rounded-lg hover:bg-[#90BEE5]/30 transition-colors">
+              <button onClick={() => onNavigate('map')} className="flex items-center gap-1.5 text-xs font-semibold text-[#1B4C72] bg-[#DDEEFF] px-3 py-1.5 rounded-lg hover:bg-[#90BEE5]/30 transition-colors">
                 <Icon name="map" size={13} />
                 Map view
               </button>
@@ -214,7 +246,12 @@ export default function Explore({ onNavigate }: ExploreProps) {
           </div>
 
           {/* Category pills */}
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+          <div
+            className="flex gap-2 scroll-x-focusable scrollbar-hide"
+            tabIndex={0}
+            role="group"
+            aria-label="Listing categories"
+          >
             {['All', ...categoryOptions.map(option => option.name)].map(cat => (
               <Chip key={cat} active={category === cat} onClick={() => setCategory(cat)}>{cat}</Chip>
             ))}
@@ -229,23 +266,51 @@ export default function Explore({ onNavigate }: ExploreProps) {
             <aside className="hidden md:block w-64 flex-shrink-0">
               <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 sticky top-40">
                 <div className="flex items-center justify-between mb-5">
-                  <h3 className="font-semibold text-[#1B2A4A]">Filters</h3>
-                  <button className="text-xs text-[#B94C2A] font-medium hover:underline">Clear all</button>
+                  <h2 className="font-semibold text-[#1B2A4A]">Filters</h2>
+                  {/*
+                    This button previously had no handler, so "Clear all"
+                    cleared nothing while claiming to. It now resets the
+                    filters it sits above.
+                  */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMinPrice('')
+                      setMaxPrice(DEFAULT_MAX_PRICE)
+                      setDistance(DEFAULT_DISTANCE)
+                      setCondition(DEFAULT_CONDITION)
+                      setCategory('All')
+                      setSearchNonce(n => n + 1)
+                    }}
+                    className="min-h-11 px-2 -mr-2 text-xs text-[#B94C2A] font-medium hover:underline"
+                  >
+                    Clear all
+                  </button>
                 </div>
 
                 {/* Price range */}
                 <div className="mb-5">
-                  <label className="block text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide mb-3">Price range</label>
+                  <p className="block text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide mb-3" id="price-range-label">Price range</p>
                   <div className="flex gap-2">
+                    <label htmlFor="filter-min-price" className="sr-only">
+                      Minimum price
+                    </label>
                     <input
+                      id="filter-min-price"
                       type="number"
                       placeholder="Min"
                       value={minPrice}
                       onChange={e => setMinPrice(e.target.value)}
                       className="flex-1 h-9 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-lg text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F]"
                     />
-                    <span className="flex items-center text-[#5C6E8A] text-sm">–</span>
+                    <span className="flex items-center text-[#5C6E8A] text-sm" aria-hidden="true">
+                      –
+                    </span>
+                    <label htmlFor="filter-max-price" className="sr-only">
+                      Maximum price
+                    </label>
                     <input
+                      id="filter-max-price"
                       type="number"
                       placeholder="Max"
                       value={maxPrice}
@@ -257,15 +322,18 @@ export default function Explore({ onNavigate }: ExploreProps) {
 
                 {/* Distance */}
                 <div className="mb-5">
-                  <label className="block text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide mb-3">
+                  <label htmlFor="filter-distance" className="block text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide mb-3">
                     Distance: within <span className="text-[#2D6A4F]">{distance} miles</span>
                   </label>
                   <input
+                    id="filter-distance"
                     type="range"
                     min={1}
                     max={50}
                     value={distance}
                     onChange={e => setDistance(parseInt(e.target.value))}
+                    // The global range styling gives the slider a 24px band;
+                    // this keeps the control full-width within it.
                     className="w-full"
                   />
                   <div className="flex justify-between text-xs text-[#5C6E8A] mt-1">
@@ -275,7 +343,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
 
                 {/* Condition */}
                 <div className="mb-5">
-                  <label className="block text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide mb-3">Condition</label>
+                  <p className="block text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide mb-3">Condition</p>
                   <div className="flex flex-wrap gap-2">
                     {conditions.map(c => (
                       <button
@@ -296,16 +364,20 @@ export default function Explore({ onNavigate }: ExploreProps) {
                     { key: 'free', label: 'Free items only', state: freeOnly, set: setFreeOnly },
                     { key: 'delivery', label: 'Delivery available', state: deliveryOnly, set: setDeliveryOnly },
                   ].map(({ key, label, state, set }) => (
-                    <div key={key} className="flex items-center justify-between">
-                      <span className="text-sm text-[#1B2A4A]">{label}</span>
-                      <Toggle checked={state} onChange={set} />
+                    <div key={key} className="flex items-center justify-between gap-3">
+                      {/* The visible text is the label, associated by id with the
+                          switch, so it is announced as its accessible name. */}
+                      <label htmlFor={`filter-${key}`} className="text-sm text-[#1B2A4A] cursor-pointer">
+                        {label}
+                      </label>
+                      <Toggle id={`filter-${key}`} checked={state} onChange={set} />
                     </div>
                   ))}
                 </div>
 
                 {/* Seller rating */}
                 <div className="mt-5 border-t border-[#F5F4EF] pt-4">
-                  <label className="block text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide mb-3">Minimum seller rating</label>
+                  <p className="block text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide mb-3">Minimum seller rating</p>
                   <div className="flex gap-2">
                     {[4, 4.5, 4.8].map(r => (
                       <button key={r} className="flex-1 py-1.5 text-xs font-medium rounded-lg border border-[#E8E6DF] text-[#5C6E8A] hover:border-[#2D6A4F] transition-colors">
@@ -333,11 +405,15 @@ export default function Explore({ onNavigate }: ExploreProps) {
                     {query && <span> for &quot;<span className="text-[#2D6A4F] font-medium">{query}</span>&quot;</span>}
                   </p>
                 )}
-                {/* Active filters */}
+                {/* Active filters. Each chip clears the specific filter it represents;
+                    they previously passed a no-op so the remove control did
+                    nothing while looking actionable. */}
                 {activeFilters.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {activeFilters.map(f => (
-                      <Chip key={f} active onRemove={() => {}}>{f}</Chip>
+                      <Chip key={f} active onRemove={() => clearFilter(f)}>
+                        {f}
+                      </Chip>
                     ))}
                   </div>
                 )}
@@ -355,13 +431,24 @@ export default function Explore({ onNavigate }: ExploreProps) {
                 </button>
                 {alertError && <p className="text-xs text-[#A63D27]" role="alert">{alertError}</p>}
 
-                {/* View toggle */}
-                <div className="flex items-center bg-white border border-[#E8E6DF] rounded-xl p-1">
+                {/*
+                  Icon-only view toggles. Each states which view it switches
+                  to, and the current one is marked with aria-pressed so the
+                  selection is not conveyed by colour alone.
+                */}
+                <div
+                  role="group"
+                  aria-label="Listing view"
+                  className="flex items-center bg-white border border-[#E8E6DF] rounded-xl p-1"
+                >
                   {(['grid', 'list', 'map'] as const).map(v => (
                     <button
                       key={v}
+                      type="button"
+                      aria-label={`${v === 'map' ? 'Map' : v === 'grid' ? 'Grid' : 'List'} view`}
+                      aria-pressed={view === v}
                       onClick={() => v === 'map' ? onNavigate('map') : setView(v)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${view === v ? 'bg-[#2D6A4F] text-white' : 'text-[#5C6E8A] hover:text-[#1B2A4A]'}`}
+                      className={`w-8 h-8 min-h-8 flex items-center justify-center rounded-lg transition-colors ${view === v ? 'bg-[#2D6A4F] text-white' : 'text-[#5C6E8A] hover:text-[#1B2A4A]'}`}
                     >
                       <Icon name={v === 'grid' ? 'grid' : v === 'list' ? 'list' : 'map'} size={14} />
                     </button>
@@ -369,10 +456,14 @@ export default function Explore({ onNavigate }: ExploreProps) {
                 </div>
 
                 {/* Sort */}
+                <label htmlFor="explore-sort" className="sr-only">
+                  Sort listings
+                </label>
                 <select
+                  id="explore-sort"
                   value={sort}
                   onChange={e => setSort(e.target.value)}
-                  className="h-9 px-3 bg-white border border-[#E8E6DF] rounded-xl text-xs font-medium text-[#1B2A4A] focus:outline-none cursor-pointer"
+                  className="h-9 min-h-9 px-3 bg-white border border-[#E8E6DF] rounded-xl text-xs font-medium text-[#1B2A4A] focus:outline-none cursor-pointer"
                 >
                   {sortOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -400,7 +491,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-start justify-between gap-3">
-                          <h3 className="font-semibold text-[#1B2A4A]">{listing.title}</h3>
+                          <h2 className="font-semibold text-[#1B2A4A]">{listing.title}</h2>
                           <span className="font-bold text-[#1B2A4A] text-lg flex-shrink-0">
                             {listing.isFree ? <span className="text-[#2D6A4F]">Free</span> : `$${listing.price?.toLocaleString()}`}
                           </span>
@@ -432,7 +523,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
             ) : (
               <div className="py-20 text-center">
                 <div className="text-5xl mb-4">🔍</div>
-                <h3 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">No results found</h3>
+                <h2 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">No results found</h2>
                 <p className="text-[#5C6E8A] max-w-sm mx-auto mb-6">Try adjusting your filters or searching in a wider radius. We can alert you when something matching your search is posted.</p>
                 <div className="flex items-center justify-center gap-3">
                   <Button variant="primary" size="sm" onClick={() => { setFreeOnly(false); setVerifiedOnly(false); setMaxPrice(''); setMinPrice(''); setCategory('All'); setOffset(0) }}>Clear filters</Button>

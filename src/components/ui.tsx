@@ -1,4 +1,4 @@
-import { useState, type ReactNode, type ButtonHTMLAttributes } from "react"
+import { useId, useState, type ReactNode, type ButtonHTMLAttributes } from "react"
 import { api, ApiError } from "../api/client"
 import { mediaSrc } from "../lib/view"
 
@@ -310,19 +310,29 @@ export function Input({
     md: "h-11 text-sm px-4",
     lg: "h-13 text-base px-5",
   }
+  const inputId = useId()
   return (
     <div className={`relative ${className}`}>
       {label && (
-        <label className="block text-xs font-semibold text-[#5C6E8A] mb-1.5 uppercase tracking-wide">
+        // Associated by id: a bare <label> does not name the input, so the
+        // field was announced with no accessible name.
+        <label
+          htmlFor={inputId}
+          className="block text-xs font-semibold text-[#5C6E8A] mb-1.5 uppercase tracking-wide"
+        >
           {label}
         </label>
       )}
       {icon && (
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5C6E8A] pointer-events-none">
+        <span
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5C6E8A] pointer-events-none"
+          aria-hidden="true"
+        >
           {icon}
         </span>
       )}
       <input
+        id={inputId}
         type={type}
         placeholder={placeholder}
         value={value}
@@ -344,6 +354,7 @@ export function Input({
 
 export function SearchBar({
   placeholder = "Search...",
+  label,
   value,
   onChange,
   onSearch,
@@ -351,6 +362,8 @@ export function SearchBar({
   className = "",
 }: {
   placeholder?: string
+  /** Accessible name. Falls back to the placeholder. */
+  label?: string
   value?: string
   onChange?: (v: string) => void
   onSearch?: () => void
@@ -358,9 +371,10 @@ export function SearchBar({
   className?: string
 }) {
   const heights = { md: "h-12", lg: "h-14" }
+  const inputId = useId()
   return (
     <div className={`relative flex items-center ${className}`}>
-      <span className="absolute left-4 text-[#5C6E8A] pointer-events-none">
+      <span className="absolute left-4 text-[#5C6E8A] pointer-events-none" aria-hidden="true">
         <svg
           width="18"
           height="18"
@@ -375,15 +389,25 @@ export function SearchBar({
           <path d="m21 21-4.35-4.35" />
         </svg>
       </span>
-      <input
-        type="text"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange?.(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && onSearch?.()}
-        className={`w-full ${heights[size]} pl-11 pr-28 bg-white border border-[#E8E6DF] rounded-full text-[#1B2A4A] placeholder:text-[#5C6E8A] focus:outline-none focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10 transition-all text-sm shadow-[0_2px_8px_rgba(27,42,74,0.06)]`}
-      />
+      {/*
+          The field previously had only a placeholder, which is not a reliable
+          accessible name. The label is visually hidden so the design is
+          unchanged while the control gains a proper name.
+        */}
+        <label htmlFor={inputId} className="sr-only">
+          {label ?? placeholder ?? "Search"}
+        </label>
+        <input
+          id={inputId}
+          type="search"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange?.(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && onSearch?.()}
+          className={`w-full ${heights[size]} pl-11 pr-28 bg-white border border-[#E8E6DF] rounded-full text-[#1B2A4A] placeholder:text-[#5C6E8A] focus:outline-none focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10 transition-all text-sm shadow-[0_2px_8px_rgba(27,42,74,0.06)]`}
+        />
       <button
+        type="button"
         onClick={onSearch}
         className="absolute right-2 bg-[#2D6A4F] text-white rounded-full px-4 py-2 text-sm font-semibold hover:bg-[#1B4332] transition-colors"
       >
@@ -406,25 +430,37 @@ export function Chip({
   onClick?: () => void
   onRemove?: () => void
 }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
-        active
-          ? "bg-[#2D6A4F] text-white border-[#2D6A4F]"
-          : "bg-white text-[#1B2A4A] border-[#E8E6DF] hover:border-[#2D6A4F] hover:text-[#2D6A4F]"
-      }`}
-    >
-      {children}
-      {onRemove && (
-        <span
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove()
-          }}
-          className="w-3.5 h-3.5 rounded-full flex items-center justify-center hover:opacity-70"
+  // min-height keeps the chip a usable tap target; the visual padding stays
+  // small so the pill keeps its original proportions.
+  const shell = `inline-flex items-center gap-1.5 min-h-11 px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
+    active
+      ? "bg-[#2D6A4F] text-white border-[#2D6A4F]"
+      : "bg-white text-[#1B2A4A] border-[#E8E6DF] hover:border-[#2D6A4F] hover:text-[#2D6A4F]"
+  }`
+
+  /*
+   * A removable chip needs two separate controls: selecting the chip and
+   * removing it. They cannot be nested buttons, so when `onRemove` is present
+   * the chip is rendered as a span holding a select button and a remove button.
+   * Previously the remove control was a <span onClick>, which could not be
+   * focused or activated by keyboard at all.
+   */
+  if (onRemove) {
+    return (
+      <span className={`${shell} pr-1.5`}>
+        {/* The minimum height goes on the buttons themselves: they are the
+            focusable targets, and the wrapper does not size them. */}
+        <button type="button" onClick={onClick} aria-pressed={active} className="min-h-11">
+          {children}
+        </button>
+        <button
+          type="button"
+          aria-label={`Remove ${typeof children === "string" ? children : "filter"}`}
+          onClick={onRemove}
+          className="w-6 h-6 shrink-0 -mr-1 rounded-full flex items-center justify-center hover:opacity-70"
         >
           <svg
+            aria-hidden="true"
             viewBox="0 0 10 10"
             width="10"
             height="10"
@@ -435,8 +471,14 @@ export function Chip({
             <line x1="2" y1="2" x2="8" y2="8" />
             <line x1="8" y1="2" x2="2" y2="8" />
           </svg>
-        </span>
-      )}
+        </button>
+      </span>
+    )
+  }
+
+  return (
+    <button type="button" onClick={onClick} aria-pressed={active} className={shell}>
+      {children}
     </button>
   )
 }
@@ -538,6 +580,12 @@ export function ListingCard({
             }
           }}
           title={saveError || (saved ? "Remove from saved items" : "Save listing")}
+          // `title` alone is not an accessible name that every screen reader
+          // reliably announces, and the control is icon-only, so the state is
+          // stated explicitly and the listing is named so the button is
+          // distinguishable when several are on one page.
+          aria-label={`${saved ? "Remove from saved items" : "Save listing"}: ${listing.title}`}
+          aria-pressed={saved}
           className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
         >
           <svg
@@ -549,6 +597,7 @@ export function ListingCard({
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            aria-hidden="true"
           >
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
           </svg>
@@ -703,8 +752,13 @@ export function SectionHeader({
       </div>
       {action && actionLabel && (
         <button
+          type="button"
           onClick={action}
-          className="text-sm font-semibold text-[#2D6A4F] hover:text-[#1B4332] transition-colors"
+          // The section title is already in the heading, so the link names the
+          // section it leads to. Without this a screen reader announces only
+          // "See all", which is meaningless out of context.
+          aria-label={`${actionLabel} ${title.toLowerCase()}`}
+          className="min-h-11 px-2 -mr-2 text-sm font-semibold text-[#2D6A4F] hover:text-[#1B4332] transition-colors"
         >
           {actionLabel} →
         </button>
@@ -728,14 +782,21 @@ export function Select({
   label?: string
   className?: string
 }) {
+  const selectId = useId()
   return (
     <div className={className}>
       {label && (
-        <label className="block text-xs font-semibold text-[#5C6E8A] mb-1.5 uppercase tracking-wide">
+        // Associated by id: a <label> with no htmlFor does not name the
+        // select, so the control announced as an unlabelled combo box.
+        <label
+          htmlFor={selectId}
+          className="block text-xs font-semibold text-[#5C6E8A] mb-1.5 uppercase tracking-wide"
+        >
           {label}
         </label>
       )}
       <select
+        id={selectId}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full h-11 px-4 bg-white border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F] appearance-none cursor-pointer"
@@ -756,27 +817,51 @@ export function Toggle({
   checked,
   onChange,
   label,
+  id,
 }: {
   checked: boolean
   onChange: (v: boolean) => void
   label?: string
+  /** Associate the control with an external <label htmlFor>. */
+  id?: string
 }) {
+  /*
+   * This was a <label> wrapping a clickable <div>. The div is not focusable
+   * and cannot be operated by keyboard, so the control was invisible to a
+   * keyboard or screen-reader user. It is now a real <input type="checkbox">
+   * visually replaced by the switch graphic, which keeps the native
+   * semantics, the keyboard behaviour and the form association for free.
+   */
   return (
-    <label className="flex items-center gap-3 cursor-pointer">
-      {label && <span className="text-sm text-[#1B2A4A]">{label}</span>}
-      <div
-        onClick={() => onChange(!checked)}
-        className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-          checked ? "bg-[#2D6A4F]" : "bg-[#E8E6DF]"
-        }`}
-      >
-        <div
-          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
-            checked ? "translate-x-5" : "translate-x-0"
-          }`}
+    <span className="inline-flex items-center gap-3">
+      {label && (
+        <label htmlFor={id} className="text-sm text-[#1B2A4A] cursor-pointer">
+          {label}
+        </label>
+      )}
+      <span className="relative inline-flex">
+        <input
+          id={id}
+          type="checkbox"
+          role="switch"
+          checked={checked}
+          onChange={event => onChange(event.target.checked)}
+          className="peer sr-only"
         />
-      </div>
-    </label>
+        <span
+          aria-hidden="true"
+          className={`relative w-11 h-6 rounded-full transition-colors duration-200 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[#1B4332] cursor-pointer ${
+            checked ? "bg-[#2D6A4F]" : "bg-[#E8E6DF]"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+              checked ? "translate-x-5" : "translate-x-0"
+            }`}
+          />
+        </span>
+      </span>
+    </span>
   )
 }
 
@@ -890,9 +975,14 @@ export function EmptyState({
           {icon}
         </div>
       )}
-      <h3 className="font-display text-lg font-semibold text-[#1B2A4A] mb-2">
+      {/*
+        An empty state is the page's main message, so it is a level-two
+        heading directly under the page's <h1>. It was an <h3>, which skipped
+        a level on screens that have no <h2> before it.
+      */}
+      <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-2">
         {title}
-      </h3>
+      </h2>
       {description && (
         <p className="text-sm text-[#5C6E8A] max-w-xs">{description}</p>
       )}

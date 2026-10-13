@@ -42,6 +42,16 @@ export default defineConfig(({ mode }) => {
     preview: {
       host: process.env.FIGMA_DEV_SERVER_HOST || '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
+      // The client connects its Socket.IO namespace to the same origin
+      // ("/realtime"), which is how the deployed topology works: the edge
+      // proxy serves the SPA and forwards /api and /socket.io to the API.
+      // Without this proxy `vite preview` cannot reproduce that topology, so
+      // realtime connections fail the handshake and the browser suite cannot
+      // verify authenticated realtime behaviour.
+      proxy: {
+        '/api': { target: 'http://127.0.0.1:3001', changeOrigin: true },
+        '/socket.io': { target: 'http://127.0.0.1:3001', changeOrigin: true, ws: true },
+      },
     },
   }
 })

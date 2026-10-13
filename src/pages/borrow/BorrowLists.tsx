@@ -54,7 +54,7 @@ export default function BorrowLists({ onNavigate }: BorrowListsProps) {
   }, [tab, loadRequests, loadItems])
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
+    <section className="mx-auto w-full max-w-4xl px-6 py-12 space-y-6">
       <ScreenTitle
         title="Borrowing"
         subtitle="Everything you are borrowing, lending, and offering to lend."
@@ -97,12 +97,15 @@ export default function BorrowLists({ onNavigate }: BorrowListsProps) {
                 {entry.label}
               </button>
             ))}
-            <label className="flex items-center gap-2 text-sm text-[#1B2A4A]">
+            <label className="flex items-center gap-2 min-h-11 text-sm text-[#1B2A4A] cursor-pointer">
               <input
                 type="checkbox"
                 checked={overdueOnly}
                 onChange={event => setOverdueOnly(event.target.checked)}
-                className="h-5 w-5 accent-[#2D6A4F]"
+                // The box itself is enlarged to 28px so it clears the 24px
+                // minimum target on its own, rather than relying on the
+                // label's padding to make the hit area large enough.
+                className="w-7 h-7 accent-[#2D6A4F] cursor-pointer shrink-0"
               />
               Overdue only
             </label>
@@ -181,7 +184,7 @@ export default function BorrowLists({ onNavigate }: BorrowListsProps) {
       <button type="button" className={secondaryButton()} onClick={() => onNavigate("borrow")}>
         Browse the marketplace
       </button>
-    </main>
+    </section>
   )
 }
 

@@ -286,10 +286,15 @@ export function Menu({
         aria-expanded={open}
         aria-haspopup="true"
         aria-controls={open ? menuId : undefined}
-        aria-label={label}
+        // The name comes from the trigger's content, not from `aria-label`.
+        // An aria-label of "Account menu" replaced the visible avatar text,
+        // which fails WCAG 2.5.3 (Label in Name): the spoken name must
+        // contain the seen name. Exposing `label` as visually hidden content
+        // keeps both, and `aria-expanded` still announces the state.
         onClick={() => setOpen(current => !current)}
         className="flex items-center gap-2"
       >
+        <span className="sr-only">{label}</span>
         {trigger}
       </button>
       {open && (
