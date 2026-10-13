@@ -7,7 +7,7 @@ import { SavedSearchAlertWorker } from '../notifications/saved-search-worker'
 import { MessagingGateway } from '../messaging/messaging.gateway'
 import { MessagingService } from '../messaging/messaging.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { createTestPrisma } from '../common/testing/integration-fixtures'
+import { createTestPrisma, drainUntilDelivered } from '../common/testing/integration-fixtures'
 
 const PASSWORD_HASH = '$argon2id$stub'
 
@@ -287,7 +287,7 @@ describe('Messaging and notifications against real PostgreSQL', () => {
       },
       { dedupe: [eventKey] }
     )
-    await worker.drain()
+    await drainUntilDelivered(worker, () => notifications.list(offerer), result => result.total >= 1)
     const first = await notifications.list(offerer)
 
     // Redelivery of an identical event: same dedupeKey, so the insert is a
@@ -296,7 +296,7 @@ describe('Messaging and notifications against real PostgreSQL', () => {
       where: { dedupeKey: eventKey },
       data: { status: 'PENDING', processedAt: null }
     })
-    await worker.drain()
+    await drainUntilDelivered(worker, () => notifications.list(offerer), result => result.total >= 1)
     const second = await notifications.list(offerer)
 
     expect(first.total).toBe(1)

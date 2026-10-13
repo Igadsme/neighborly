@@ -11,6 +11,38 @@ export function createTestPrisma(): PrismaService {
   return new PrismaService()
 }
 
+/**
+ * Drains the notification outbox until every listed event has been delivered,
+ * or gives up after a bounded number of attempts.
+ *
+ * Every integration suite shares one database, so a spec cannot assume a
+ * single `drain` reaches its own event. Earlier suites leave PENDING rows
+ * behind that this worker will also claim, and `drain` takes one batch;
+ * `drain` is additionally a no-op while another sweep holds the running flag,
+ * which is why a loop that merely waits for `drain` to return 0 can exit
+ * without doing any work.
+ *
+ * Waiting on the delivery itself is what makes these assertions deterministic.
+ * It does not weaken them: if the notification never arrives, this returns
+ * after the bound and the caller's assertion still fails.
+ */
+export async function drainUntilDelivered<T>(
+  worker: { drain: (limit?: number) => Promise<number> },
+  check: () => Promise<T>,
+  isDone: (value: T) => boolean,
+  { attempts = 40, delayMs = 50, limit = 200 } = {}
+): Promise<T> {
+  let last = await check()
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (isDone(last)) return last
+    await worker.drain(limit)
+    last = await check()
+    if (isDone(last)) return last
+    await new Promise(resolve => setTimeout(resolve, delayMs))
+  }
+  return last
+}
+
 export const INTEGRATION_IDS = {
   requester: '20000000-0000-4000-8000-000000000001',
   offerer: '20000000-0000-4000-8000-000000000002',

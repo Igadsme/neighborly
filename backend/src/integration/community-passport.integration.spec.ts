@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { MissionCategory } from '@prisma/client'
-import { createTestPrisma } from '../common/testing/integration-fixtures'
+import { createTestPrisma, drainUntilDelivered } from '../common/testing/integration-fixtures'
 import { OutboxWriter } from '../events/outbox-writer'
 import { MissionsService } from '../missions/missions.service'
 import { NotificationWorker } from '../notifications/notification-worker'
@@ -11,14 +11,6 @@ import { ReviewsService } from '../passport/reviews.service'
 const PASSWORD_HASH = '$argon2id$stub'
 const DAY = 86_400_000
 
-/**
- * Milestones 5 through 9 against one database and one event pipeline.
- *
- * The point of this suite is the seams. A review, a badge, a verified
- * participation, and a notification each cross a module boundary and a
- * transaction; this is where it shows up if one of those seams disagrees with
- * another. The retry checks at the end are the reason it exists.
- */
 describe('Cross-milestone: reviews, missions, passport, and notifications', () => {
   let prisma: PrismaService
   let outbox: OutboxWriter
@@ -140,7 +132,14 @@ describe('Cross-milestone: reviews, missions, passport, and notifications', () =
     // 9. Notifications reach the right people and nobody else. The neighbor
     // hears they were confirmed and that participation was verified; the
     // organizer is not told about their own action.
-    await worker.drain(200)
+    await drainUntilDelivered(
+      worker,
+      () => prisma.notification.findMany({ where: { userId: neighbor }, select: { type: true } }),
+      rows =>
+        ['mission_participation_verified', 'badge_earned', 'mission_attendance_confirmed'].every(type =>
+          rows.some(row => row.type === type)
+        )
+    )
     const forNeighbor = await prisma.notification.findMany({
       where: { userId: neighbor },
       select: { type: true, link: true }
