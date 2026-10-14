@@ -183,7 +183,15 @@ export default function Navigation({
             </button>
 
             {/* Search entry point */}
-            <div className="flex-1 max-w-md">
+            {/*
+              min-w-0 lets this shrink below the input's intrinsic width. A
+              flex item defaults to min-width:auto, so between 768px and about
+              1040px the header could not compress: the search refused to
+              give way and pushed the right-hand actions off the right edge,
+              which produced a horizontal scrollbar on every screen at those
+              widths.
+            */}
+            <div className="flex-1 min-w-0 max-w-md">
               <div className="relative">
                 <Icon
                   name="search"
@@ -206,7 +214,14 @@ export default function Navigation({
             </div>
 
             {/* Nav links */}
-            <nav aria-label="Main" className="flex items-center gap-1 ml-2">
+            {/*
+              The full text navigation needs roughly 1000px alongside the
+              logo, search and right-hand actions. Below `lg` it cannot fit,
+              and a flex row that cannot fit overflows the viewport rather
+              than wrapping, so the text links are hidden in that range and
+              the bottom navigation carries those destinations instead.
+            */}
+            <nav aria-label="Main" className="hidden lg:flex items-center gap-1 ml-2">
               {NAV_ITEMS.map(({ label, page }) => (
                 <button
                   key={page}

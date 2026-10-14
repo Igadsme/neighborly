@@ -247,7 +247,11 @@ export default function Explore({ onNavigate }: ExploreProps) {
 
           {/* Category pills */}
           <div
-            className="flex gap-2 scroll-x-focusable scrollbar-hide"
+            // min-w-0 so the row can shrink below the width of its pills. It
+            // scrolls horizontally by design, but as a flex item it otherwise
+            // keeps min-width:auto and pushes the document sideways on the
+            // narrowest phones.
+            className="flex gap-2 min-w-0 scroll-x-focusable scrollbar-hide"
             tabIndex={0}
             role="group"
             aria-label="Listing categories"
@@ -419,7 +423,13 @@ export default function Explore({ onNavigate }: ExploreProps) {
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              {/*
+                Wraps rather than overflowing. Save search, the view toggles
+                and the sort control together need about 354px, so on a 320px
+                phone the row pushed the document sideways and the whole page
+                scrolled horizontally.
+              */}
+              <div className="flex flex-wrap items-center gap-2">
                 {/* Save search */}
                 <button
                   disabled={savingAlert}
