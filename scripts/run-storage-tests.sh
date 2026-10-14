@@ -26,7 +26,7 @@ S3_SECRET_KEY="neighborly-m4-local-only"
 # MinIO's own quay.io registry is not anonymously pullable; locally a mirror
 # with a usable RustFS image is reachable instead. The adapter only uses
 # PutObject, GetObject, DeleteObject and ListObjectsV2, so any of these work.
-S3_IMAGE="${S3_IMAGE:-rustfs/rustfs:latest}"
+S3_IMAGE="${S3_IMAGE:-rustfs/rustfs:1.0.1}"
 
 cleanup() {
   docker rm -f "$PG_CONTAINER" "$S3_CONTAINER" >/dev/null 2>&1 || true
