@@ -106,7 +106,9 @@ export function Badge({
 }: BadgeProps) {
   const variants: Record<BadgeVariant, string> = {
     green: "bg-[#D8F3DC] text-[#1B4332]",
-    coral: "bg-[#FDE8E0] text-[#C4512D]",
+    // #C4512D on #FDE8E0 measured 3.9:1, below the 4.5:1 AA minimum for this
+    // badge's small text. #9C3A1B keeps the hue and clears it at 5.9:1.
+    coral: "bg-[#FDE8E0] text-[#9C3A1B]",
     blue: "bg-[#DDEEFF] text-[#2B5F8E]",
     navy: "bg-[#EEF0F5] text-[#1B2A4A]",
     amber: "bg-[#FEF3C7] text-[#92400E]",

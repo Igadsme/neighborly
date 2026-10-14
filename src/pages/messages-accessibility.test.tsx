@@ -65,7 +65,11 @@ afterEach(() => {
 describe("Messages accessibility", () => {
   it("gives every icon-only control an accessible name", async () => {
     const { container } = render(<Messages onNavigate={() => undefined} />)
-    await waitFor(() => expect(screen.getByText("James Rivera")).toBeTruthy())
+    // The conversation pane is only rendered once a conversation has been
+    // selected, which happens after its messages load. Waiting on the peer's
+    // name is not enough: the conversation list shows the same name, so that
+    // resolves before the pane exists and the assertions below race it.
+    await waitFor(() => expect(container.querySelector("textarea")).toBeTruthy())
 
     // Asserted on the rendered attributes rather than through getByRole: the
     // back control is inside a pane that is display:none until a conversation
@@ -87,7 +91,7 @@ describe("Messages accessibility", () => {
 
   it("keeps the back control large enough to tap", async () => {
     const { container } = render(<Messages onNavigate={() => undefined} />)
-    await waitFor(() => expect(screen.getByText("James Rivera")).toBeTruthy())
+    await waitFor(() => expect(container.querySelector("textarea")).toBeTruthy())
 
     const back = container.querySelector('button[aria-label="Back to conversations"]')
     // The button was 18px tall, well under the 24px minimum the harness
@@ -97,7 +101,7 @@ describe("Messages accessibility", () => {
 
   it("always has exactly one level-one heading", async () => {
     const { container } = render(<Messages onNavigate={() => undefined} />)
-    await waitFor(() => expect(screen.getByText("James Rivera")).toBeTruthy())
+    await waitFor(() => expect(container.querySelector("textarea")).toBeTruthy())
 
     // Two h1s is the regression this guards against: a screen-level heading
     // plus the one in the list. jsdom applies no stylesheet, so the narrow

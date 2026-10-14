@@ -450,7 +450,11 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 </div>
               </div>
               </div>
-            <div className="absolute -top-3 -right-3 bg-[#FDE8E0] rounded-2xl px-3 py-2 text-xs font-semibold text-[#B94C2A] shadow-md">
+            {/*
+              #B94C2A on this peach reads at 3.9:1, under the 4.5:1 minimum.
+              #9C3A1B is the same hue carried far enough to clear it at 5.9:1.
+            */}
+            <div className="absolute -top-3 -right-3 bg-[#FDE8E0] rounded-2xl px-3 py-2 text-xs font-semibold text-[#9C3A1B] shadow-md">
               Published listing
             </div>
           </div>
@@ -498,7 +502,14 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             <h2 className="font-display text-4xl font-semibold text-white mb-3">
               Simple. Safe. Local.
             </h2>
-            <p className="text-[#5C6E8A] text-lg">
+            {/*
+              Body text on the navy section. #5C6E8A is the muted slate used
+              across the light sections, where it clears AA. On #1B2A4A it
+              measures 2.74:1, which fails the 4.5:1 minimum and leaves this
+              copy genuinely hard to read. #A9B7CC keeps the same muted
+              intent at 7.0:1.
+            */}
+            <p className="text-[#A9B7CC] text-lg">
               Three steps to find, connect, and exchange with neighbors.
             </p>
           </div>
@@ -513,7 +524,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   <h3 className="font-display text-xl font-semibold text-white mb-3">
                     {step.title}
                   </h3>
-                  <p className="text-[#5C6E8A] leading-relaxed">{step.desc}</p>
+                  <p className="text-[#A9B7CC] leading-relaxed">{step.desc}</p>
                 </div>
               </div>
             ))}
@@ -555,9 +566,12 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   className="bg-white p-5 rounded-2xl border border-[#E8E6DF]"
                 >
                   <div className="text-2xl mb-3">{point.icon}</div>
-                  <h4 className="font-semibold text-[#1B2A4A] text-sm mb-1">
+                  {/* h3, not h4: these sit directly under this section's h2, and skipping a
+                      level breaks the heading outline a screen reader relies
+                      on to navigate. */}
+                  <h3 className="font-semibold text-[#1B2A4A] text-sm mb-1">
                     {point.title}
-                  </h4>
+                  </h3>
                   <p className="text-xs text-[#5C6E8A] leading-relaxed">
                     {point.desc}
                   </p>
@@ -746,9 +760,10 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
               },
             ].map((col) => (
               <div key={col.title}>
-                <h4 className="font-semibold text-[#1B2A4A] text-sm mb-3">
+                {/* h3 for the same reason: the footer columns sit under the last h2. */}
+                <h3 className="font-semibold text-[#1B2A4A] text-sm mb-3">
                   {col.title}
-                </h4>
+                </h3>
                 <ul className="space-y-2">
                   {col.links.map((link) => (
                     <li key={link}>
