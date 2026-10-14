@@ -5,10 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+# No deployment happens in this workflow. Deployments live in
+# deploy-staging.yml and deploy-production.yml and are gated behind
+# manual approval and environment protection rules.
+
 jobs:
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -18,14 +23,177 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
       - run: pnpm exec tsc --noEmit
       - run: pnpm test
       - run: pnpm build
 
+  # Real-PostgreSQL integration tests. A disposable PostgreSQL 16 service
+  # container stands in for production Postgres; the suite refuses any
+  # non-loopback database host, so this job can never reach a shared or
+  # production database. The integration specs are excluded from `pnpm test`.
+  integration:
+    name: Integration (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55432/neighborly_m2
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: neighborly_m2
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      # Applying the whole migration chain from an empty database is the
+      # check that migrations stay safe to deploy.
+      - run: pnpm exec prisma migrate deploy
+      # Covers offer acceptance, request privacy, transactions, category
+      # bootstrap, and the Milestone 3 account lifecycle: registration,
+      # verification, recovery, refresh rotation, suspension, deletion.
+      - run: pnpm exec jest --config jest.integration.config.cjs --runInBand
+        env:
+          NEIGHBORLY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55432/neighborly_m2
+
+  # Real object storage. Storage specs are excluded from the integration job
+  # because they need both PostgreSQL and a live S3-compatible service.
+  storage-integration:
+    name: Storage integration (S3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55436/neighborly_m4
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: neighborly_m4
+        ports:
+          - 55436:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      - run: pnpm exec prisma migrate deploy
+      - name: Start a disposable S3-compatible store
+        env:
+          # Pinned, and the reason is recorded here because this has already
+          # broken once. `minio/minio` was withdrawn from Docker Hub upstream -
+          # that repository returns 404 and pulling it fails with "pull access
+          # denied". MinIO's own quay.io registry is not anonymously pullable
+          # either: tags/list returns 401 even with an anonymous token.
+          #
+          # RustFS is an S3-compatible server published on Docker Hub, and it
+          # is what scripts/run-storage-tests.sh already uses successfully, so
+          # CI and local verification now exercise the same server. This is a
+          # real object store over the S3 API, not a mock: the suite writes,
+          # reads, deletes and lists objects. The adapter only uses PutObject,
+          # GetObject, DeleteObject and ListObjectsV2.
+          S3_IMAGE: rustfs/rustfs:1.0.1
+        run: |
+          set -euo pipefail
+          # No command override: the image's own entrypoint takes no arguments
+          # and reads RUSTFS_ACCESS_KEY / RUSTFS_SECRET_KEY. Passing MinIO's
+          # MINIO_ROOT_* variables or a `server /data` argument starts a
+          # container that never listens, which is what the previous attempt
+          # did.
+          docker run -d --name neighborly-m4-s3 \
+            -e RUSTFS_ACCESS_KEY=neighborly-m4-local \
+            -e RUSTFS_SECRET_KEY=neighborly-m4-local-only \
+            -p 127.0.0.1:59000:9000 \
+            "$S3_IMAGE" >/dev/null
+
+          ready=0
+          for _ in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:59000/minio/health/live >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "Object storage did not become ready; container logs follow." >&2
+            docker logs neighborly-m4-s3 >&2 || true
+            exit 1
+          fi
+          curl -fsS http://127.0.0.1:59000/minio/health/live
+      - name: Run the storage suites
+        env:
+          NEIGHBORLY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55436/neighborly_m4
+          NEIGHBORLY_TEST_S3_ENDPOINT: http://127.0.0.1:59000
+          NEIGHBORLY_TEST_S3_BUCKET: neighborly-m4-media
+          NEIGHBORLY_TEST_S3_ACCESS_KEY: neighborly-m4-local
+          NEIGHBORLY_TEST_S3_SECRET_KEY: neighborly-m4-local-only
+        run: |
+          set -euo pipefail
+          S3_BUCKET_NAME=neighborly-m4-media \
+          S3_ENDPOINT_URL=http://127.0.0.1:59000 \
+          S3_ACCESS_KEY_ID=neighborly-m4-local \
+          S3_SECRET_ACCESS_KEY=neighborly-m4-local-only \
+            node -e '
+          const { S3Client, CreateBucketCommand } = require("@aws-sdk/client-s3")
+          const client = new S3Client({
+            region: "us-east-1",
+            endpoint: process.env.S3_ENDPOINT_URL,
+            forcePathStyle: true,
+            credentials: {
+              accessKeyId: process.env.S3_ACCESS_KEY_ID,
+              secretAccessKey: process.env.S3_SECRET_ACCESS_KEY
+            }
+          })
+          client.send(new CreateBucketCommand({ Bucket: process.env.S3_BUCKET_NAME }))
+            .then(() => process.stdout.write("bucket ready\n"))
+            .catch(error => {
+              if (error.name === "BucketAlreadyOwnedByYou") process.stdout.write("bucket ready\n")
+              else { process.stderr.write(String(error) + "\n"); process.exit(1) }
+            })
+          '
+          pnpm exec jest --config jest.storage.config.cjs --runInBand --testPathPattern storage
+
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       DATABASE_URL: postgresql://neighborly:neighborly@localhost:5432/neighborly
     defaults:
@@ -43,6 +211,92 @@ jobs:
           cache-dependency-path: backend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec prisma generate
+      - run: pnpm exec prisma validate
+      - run: pnpm lint
       - run: pnpm exec tsc --noEmit
       - run: pnpm test
       - run: pnpm build
+
+  # Production dependency vulnerabilities. `--prod` is the gate on purpose:
+  # a build-time or type-only advisory is not something an attacker can reach
+  # in a deployed container, and gating on it would block releases for a
+  # finding that cannot be exploited. The full audit including devDependencies
+  # runs in the same step as a non-blocking report so the drift stays visible.
+  security-audit:
+    name: Dependency security audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - name: Install both workspaces
+        run: |
+          pnpm install --frozen-lockfile
+          cd backend && pnpm install --frozen-lockfile
+      - name: Audit production dependencies (blocking)
+        run: |
+          set -euo pipefail
+          pnpm audit --prod --audit-level=moderate
+          cd backend && pnpm audit --prod --audit-level=moderate
+      - name: Report the full picture including devDependencies
+        if: always()
+        run: |
+          echo "### Frontend (all dependencies)" >> "$GITHUB_STEP_SUMMARY"
+          pnpm audit 2>&1 | tail -20 >> "$GITHUB_STEP_SUMMARY" || true
+          echo "### Backend (all dependencies)" >> "$GITHUB_STEP_SUMMARY"
+          cd backend && pnpm audit 2>&1 | tail -20 >> "$GITHUB_STEP_SUMMARY" || true
+
+  # The migration files and the Prisma schema are two different sources of
+  # truth. Applying them to a scratch database and diffing proves that what
+  # would be deployed actually matches what the application expects, which
+  # `prisma migrate status` alone cannot show.
+  migration-drift:
+    name: Migration drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: neighborly_drift
+        ports:
+          - 55440:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      - name: Diff the migration chain against the Prisma schema
+        run: |
+          set -euo pipefail
+          # --exit-code makes Prisma exit non-zero when the two disagree, so a
+          # schema edited without a migration fails the build instead of
+          # failing later in a deploy.
+          pnpm exec prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "postgresql://postgres:postgres@127.0.0.1:55440/neighborly_drift" \
+            --exit-code

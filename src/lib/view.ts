@@ -90,7 +90,7 @@ export function listingFromApi(listing: ApiListing, saved = false): Listing {
     postedAt: relativeTime(listing.createdAt),
     images:
       listing.images
-        ?.map((image) => displayableImage(image.url || image.key || image.objectKey || ""))
+        ?.map((image) => displayableImage(image.url ?? image.objectKey ?? ""))
         .filter(Boolean) ?? [],
     description: listing.description,
     seller: {

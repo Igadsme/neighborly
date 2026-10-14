@@ -47,6 +47,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
   const [listingsLoading, setListingsLoading] = useState(true)
   const [listingsError, setListingsError] = useState('')
   const [firstName, setFirstName] = useState('')
+  const [neighborhood, setNeighborhood] = useState('')
   const [services, setServices] = useState<ServiceCard[]>([])
   const [events, setEvents] = useState<CommunityEventCard[]>([])
   const [posts, setPosts] = useState<CommunityPostCard[]>([])
@@ -59,8 +60,9 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
     let active = true
     api.listings
       .list({ limit: 24 })
-      .then((rows) => {
+      .then((page) => {
         if (!active) return
+        const rows = page.items
         const cards = rows.map((row) => listingFromApi(row))
         const dayAgo = Date.now() - 24 * 60 * 60 * 1000
         const fresh = new Set(
@@ -87,7 +89,11 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
     api.auth
       .me()
       .then((me) => {
-        if (active) setFirstName(me.profile?.firstName?.trim() || '')
+        if (!active) return
+        setFirstName(me.profile?.firstName?.trim() || '')
+        setNeighborhood(
+          [me.profile?.neighborhood, me.profile?.city].filter(Boolean).join(' · '),
+        )
       })
       .catch(() => undefined)
     Promise.all([api.services.list({ limit: 3 }), api.community.events(), api.community.posts({ limit: 3 })])
@@ -121,11 +127,18 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
               <h1 className="font-display text-2xl md:text-3xl font-semibold text-[#1B2A4A]">
                 {greeting}, <em className="not-italic text-[#2D6A4F]">{firstName || 'there'}</em> 👋
               </h1>
-              <button className="flex items-center gap-1 text-sm text-[#5C6E8A] mt-1 hover:text-[#2D6A4F] transition-colors">
-                <Icon name="mapPin" size={13} className="text-[#E8694A]" />
-                Inman Park · Atlanta, GA
-                <Icon name="chevronDown" size={12} />
-              </button>
+              {/*
+                This was a button with a chevron that did nothing, and it
+                showed a hardcoded neighbourhood to every member. There is no
+                location switching behind it, so it is plain text, and it
+                states only what the signed-in member's profile actually says.
+              */}
+              {neighborhood && (
+                <p className="flex items-center gap-1 text-sm text-[#5C6E8A] mt-1">
+                  <Icon name="mapPin" size={13} className="text-[#B94C2A]" />
+                  {neighborhood}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <button onClick={() => onNavigate('dashboard')} className="hidden md:flex items-center gap-2 px-4 py-2 bg-white border border-[#E8E6DF] rounded-xl text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A] transition-colors">
@@ -141,18 +154,31 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
 
           {/* Main search */}
           <div className="relative mt-4">
-            <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#C5CCDA] pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search for anything nearby — furniture, services, housing..."
+            <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5C6E8A] pointer-events-none" />
+            {/*
+              This field is a read-only shortcut into Explore rather than an
+              editable input, so it is a button with a real accessible name.
+              As an unlabelled readonly input it announced as a text field
+              that could not be typed into.
+            */}
+            <button
+              type="button"
               onClick={() => onNavigate('explore')}
-              readOnly
-              className="w-full h-13 pl-12 pr-4 bg-white border border-[#E8E6DF] rounded-2xl text-sm text-[#1B2A4A] placeholder:text-[#C5CCDA] focus:outline-none cursor-pointer shadow-sm hover:border-[#2D6A4F]/30 transition-colors"
-            />
+              className="w-full h-13 pl-12 pr-4 bg-white border border-[#E8E6DF] rounded-2xl text-sm text-left text-[#1B2A4A] placeholder:text-[#5C6E8A] focus:outline-none cursor-pointer shadow-sm hover:border-[#2D6A4F]/30 transition-colors"
+            >
+              <span className="text-[#5C6E8A]">
+                Search for anything nearby — furniture, services, housing...
+              </span>
+            </button>
           </div>
 
           {/* Quick categories */}
-          <div className="flex gap-2 mt-4 overflow-x-auto scrollbar-hide pb-1">
+          <div
+            className="flex gap-2 mt-4 scroll-x-focusable scrollbar-hide pb-1"
+            tabIndex={0}
+            role="group"
+            aria-label="Quick categories"
+          >
             {quickCategories.map(cat => (
               <button
                 key={cat.label}
@@ -167,7 +193,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                 {cat.label}
               </button>
             ))}
-            <button onClick={() => onNavigate('categories')} className="flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium border border-[#E8E6DF] text-[#8A9AB5] hover:text-[#1B2A4A] bg-white whitespace-nowrap">
+            <button onClick={() => onNavigate('categories')} className="flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium border border-[#E8E6DF] text-[#5C6E8A] hover:text-[#1B2A4A] bg-white whitespace-nowrap">
               All →
             </button>
           </div>
@@ -200,7 +226,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
             actionLabel="See all"
           />
           {listingsLoading ? (
-            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
               Loading listings…
             </div>
           ) : listingsError ? (
@@ -208,7 +234,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
               {listingsError}
             </div>
           ) : listings.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
               No listings nearby yet.
             </div>
           ) : (
@@ -228,7 +254,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
             {listingsLoading ? (
               <LoadState loading loadingLabel="Loading listings…" />
             ) : listings.slice(2, 5).length === 0 ? (
-              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">No recommendations yet.</div>
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No recommendations yet.</div>
             ) : (
             <div className="space-y-3">
               {listings.slice(2, 5).map(listing => (
@@ -236,7 +262,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                   <ListingThumb listing={listing} />
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-1">{listing.title}</p>
-                    <p className="text-xs text-[#8A9AB5] mt-0.5">{listing.neighborhood} · {listing.distance}</p>
+                    <p className="text-xs text-[#5C6E8A] mt-0.5">{listing.neighborhood} · {listing.distance}</p>
                     <div className="flex items-center justify-between mt-2">
                       <span className="font-bold text-sm text-[#1B2A4A]">
                         {listing.isFree ? <span className="text-[#2D6A4F]">Free</span> : `$${listing.price?.toLocaleString()}`}
@@ -256,7 +282,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
             {listingsLoading ? (
               <LoadState loading loadingLabel="Loading listings…" />
             ) : freeListings.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">No free listings nearby yet.</div>
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No free listings nearby yet.</div>
             ) : (
             <div className="space-y-3">
               {freeListings.map((listing) => (
@@ -264,8 +290,8 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                   <ListingThumb listing={listing} free />
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-2">{listing.title}</p>
-                    <p className="text-xs text-[#8A9AB5] mt-0.5">{listing.neighborhood} · {listing.distance}</p>
-                    <p className="text-xs text-[#E8694A] font-medium mt-1">{listing.postedAt}</p>
+                    <p className="text-xs text-[#5C6E8A] mt-0.5">{listing.neighborhood} · {listing.distance}</p>
+                    <p className="text-xs text-[#B94C2A] font-medium mt-1">{listing.postedAt}</p>
                   </div>
                 </div>
               ))}
@@ -282,7 +308,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
           ) : verticalsError ? (
             <LoadState error={verticalsError} loadingLabel="Loading services…" />
           ) : services.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">No local services yet.</div>
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No local services yet.</div>
           ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {services.slice(0, 3).map(svc => {
@@ -294,7 +320,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                 </div>
                 <div className="p-3">
                   <p className="font-semibold text-sm text-[#1B2A4A]">{svc.title}</p>
-                  <p className="text-xs text-[#8A9AB5] mt-0.5">from ${svc.startingPrice.toLocaleString()}</p>
+                  <p className="text-xs text-[#5C6E8A] mt-0.5">from ${svc.startingPrice.toLocaleString()}</p>
                   <div className="flex items-center justify-between mt-2">
                     <StarRating rating={svc.rating} count={svc.reviews} size="xs" />
                     {svc.backgroundCheck && <Badge variant="green" size="sm">BG Check</Badge>}
@@ -313,9 +339,14 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
           {verticalsLoading ? (
             <LoadState loading loadingLabel="Loading events…" />
           ) : verticalsError ? null : events.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">No community events yet.</div>
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No community events yet.</div>
           ) : (
-          <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
+          <div
+            className="flex gap-4 scroll-x-focusable scrollbar-hide pb-2"
+            tabIndex={0}
+            role="group"
+            aria-label="Recommended listings"
+          >
             {events.map(event => {
               const photo = mediaSrc(event.image, 'w=400&h=200&fit=crop&auto=format')
               return (
@@ -325,8 +356,8 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                 </div>
                 <div className="p-4">
                   <p className="font-semibold text-sm text-[#1B2A4A] leading-tight">{event.title}</p>
-                  <p className="text-xs text-[#E8694A] font-medium mt-1">{event.date} · {event.time}</p>
-                  <p className="text-xs text-[#8A9AB5] mt-0.5">{event.neighborhood}</p>
+                  <p className="text-xs text-[#B94C2A] font-medium mt-1">{event.date} · {event.time}</p>
+                  <p className="text-xs text-[#5C6E8A] mt-0.5">{event.neighborhood}</p>
                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#F5F4EF]">
                     <span className="text-xs text-[#5C6E8A]">👥 {event.attending} attending</span>
                     <Badge variant="blue" size="sm">RSVP</Badge>
@@ -345,7 +376,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
           {verticalsLoading ? (
             <LoadState loading loadingLabel="Loading discussions…" />
           ) : verticalsError ? null : posts.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">No community discussions yet.</div>
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No community discussions yet.</div>
           ) : (
           <div className="space-y-3">
             {posts.slice(0, 3).map(post => (
@@ -355,8 +386,8 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <span className="text-xs font-semibold text-[#8A9AB5]">{post.author.name} · {post.author.neighborhood} · {post.postedAt}</span>
-                        <h4 className="font-semibold text-sm text-[#1B2A4A] mt-0.5">{post.title}</h4>
+                        <span className="text-xs font-semibold text-[#5C6E8A]">{post.author.name} · {post.author.neighborhood} · {post.postedAt}</span>
+                        <h3 className="font-semibold text-sm text-[#1B2A4A] mt-0.5">{post.title}</h3>
                       </div>
                       <Badge variant={
                         post.type === 'discussion' ? 'gray' :
@@ -369,7 +400,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                       </Badge>
                     </div>
                     <p className="text-sm text-[#5C6E8A] mt-1 line-clamp-2">{post.body}</p>
-                    <div className="flex items-center gap-4 mt-3 text-xs text-[#8A9AB5]">
+                    <div className="flex items-center gap-4 mt-3 text-xs text-[#5C6E8A]">
                       <span>❤️ {post.reactions.love + post.reactions.like + post.reactions.wow} reactions</span>
                       <span>💬 {post.replies} replies</span>
                     </div>
@@ -384,17 +415,22 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
         {/* People to follow */}
         <section className="mb-10">
           <SectionHeader title="Neighbors to follow" subtitle="Preview · Examples. Not live ratings." />
-          <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
+          <div
+            className="flex gap-4 scroll-x-focusable scrollbar-hide pb-2"
+            tabIndex={0}
+            role="group"
+            aria-label="Preview neighbor examples"
+          >
             {suggestedPeople.map(person => (
               <div key={person.name} className="flex-shrink-0 w-48 bg-white rounded-2xl border border-[#E8E6DF] p-4 text-center">
                 <Avatar src={person.avatar} name={person.name} size="lg" verified className="mx-auto mb-3" />
                 <p className="font-semibold text-sm text-[#1B2A4A]">{person.name}</p>
-                <p className="text-xs text-[#8A9AB5] mt-0.5">{person.neighborhood}</p>
+                <p className="text-xs text-[#5C6E8A] mt-0.5">{person.neighborhood}</p>
                 <div className="flex justify-center mt-2 mb-3" title="Preview example, not a live rating">
                   <StarRating rating={person.rating} count={person.transactions} size="xs" />
                 </div>
                 <Button variant="soft" size="xs" fullWidth disabled>Follow</Button>
-                <p className="text-[10px] text-[#8A9AB5] mt-2">Following isn't available yet.</p>
+                <p className="text-[10px] text-[#5C6E8A] mt-2">Following isn&apos;t available yet.</p>
               </div>
             ))}
           </div>
@@ -406,7 +442,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
           {listingsLoading ? (
             <LoadState loading loadingLabel="Loading listings…" />
           ) : newToday.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">Nothing new in the last 24 hours.</div>
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">Nothing new in the last 24 hours.</div>
           ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {newToday.map(listing => (
@@ -429,7 +465,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
           <div className="absolute inset-0 bg-gradient-to-r from-[#1B2A4A]/80 to-transparent flex items-center p-8">
             <div>
               <p className="text-[#74C69D] text-sm font-semibold mb-1">Explore the map</p>
-              <h3 className="font-display text-2xl md:text-3xl font-semibold text-white mb-2">See everything nearby</h3>
+              <h2 className="font-display text-2xl md:text-3xl font-semibold text-white mb-2">See everything nearby</h2>
               <p className="text-white/70 text-sm mb-4 max-w-xs">Browse listings, safe meetup spots, and neighborhood boundaries on an interactive map.</p>
               <Button variant="soft" size="sm">Open Map →</Button>
             </div>
@@ -437,7 +473,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
           {/* Animated pins */}
           <div className="absolute top-8 right-24 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-sm animate-bounce">📍</div>
           <div className="absolute top-16 right-40 w-7 h-7 bg-[#2D6A4F] rounded-full shadow-lg flex items-center justify-center text-white text-xs font-bold">$650</div>
-          <div className="absolute bottom-12 right-20 w-7 h-7 bg-[#E8694A] rounded-full shadow-lg flex items-center justify-center text-white text-xs font-bold">Free</div>
+          <div className="absolute bottom-12 right-20 w-7 h-7 bg-[#B94C2A] rounded-full shadow-lg flex items-center justify-center text-white text-xs font-bold">Free</div>
         </div>
       </div>
     </div>

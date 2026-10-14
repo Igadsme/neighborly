@@ -3,11 +3,15 @@ import { JwtModule, JwtService } from '@nestjs/jwt'
 import { Test } from '@nestjs/testing'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthService } from '../auth/auth.service'
+import { EMAIL_SENDER } from '../auth/email-sender'
 import { resetRateLimitsForTests } from '../common/rate-limit'
 import { testJwtSecret } from '../common/testing/http-app'
 import { PrismaService } from '../prisma/prisma.service'
 import { ListingsController } from '../listings/listings.controller'
 import { ListingsService } from '../listings/listings.service'
+import { stubStorage } from '../common/testing/stub-storage'
+import { OutboxWriter } from '../events/outbox-writer'
+import { RequestLifecycleService } from '../requests/request-lifecycle.service'
 import { MessagingController } from '../messaging/messaging.controller'
 import { MessagingGateway } from '../messaging/messaging.gateway'
 import { MessagingService } from '../messaging/messaging.service'
@@ -174,6 +178,8 @@ describe('Abuse limits on auth, messaging, listings, and offers', () => {
   it('returns 429 on the second login from the same address', async () => {
     const booted = await boot([AuthController], [
       AuthService,
+      // Login fails on the user lookup, so the sender is never invoked.
+      { provide: EMAIL_SENDER, useValue: { send: async () => undefined } },
       { provide: PrismaService, useValue: { user: { findUnique: async () => null } } }
     ])
     const init = {
@@ -224,6 +230,7 @@ describe('Abuse limits on auth, messaging, listings, and offers', () => {
   it('returns 429 on the second listing create', async () => {
     const booted = await boot([ListingsController], [
       ListingsService,
+      stubStorage().provider,
       AuthGuard,
       {
         provide: PrismaService,
@@ -263,6 +270,11 @@ describe('Abuse limits on auth, messaging, listings, and offers', () => {
     const booted = await boot([RequestsController], [
       RequestsService,
       AuthGuard,
+      { provide: OutboxWriter, useValue: { record: async () => undefined } },
+      {
+        provide: RequestLifecycleService,
+        useFactory: (prisma: object) => new RequestLifecycleService(prisma as never, { record: async () => undefined } as never)
+      },
       {
         provide: PrismaService,
         useValue: {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
@@ -16,6 +16,13 @@ export class MessagingController {
   @Get()
   list(@Req() req: AuthenticatedRequest) { return this.messaging.listConversations(req.user.id) }
 
+  /** Global unread badge: messages plus notification count. */
+  @Get('unread')
+  async unread(@Req() req: AuthenticatedRequest) {
+    const messages = await this.messaging.unreadTotals(req.user.id)
+    return { messages: messages.messages, notifications: 0 }
+  }
+
   @Post()
   async create(@Req() req: AuthenticatedRequest, @Body() input: CreateConversationDto) {
     await enforceRateLimit('messaging', req.user.id)
@@ -23,7 +30,26 @@ export class MessagingController {
   }
 
   @Get(':id/messages')
-  messages(@Req() req: AuthenticatedRequest, @Param('id') id: string) { return this.messaging.listMessages(req.user.id, id) }
+  messages(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string
+  ) {
+    return this.messaging.listMessages(req.user.id, id, {
+      limit: limit ? Number(limit) : undefined,
+      before
+    })
+  }
+
+  @Get(':id/messages/more')
+  async moreMessages(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Query('before') before?: string
+  ) {
+    return { hasMore: await this.messaging.hasMoreMessages(req.user.id, id, before) }
+  }
 
   @Post(':id/messages')
   async send(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() input: SendMessageDto) {

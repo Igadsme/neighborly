@@ -106,13 +106,13 @@ export default function Housing({ onNavigate }: HousingProps) {
           <div className="flex gap-1 bg-[#F5F4EF] p-1 rounded-xl mb-4 w-fit">
             <button
               onClick={() => setListingType('rent')}
-              className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${listingType === 'rent' ? 'bg-white text-[#1B2A4A] shadow-sm' : 'text-[#8A9AB5]'}`}
+              className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${listingType === 'rent' ? 'bg-white text-[#1B2A4A] shadow-sm' : 'text-[#5C6E8A]'}`}
             >
               For Rent
             </button>
             <button
               onClick={() => setListingType('sale')}
-              className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${listingType === 'sale' ? 'bg-white text-[#1B2A4A] shadow-sm' : 'text-[#8A9AB5]'}`}
+              className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${listingType === 'sale' ? 'bg-white text-[#1B2A4A] shadow-sm' : 'text-[#5C6E8A]'}`}
             >
               For Sale
             </button>
@@ -143,7 +143,7 @@ export default function Housing({ onNavigate }: HousingProps) {
 
             {/* Max price */}
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9AB5] text-sm">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5C6E8A] text-sm">$</span>
               <input
                 type="number"
                 placeholder={listingType === 'rent' ? 'Max/mo' : 'Max price'}
@@ -258,14 +258,14 @@ export default function Housing({ onNavigate }: HousingProps) {
                       <div className="text-right flex-shrink-0">
                         <p className="font-bold text-[#1B2A4A]">
                           ${property.price.toLocaleString()}
-                          {property.priceUnit && <span className="text-xs font-normal text-[#8A9AB5]">{property.priceUnit}</span>}
+                          {property.priceUnit && <span className="text-xs font-normal text-[#5C6E8A]">{property.priceUnit}</span>}
                         </p>
                       </div>
                     </div>
 
                     {/* Location */}
-                    <p className="text-xs text-[#8A9AB5] mb-3 flex items-center gap-1">
-                      <Icon name="mapPin" size={10} className="text-[#E8694A]" />
+                    <p className="text-xs text-[#5C6E8A] mb-3 flex items-center gap-1">
+                      <Icon name="mapPin" size={10} className="text-[#B94C2A]" />
                       {property.neighborhood} · {property.distance}
                     </p>
 
@@ -273,11 +273,11 @@ export default function Housing({ onNavigate }: HousingProps) {
                     <div className="flex items-center gap-3 text-sm text-[#5C6E8A] mb-3">
                       {property.beds > 0 && <span className="flex items-center gap-1 font-medium"><span className="text-[#1B2A4A]">{property.beds}</span> bd</span>}
                       {property.beds === 0 && <span className="font-medium text-[#1B2A4A]">Studio</span>}
-                      <span className="text-[#C5CCDA]">·</span>
+                      <span className="text-[#5C6E8A]">·</span>
                       <span className="flex items-center gap-1 font-medium"><span className="text-[#1B2A4A]">{property.baths}</span> ba</span>
                       {property.sqft > 0 && (
                         <>
-                          <span className="text-[#C5CCDA]">·</span>
+                          <span className="text-[#5C6E8A]">·</span>
                           <span className="flex items-center gap-1 font-medium"><span className="text-[#1B2A4A]">{property.sqft.toLocaleString()}</span> sqft</span>
                         </>
                       )}
@@ -292,7 +292,7 @@ export default function Housing({ onNavigate }: HousingProps) {
 
                     {/* Lease */}
                     {property.lease !== 'N/A' && (
-                      <p className="text-xs text-[#8A9AB5] mb-3">
+                      <p className="text-xs text-[#5C6E8A] mb-3">
                         📋 Lease: {property.lease}
                       </p>
                     )}
@@ -324,7 +324,7 @@ export default function Housing({ onNavigate }: HousingProps) {
           <div className="py-20 text-center">
             <div className="text-5xl mb-4">🏠</div>
             <h3 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">No homes match your filters</h3>
-            <p className="text-[#8A9AB5]">Try adjusting your search criteria.</p>
+            <p className="text-[#5C6E8A]">Try adjusting your search criteria.</p>
           </div>
         )}
 

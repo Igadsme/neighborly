@@ -43,9 +43,23 @@ cd backend
 pnpm install
 pnpm prisma:generate
 pnpm prisma:migrate
-pnpm prisma:seed
+pnpm prisma:bootstrap  # production category reference data, idempotent, no demo rows
+pnpm prisma:seed       # local demo fixtures only; never run in production
 pnpm start:dev
 ```
+
+Backend tests: `pnpm test` (hermetic unit suite), `../scripts/run-integration-tests.sh`
+(real PostgreSQL in a disposable container), and `../scripts/run-storage-tests.sh`
+(real PostgreSQL plus a real S3-compatible object store).
+
+Marketplace (Milestone 4): `docs/MILESTONE_4_MARKETPLACE.md`.
+Requests and matching (Milestone 5): `docs/MILESTONE_5_REQUEST_MATCHING.md`.
+Messaging and notifications (Milestone 6): `docs/MILESTONE_6_MESSAGING_NOTIFICATIONS.md`.
+Cross-milestone verification (Milestones 5 and 6): `docs/MILESTONE_5_6_END_TO_END.md`.
+Borrowing and lending (Milestone 7): `docs/MILESTONE_7_NEIGHBORLY_BORROW.md`. Listing images: `docs/STORAGE.md`.
+Account lifecycle (Milestone 3): `docs/MILESTONE_3_AUTHENTICATION.md`.
+Email delivery: `docs/EMAIL_DELIVERY.md` — no provider is configured, messages go to the `EmailOutbox` table.
+Account deletion: `docs/ACCOUNT_DELETION.md`.
 
 The API listens on port 3000. Health is `GET http://localhost:3000/api/v1/health`. Swagger is `http://localhost:3000/docs`.
 
@@ -60,14 +74,20 @@ Vite binds to `$PORT` or **8443** (`vite.config.ts`). `CORS_ORIGIN` in `env.exam
 
 ## Checks
 
+CI (`.github/workflows/ci.yml`) runs lint, type checks, tests, and builds for both packages on every push to `main` and every pull request, with pnpm cache and frozen-lockfile installs. No deployment runs in CI.
+
 ```bash
-# frontend
+# frontend (repo root)
+pnpm lint
 pnpm exec tsc --noEmit
+pnpm test
 pnpm build
 
 # backend
 cd backend
 pnpm prisma:generate
+pnpm exec prisma validate
+pnpm lint
 pnpm exec tsc --noEmit
 pnpm test
 pnpm build

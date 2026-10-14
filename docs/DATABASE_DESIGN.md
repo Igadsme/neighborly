@@ -1,6 +1,6 @@
 # Database Design
 
-PostgreSQL via Prisma (`backend/prisma/schema.prisma`). Migrations: `backend/prisma/migrations/0001_init`, `backend/prisma/migrations/0002_onboarding`, `backend/prisma/migrations/0003_verticals`, `backend/prisma/migrations/0004_trust_safety`, and `backend/prisma/migrations/0005_query_indexes`. Client provider: `prisma-client-js`.
+PostgreSQL via Prisma (`backend/prisma/schema.prisma`). Migrations: `backend/prisma/migrations/0001_init`, `backend/prisma/migrations/0002_onboarding`, `backend/prisma/migrations/0003_verticals`, `backend/prisma/migrations/0004_trust_safety`, `backend/prisma/migrations/0005_query_indexes`, and `backend/prisma/migrations/0006_transaction_offer_unique` (unique `Transaction.offerId`; the migration aborts without changing data if duplicates already exist). Client provider: `prisma-client-js`. Category reference data is loaded by `backend/prisma/bootstrap.ts` (`pnpm prisma:bootstrap`), separately from the demo seed.
 
 **IMPLEMENTED** is every model, enum, and index in that schema. **TARGET** is the rest of the older entity list that has no table. A model with no service writer is called out; it is still implemented schema, not a target table.
 

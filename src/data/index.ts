@@ -366,7 +366,7 @@ export const mapListings = [
   { id: 'm7', title: 'Ceramic Set', price: 180, x: 20, y: 44, image: 'photo-1610701596007-11502861dcfa', category: 'Home' },
   { id: 'm8', title: 'Standing Desk', price: 480, x: 62, y: 48, image: 'photo-1593640408182-31c228067bec', category: 'Furniture' },
   { id: 'm9', title: 'Garden Tools', price: 45, x: 38, y: 25, image: 'photo-1416879595882-3373a0480b5b', category: 'Garden' },
-  { id: 'm10', title: 'Road Bike', price: 800, x: 82, y: 28, image: 'photo-1558618047-3c4f7f7f7b43', category: 'Bikes' },
+  { id: 'm10', title: 'Road Bike', price: 800, x: 82, y: 28, image: 'photo-1485965120184-e220f721d03e', category: 'Bikes' },
   { id: 'm11', title: 'Leather Jacket', price: 120, x: 52, y: 22, image: 'photo-1551028719-00167b16eac5', category: 'Clothing' },
   { id: 'm12', title: 'Vintage Record Player', price: 175, x: 26, y: 72, image: 'photo-1526394931762-8a4ceaf1b596', category: 'Electronics' },
 ]
