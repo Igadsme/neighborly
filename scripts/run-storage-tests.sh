@@ -21,9 +21,11 @@ DB_URL="postgresql://postgres:postgres@localhost:${PG_PORT}/neighborly_m4"
 S3_ACCESS_KEY="neighborly-m4-local"
 S3_SECRET_KEY="neighborly-m4-local-only"
 
-# Pinned by digest-free tag on purpose: a registry mirror is available in
-# this environment. Override S3_IMAGE to use MinIO itself where it is
-# reachable, e.g. S3_IMAGE=quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z.
+# Override S3_IMAGE to point at any real S3-compatible server. The CI job pins
+# bitnamilegacy/minio, because `minio/minio` was withdrawn from Docker Hub and
+# MinIO's own quay.io registry is not anonymously pullable; locally a mirror
+# with a usable RustFS image is reachable instead. The adapter only uses
+# PutObject, GetObject, DeleteObject and ListObjectsV2, so any of these work.
 S3_IMAGE="${S3_IMAGE:-rustfs/rustfs:latest}"
 
 cleanup() {

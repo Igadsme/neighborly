@@ -116,15 +116,29 @@ jobs:
       - run: pnpm exec prisma generate
       - run: pnpm exec prisma migrate deploy
       - name: Start a disposable S3-compatible store
+        env:
+          # Pinned deliberately. `minio/minio` was withdrawn from Docker Hub
+          # upstream - that repository now returns 404, and pulling it fails
+          # with "pull access denied", which broke this job on 2026-10-14.
+          # MinIO's own quay.io registry is not anonymously pullable, so the
+          # last Docker Hub publication is used from Bitnami's archived
+          # catalogue, pinned to one version so an upstream change cannot move
+          # the goalposts again.
+          #
+          # This is the real MinIO server, not a mock: the storage suite
+          # writes, reads, deletes and lists objects. The adapter only needs
+          # PutObject, GetObject, DeleteObject and ListObjectsV2, so any real
+          # S3-compatible server can be substituted here if this image is ever
+          # withdrawn too.
+          S3_IMAGE: bitnamilegacy/minio:2025.7.23-debian-12-r5
         run: |
           set -euo pipefail
-          # The GitHub runner can pull MinIO from Docker Hub, so the
-          # production-representative image is used here.
           docker run -d --name neighborly-m4-s3 \
             -e MINIO_ROOT_USER=neighborly-m4-local \
             -e MINIO_ROOT_PASSWORD=neighborly-m4-local-only \
+            -e MINIO_DEFAULT_BUCKETS=neighborly-m4-media \
             -p 127.0.0.1:59000:9000 \
-            minio/minio:latest server /data
+            "$S3_IMAGE" server /data --console-address :9001
           for _ in $(seq 1 45); do
             if curl -fsS http://127.0.0.1:59000/minio/health/live >/dev/null 2>&1; then break; fi
             sleep 2

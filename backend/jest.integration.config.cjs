@@ -15,6 +15,11 @@ module.exports = {
   ],
   // Integration tests talk to a disposable local PostgreSQL.
   testTimeout: 30000,
+  // Runs before any test module is imported. AppModule validates its
+  // configuration while it is being evaluated, so the values it requires have
+  // to exist before the first import in a test file - not in a beforeAll, and
+  // not from a developer's .env, which is gitignored and absent on CI.
+  setupFiles: ['<rootDir>/common/testing/integration-env-setup.ts'],
   // Truncates application tables before the run so the suite is safe to
   // rerun against a reused database. The spec files' own fixtures create
   // everything they assert on; no assertion is relaxed to accommodate this.
