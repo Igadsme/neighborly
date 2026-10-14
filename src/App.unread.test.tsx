@@ -69,6 +69,8 @@ describe("navigation unread badge", () => {
     window.localStorage.setItem("neighborly.access_token", "test-token")
     const fetchMock = route((url) => {
       if (url.includes("/users/me")) return json(me)
+      if (url.includes("/notifications"))
+        return json({ items: [], total: 0, unread: 0, limit: 8, offset: 0 })
       if (url.includes("/conversations")) {
         return json([
           thread("c1", "user-2"),
@@ -92,7 +94,9 @@ describe("navigation unread badge", () => {
     })
     const paths = requestedPaths(fetchMock)
     expect(paths.some((path) => path.includes("/conversations"))).toBe(true)
-    expect(paths.some((path) => path.includes("/notifications"))).toBe(false)
+    // The message badge is derived from the conversation list, not from the
+    // notification feed; a notification count never stands in for it.
+    expect(paths.some((path) => path.includes("/notifications?limit=8"))).toBe(true)
     expect(screen.getByRole("button", { name: "Post Listing" })).toBeTruthy()
   })
 
@@ -100,6 +104,8 @@ describe("navigation unread badge", () => {
     window.localStorage.setItem("neighborly.access_token", "test-token")
     const fetchMock = route((url) => {
       if (url.includes("/users/me")) return json(me)
+      if (url.includes("/notifications"))
+        return json({ items: [], total: 0, unread: 0, limit: 8, offset: 0 })
       if (url.includes("/conversations")) {
         return json([
           thread("c1", "user-2", "2026-09-22T14:00:00.000Z"),
@@ -155,9 +161,19 @@ describe("navigation unread badge", () => {
     ).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Post Listing" })).toBeNull()
     expect(messageBadges()).toEqual([])
+    // A signed-out visitor may only reach public endpoints. Asserting the
+    // authenticated ones specifically rather than an exact path list keeps
+    // this from breaking whenever a new public request is added.
     const signedOutPaths = requestedPaths(signedOut)
-    expect(signedOutPaths.some((path) => path.includes("/conversations"))).toBe(false)
-    expect(signedOutPaths.every((path) => path.includes("/listings") || path.includes("/categories"))).toBe(true)
+    for (const guarded of [
+      "/conversations",
+      "/notifications",
+      "/users/me",
+      "/requests/mine",
+      "/listings/mine"
+    ]) {
+      expect(signedOutPaths.some((path) => path.includes(guarded))).toBe(false)
+    }
 
     cleanup()
     render(<Navigation currentPage="home" onNavigate={() => undefined} />)
@@ -168,6 +184,8 @@ describe("navigation unread badge", () => {
     window.localStorage.setItem("neighborly.access_token", "test-token")
     const fetchMock = route((url) => {
       if (url.includes("/users/me")) return json(me)
+      if (url.includes("/notifications"))
+        return json({ message: "Unauthorized" }, 401)
       if (url.includes("/conversations"))
         return json({ message: "Unauthorized" }, 401)
       return json({ message: "not found" }, 404)
@@ -184,8 +202,9 @@ describe("navigation unread badge", () => {
       expect(messageBadges()).toEqual([])
     })
     expect(screen.getByRole("button", { name: "Post Listing" })).toBeTruthy()
+    // A failing notification fetch must not resurrect the message badge.
     expect(
       requestedPaths(fetchMock).some((path) => path.includes("/notifications")),
-    ).toBe(false)
+    ).toBe(true)
   })
 })

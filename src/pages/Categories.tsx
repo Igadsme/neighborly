@@ -163,8 +163,8 @@ export default function Categories({ onNavigate }: CategoriesProps) {
     let active = true
     api.listings
       .list({ status: 'PUBLISHED', limit: 6 })
-      .then((rows) => {
-        if (active) setFeatured(rows.slice(0, 6).map((row) => listingFromApi(row)))
+      .then((page) => {
+        if (active) setFeatured(page.items.map((row) => listingFromApi(row)))
       })
       .catch((cause: unknown) => {
         if (active) setFeaturedError(readStatus(cause, 'Listings could not be loaded.'))
@@ -189,19 +189,19 @@ export default function Categories({ onNavigate }: CategoriesProps) {
           <p className="text-[#5C6E8A] text-lg max-w-2xl mx-auto">
             From furniture to jobs, housing to community events — everything happening in your neighborhood, organized.
           </p>
-          {loading && <p className="text-sm text-[#8A9AB5] mt-4">Loading categories…</p>}
+          {loading && <p className="text-sm text-[#5C6E8A] mt-4">Loading categories…</p>}
           {error && (
             <p className="text-sm text-[#A63D27] mt-4" role="alert">
               {error}
             </p>
           )}
-          {!loading && !error && empty && <p className="text-sm text-[#8A9AB5] mt-4">No categories yet.</p>}
+          {!loading && !error && empty && <p className="text-sm text-[#5C6E8A] mt-4">No categories yet.</p>}
         </div>
 
         {/* Trending searches */}
         <div className="mb-12">
           <div className="flex items-center gap-2 mb-4">
-            <Icon name="zap" size={15} className="text-[#E8694A]" />
+            <Icon name="zap" size={15} className="text-[#B94C2A]" />
             <span className="text-sm font-semibold text-[#5C6E8A] uppercase tracking-wide">Trending in Atlanta</span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -211,7 +211,7 @@ export default function Categories({ onNavigate }: CategoriesProps) {
                 onClick={() => onNavigate('explore')}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#E8E6DF] rounded-full text-sm text-[#1B2A4A] hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-all"
               >
-                <Icon name="search" size={11} className="text-[#C5CCDA]" />
+                <Icon name="search" size={11} className="text-[#5C6E8A]" />
                 {s}
               </button>
             ))}
@@ -265,14 +265,14 @@ export default function Categories({ onNavigate }: CategoriesProps) {
         {/* Featured listings preview */}
         <section className="mb-12">
           <SectionHeader title="Featured in Atlanta" subtitle="Curated picks from trusted sellers" action={() => onNavigate('explore')} actionLabel="Browse all" />
-          {featuredLoading && <p className="text-sm text-[#8A9AB5]">Loading listings…</p>}
+          {featuredLoading && <p className="text-sm text-[#5C6E8A]">Loading listings…</p>}
           {featuredError && (
             <p className="text-sm text-[#A63D27]" role="alert">
               {featuredError}
             </p>
           )}
           {!featuredLoading && !featuredError && featured.length === 0 && (
-            <p className="text-sm text-[#8A9AB5]">No featured listings yet.</p>
+            <p className="text-sm text-[#5C6E8A]">No featured listings yet.</p>
           )}
           {!featuredLoading && !featuredError && featured.length > 0 && (
             <div className="listing-grid">
@@ -297,7 +297,7 @@ export default function Categories({ onNavigate }: CategoriesProps) {
                   {['🏡', '🌳', '🏙️', '🌺', '🎨', '✨', '🌆', '🛤️'][i]}
                 </div>
                 <p className="font-semibold text-sm text-[#1B2A4A]">{hood}</p>
-                <p className="text-xs text-[#8A9AB5] mt-0.5">
+                <p className="text-xs text-[#5C6E8A] mt-0.5">
                   {hoodError ? 'Counts unavailable' : hoodCounts == null ? '…' : `${hoodCounts[hood] ?? 0} listings`}
                 </p>
                 <div className="flex items-center gap-1 mt-2 text-[#2D6A4F] text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">

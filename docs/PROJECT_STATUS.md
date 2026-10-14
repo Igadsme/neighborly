@@ -1,5 +1,15 @@
 # Project Status
 
+**12 Oct 2026 — Milestone 7 (Neighborly Borrow & Lending).** Borrowable items on the existing listing model, an explicit borrowing lifecycle, server-enforced double-booking prevention via a partial GiST exclusion constraint, two-sided pickup and return confirmation, extensions, an idempotent overdue sweep, condition reports, and a dispute workflow with private evidence. `docs/MILESTONE_7_NEIGHBORLY_BORROW.md`.
+
+**12 Oct 2026 — Milestone 6 (messaging, realtime & notifications).** Durable outbox consumer, persisted notifications with enforced preferences, saved-search alerts, realtime unread counts and read receipts over the existing Socket.IO gateway, and the notification center, preferences, and saved-search editing UI. Completes the saved-search deferral from Milestone 4. `docs/MILESTONE_6_MESSAGING_NOTIFICATIONS.md`.
+
+**12 Oct 2026 — Milestone 5 (I need request & matching engine).** Request lifecycle with a declared state machine, server-side request discovery, a deterministic explainable matching engine, expanded offer management, atomic acceptance that also fulfils the request, and the typed domain-event contract plus transactional outbox that Milestone 6 consumes. `docs/MILESTONE_5_REQUEST_MATCHING.md`.
+
+**12 Oct 2026 — Milestone 3 (authentication & user accounts).** Registration hardening, email verification, password recovery, refresh-token rotation with reuse detection, session management, account settings, email change, anonymizing account deletion, and suspension enforcement across REST and realtime landed on `milestone3-authentication-user-accounts`. Requirements, evidence, and verification runs: `docs/MILESTONE_3_AUTHENTICATION.md`. Email delivery has **no provider configured** (`docs/EMAIL_DELIVERY.md`); avatar upload is not available.
+
+**12 Oct 2026 — Milestone 2 (database, security, data integrity).** Atomic offer acceptance, transaction concurrency safety, request privacy, a guarded migration adding unique `Transaction.offerId`, a production category bootstrap, auth/WebSocket hardening, and isolated PostgreSQL integration tests landed on `milestone2-database-security-integrity`. Requirements, evidence, and verification runs: `docs/MILESTONE_2_DATABASE_SECURITY_INTEGRITY.md`.
+
 **23 Sep 2026 — Phase 7 prep.** Production is not launched and not deployed. The preparation package is `docs/PHASE_7_PROD_PREP.md`. Product Owner approval is still required before any deploy or announcement. Staging QA (P0/P1 = 0) is `docs/PHASE_6_STAGING_QA.md`.
 
 Neighborly status board. Housing, jobs, services, and community pages call the `/api/v1` routes added in `cfd0db3`. `1f38563` points those pages, plus Home and Dashboard, at the APIs with loading, empty, error, and 401 states. Dashboard and Home no longer render fixture arrays for listings, offers, messages, transactions, reviews, or those verticals. The app is not release-complete. `docs/RELEASE_CHECKLIST.md` Section B records the offer, message, and review wiring that is in this tree. Section E (local `.env`, Compose, migrate, seed, Node 22 on the Mac, signed-in e2e) stays unchecked: Docker Desktop is not installed on the Mac, and that e2e was not run.
@@ -86,7 +96,7 @@ Signed-out visitors can open `landing` and `onboarding`. Any other id shows the 
 - No AI feature work.
 - Landing marketing cards remain a fixture screen. The Categories featured strip reads `GET /listings` and is not a fixture strip. Map, Profile, and Listing Detail (UUID ids) read the API. Non-UUID listing ids still use fixtures. Map still paints the Atlanta map, the mile line, and safe spots; it does not call Mapbox. The categories grid reads `GET /categories` for counts on Housing, Jobs, Services, and Vehicles. Other tile counts, trending searches, and neighborhood counts stay painted. Housing, services, jobs, and community pages read the APIs from `0003_verticals`. They are mapped in `docs/FRONTEND_BACKEND_MAP.md`.
 - This board is not a release-complete claim. Docker Compose, migrate, seed, and signed-in browser e2e were not run for this pass. Docker Desktop is still missing on this Mac, so those steps stay blocked.
-- Local `.env`, `docker compose`, and a full browser pass against Postgres on a Mac are not part of this wiring. CI runs frontend `tsc`, Vitest, and `vite build`, plus the existing backend Jest suite.
+- Local `.env`, `docker compose`, and a full browser pass against Postgres on a Mac are not part of this wiring. CI runs frontend lint, `tsc`, Vitest, and `vite build`, plus backend lint, `prisma validate`, `tsc`, the Jest suite, and `nest build` (`.github/workflows/ci.yml`).
 
 ## Workspace (T7 Shield)
 

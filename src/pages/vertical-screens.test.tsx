@@ -269,7 +269,7 @@ describe("Community screen", () => {
 describe("Home and Dashboard screens", () => {
   it("loads services and discussions instead of fixture titles", async () => {
     route((url) => {
-      if (url.includes("/listings")) return json([])
+      if (url.includes("/listings")) return json({ items: [], total: 0, limit: 24, offset: 0 })
       if (url.includes("/services")) {
         return json([
           {

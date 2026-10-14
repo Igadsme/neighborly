@@ -90,7 +90,9 @@ function listingRoutes(options: {
     options.urls?.push(url)
     if (init?.method === "POST" && url.endsWith("/conversations")) {
       if (options.holdMessage) await options.holdMessage
-      options.messageBody && (options.messageBody.current = init.body ? JSON.parse(String(init.body)) : null)
+      if (options.messageBody) {
+        options.messageBody.current = init.body ? JSON.parse(String(init.body)) : null
+      }
       const sent = options.messageBody?.current as { body?: string } | null
       return json(
         options.messageResult ?? {
@@ -108,17 +110,22 @@ function listingRoutes(options: {
       )
     }
     if (init?.method === "POST" && url.includes("/safety/reports")) {
-      options.messageBody && (options.messageBody.current = init.body ? JSON.parse(String(init.body)) : null)
+      if (options.messageBody) {
+        options.messageBody.current = init.body ? JSON.parse(String(init.body)) : null
+      }
       return json({ id: "report-1", status: "OPEN" }, options.reportStatus ?? 201)
     }
     if (init?.method === "POST" && url.includes("/favorite")) {
       return json(options.favoriteResult ?? { saved: true }, options.favoriteStatus ?? 200)
     }
     if (url.includes("/favorites")) return json(options.favorites ?? [])
-    if (url.includes("/listings?")) {
+    if (url.includes("/listings?") || url.endsWith("/listings")) {
       if (options.listFails) return Promise.reject(new Error("offline"))
-      if (url.includes("categoryId=")) return json(options.category ?? [detail, related])
-      return json(options.recent ?? [detail, related])
+      const rows: unknown[] =
+        url.includes("categoryId=")
+          ? ((options.category ?? [detail, related]) as unknown[])
+          : ((options.recent ?? [detail, related]) as unknown[])
+      return json({ items: rows, total: rows.length, limit: 8, offset: 0 })
     }
     if (url.includes(`/listings/${listingId}`)) {
       return json(options.detail ?? detail, options.detailStatus ?? 200)

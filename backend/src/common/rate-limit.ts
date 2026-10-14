@@ -12,9 +12,20 @@ let loggedRedisFallback = false
 export const rateLimitPolicies = {
   authRegister: { env: 'RATE_LIMIT_AUTH_REGISTER', limit: 5, windowMs: 15 * 60 * 1000 },
   authLogin: { env: 'RATE_LIMIT_AUTH_LOGIN', limit: 10, windowMs: 15 * 60 * 1000 },
+  // Credential-adjacent routes. Recovery is throttled by client address
+  // and by recipient, verification by user, so one caller cannot probe an
+  // address list or mail-bomb a target.
+  authVerify: { env: 'RATE_LIMIT_AUTH_VERIFY', limit: 20, windowMs: 15 * 60 * 1000 },
+  authResend: { env: 'RATE_LIMIT_AUTH_RESEND', limit: 3, windowMs: 15 * 60 * 1000 },
+  authForgotPassword: { env: 'RATE_LIMIT_AUTH_FORGOT_PASSWORD', limit: 5, windowMs: 15 * 60 * 1000 },
+  authResetPassword: { env: 'RATE_LIMIT_AUTH_RESET_PASSWORD', limit: 10, windowMs: 15 * 60 * 1000 },
   messaging: { env: 'RATE_LIMIT_MESSAGING', limit: 30, windowMs: 60 * 1000 },
   listings: { env: 'RATE_LIMIT_LISTINGS', limit: 20, windowMs: 60 * 60 * 1000 },
+  listingImages: { env: 'RATE_LIMIT_LISTING_IMAGES', limit: 30, windowMs: 60 * 60 * 1000 },
   offers: { env: 'RATE_LIMIT_OFFERS', limit: 30, windowMs: 60 * 60 * 1000 },
+  requests: { env: 'RATE_LIMIT_REQUESTS', limit: 20, windowMs: 60 * 60 * 1000 },
+  reviews: { env: 'RATE_LIMIT_REVIEWS', limit: 30, windowMs: 60 * 60 * 1000 },
+  missions: { env: 'RATE_LIMIT_MISSIONS', limit: 20, windowMs: 60 * 60 * 1000 },
   reports: { env: 'RATE_LIMIT_REPORTS', limit: 10, windowMs: 60 * 60 * 1000 }
 } as const
 

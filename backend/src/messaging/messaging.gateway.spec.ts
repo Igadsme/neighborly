@@ -163,3 +163,102 @@ describe('MessagingGateway auth', () => {
     expect(socket.join).not.toHaveBeenCalled()
   })
 })
+
+describe('MessagingGateway user room', () => {
+  const userId = 'user-real'
+  const prisma = {
+    conversationParticipant: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn() }
+  }
+  let gateway: MessagingGateway
+
+  beforeAll(async () => {
+    process.env.JWT_SECRET = secret
+    const moduleRef = await Test.createTestingModule({
+      imports: [JwtModule.register({})],
+      providers: [MessagingGateway, { provide: PrismaService, useValue: prisma }]
+    }).compile()
+    gateway = moduleRef.get(MessagingGateway)
+  })
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    prisma.user.findUnique.mockResolvedValue({
+      id: userId,
+      email: 'ada@example.com',
+      status: 'ACTIVE',
+      deletedAt: null
+    })
+  })
+
+  it('joins only the room of the socket own authenticated user', async () => {
+    const socket = fakeSocket({ userId })
+    // A client cannot ask for someone else's room: the id comes from the
+    // socket's own identity, never from the payload.
+    await gateway.joinUserRoom(socket as unknown as Socket)
+
+    expect(socket.join).toHaveBeenCalledWith(`user:${userId}`)
+    expect(socket.join).not.toHaveBeenCalledWith('user:someone-else')
+  })
+
+  it('refuses to join when the socket is not authenticated', async () => {
+    const socket = fakeSocket()
+    socket.data.userId = undefined
+
+    await expect(gateway.joinUserRoom(socket as unknown as Socket)).rejects.toBeInstanceOf(WsException)
+    expect(socket.join).not.toHaveBeenCalled()
+  })
+
+  it('refuses to join when the access token has expired', async () => {
+    const socket = fakeSocket({ userId })
+    ;(socket.data as { tokenExp?: number }).tokenExp = Math.floor(Date.now() / 1000) - 60
+
+    await expect(gateway.joinUserRoom(socket as unknown as Socket)).rejects.toThrow(/expired/i)
+    expect(socket.join).not.toHaveBeenCalled()
+  })
+
+  it('refuses to join for a suspended or deleted account', async () => {
+    for (const account of [
+      { id: userId, email: 'a@b.c', status: 'SUSPENDED', deletedAt: null },
+      { id: userId, email: 'a@b.c', status: 'ACTIVE', deletedAt: new Date() }
+    ]) {
+      prisma.user.findUnique.mockResolvedValue(account)
+      const socket = fakeSocket({ userId })
+      await expect(gateway.joinUserRoom(socket as unknown as Socket)).rejects.toThrow(/not active/i)
+      expect(socket.join).not.toHaveBeenCalled()
+    }
+  })
+
+  it('emits an unread update only to the named user room', () => {
+    const emit = jest.fn()
+    const to = jest.fn(() => ({ emit }))
+    gateway.server = { to } as unknown as MessagingGateway['server']
+
+    gateway.publishUnreadCounts('conv-1', [
+      { userId: 'user-a', unreadCount: 3 },
+      { userId: 'user-b', unreadCount: 0 }
+    ])
+
+    expect(to).toHaveBeenCalledWith('user:user-a')
+    expect(to).toHaveBeenCalledWith('user:user-b')
+    // Not broadcast to the conversation room, which both sides share.
+    expect(to).not.toHaveBeenCalledWith('conversation:conv-1')
+  })
+
+  it('emits a notification only to its recipient', () => {
+    const emit = jest.fn()
+    const to = jest.fn(() => ({ emit }))
+    gateway.server = { to } as unknown as MessagingGateway['server']
+
+    gateway.publishNotification('user-a', { id: 'n1' })
+
+    expect(to).toHaveBeenCalledWith('user:user-a')
+    expect(to).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends nothing when there is no server, rather than throwing', () => {
+    gateway.server = null as unknown as MessagingGateway['server']
+    expect(() => gateway.publishNotification('user-a', {})).not.toThrow()
+    expect(() => gateway.publishUnreadCounts('conv-1', [{ userId: 'user-a', unreadCount: 1 }])).not.toThrow()
+  })
+})

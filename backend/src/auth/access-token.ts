@@ -3,6 +3,7 @@ import { JwtService, JwtSignOptions } from '@nestjs/jwt'
 interface AccessTokenClaims {
   sub?: string
   email?: string
+  exp?: number
 }
 
 export function accessTokenSignOptions(): JwtSignOptions {
@@ -26,5 +27,5 @@ export function readAccessToken(jwt: JwtService, token: string) {
   if (!payload || typeof payload === 'string' || typeof payload.sub !== 'string' || !payload.sub || typeof payload.email !== 'string' || !payload.email) {
     throw new Error('Unauthorized')
   }
-  return { sub: payload.sub, email: payload.email }
+  return { sub: payload.sub, email: payload.email, exp: payload.exp }
 }

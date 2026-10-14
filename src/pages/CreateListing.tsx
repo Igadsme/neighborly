@@ -228,7 +228,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                   void handleSaveDraft()
                 }}
                 disabled={publishing || savingDraft || categoryLoading}
-                className="text-sm text-[#8A9AB5] hover:text-[#1B2A4A] transition-colors disabled:opacity-60"
+                className="text-sm text-[#5C6E8A] hover:text-[#1B2A4A] transition-colors disabled:opacity-60"
               >
                 {savingDraft ? "Saving..." : "Save draft"}
               </button>
@@ -244,7 +244,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                     ? "text-[#2D6A4F]"
                     : i < step
                       ? "text-[#74C69D]"
-                      : "text-[#C5CCDA]"
+                      : "text-[#5C6E8A]"
                 }`}
               >
                 {s}
@@ -267,8 +267,8 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
             <h2 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">
               What are you listing?
             </h2>
-            <p className="text-[#8A9AB5] mb-6">
-              Choose the type that best fits what you're offering.
+            <p className="text-[#5C6E8A] mb-6">
+              Choose the type that best fits what you&apos;re offering.
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {listingTypes.map((type) => (
@@ -291,7 +291,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                   >
                     {type.label}
                   </p>
-                  <p className="text-xs text-[#8A9AB5] mt-0.5 leading-tight">
+                  <p className="text-xs text-[#5C6E8A] mt-0.5 leading-tight">
                     {type.desc}
                   </p>
                 </button>
@@ -306,7 +306,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
             <h2 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">
               Add photos
             </h2>
-            <p className="text-[#8A9AB5] mb-6">
+            <p className="text-[#5C6E8A] mb-6">
               High-quality photos sell faster. Add up to 12 photos. The first
               photo is your cover image.
             </p>
@@ -343,7 +343,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                       }
                       className="w-6 h-6 rounded-full bg-white/90 shadow flex items-center justify-center"
                     >
-                      <Icon name="x" size={10} className="text-[#E8694A]" />
+                      <Icon name="x" size={10} className="text-[#B94C2A]" />
                     </button>
                   </div>
                 </div>
@@ -353,7 +353,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
               {photos.length < 12 && (
                 <button
                   onClick={() => setPhotos([...photos, `photo-${Date.now()}`])}
-                  className="aspect-square rounded-2xl border-2 border-dashed border-[#E8E6DF] flex flex-col items-center justify-center text-[#C5CCDA] hover:border-[#2D6A4F]/50 hover:text-[#2D6A4F] transition-all bg-white"
+                  className="aspect-square rounded-2xl border-2 border-dashed border-[#E8E6DF] flex flex-col items-center justify-center text-[#5C6E8A] hover:border-[#2D6A4F]/50 hover:text-[#2D6A4F] transition-all bg-white"
                 >
                   <Icon name="plus" size={22} />
                   <span className="text-xs mt-1 font-medium">Add photo</span>
@@ -392,7 +392,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
               <h2 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">
                 Listing details
               </h2>
-              <p className="text-[#8A9AB5] mb-6">
+              <p className="text-[#5C6E8A] mb-6">
                 Be specific and honest — listings with complete details sell 3x
                 faster.
               </p>
@@ -413,7 +413,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                 placeholder="e.g. West Elm Mid-Century Sofa, Excellent Condition"
                 className="w-full h-12 px-4 bg-white border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F] transition-all"
               />
-              <p className="text-xs text-[#C5CCDA] mt-1 text-right">
+              <p className="text-xs text-[#5C6E8A] mt-1 text-right">
                 {title.length}/80 characters
               </p>
             </div>
@@ -474,7 +474,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
               </label>
               <div className="flex gap-3">
                 <div className="relative flex-1">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8A9AB5]">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5C6E8A]">
                     $
                   </span>
                   <input
@@ -490,7 +490,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                   <span className="text-sm text-[#1B2A4A]">Free item</span>
                 </label>
               </div>
-              <p className="text-xs text-[#8A9AB5] mt-1.5 flex items-center gap-1">
+              <p className="text-xs text-[#5C6E8A] mt-1.5 flex items-center gap-1">
                 💡 Similar items in Atlanta sell for $400–$600
               </p>
             </div>
@@ -509,7 +509,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                     {tag}
                     <button
                       onClick={() => setTags(tags.filter((t) => t !== tag))}
-                      className="hover:text-[#E8694A]"
+                      className="hover:text-[#B94C2A]"
                     >
                       <Icon name="x" size={10} />
                     </button>
@@ -597,7 +597,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                 <h2 className="font-display text-xl font-semibold text-[#1B2A4A]">
                   AI listing assistant
                 </h2>
-                <p className="text-sm text-[#8A9AB5]">
+                <p className="text-sm text-[#5C6E8A]">
                   Neighborly AI reviewed your listing and has suggestions.
                 </p>
               </div>
@@ -617,7 +617,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                   </div>
                 </div>
                 <div className="p-3 bg-[#F5F4EF] rounded-xl mb-3">
-                  <p className="text-xs text-[#8A9AB5] font-medium mb-1">
+                  <p className="text-xs text-[#5C6E8A] font-medium mb-1">
                     YOURS
                   </p>
                   <p className="text-sm text-[#5C6E8A]">{title}</p>
@@ -630,7 +630,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                     {aiSuggestions.title}
                   </p>
                 </div>
-                <p className="text-xs text-[#8A9AB5] mb-3">
+                <p className="text-xs text-[#5C6E8A] mb-3">
                   More specific titles get 40% more views. Including brand and
                   key features helps buyers find your listing faster.
                 </p>
@@ -667,7 +667,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                   </div>
                   <span className="text-sm font-bold text-[#2D6A4F]">$480</span>
                 </div>
-                <p className="text-xs text-[#8A9AB5]">
+                <p className="text-xs text-[#5C6E8A]">
                   Similar Herman Miller desks in Atlanta are listing at
                   $400–$650. Your price of $480 is well-positioned.
                 </p>
@@ -699,7 +699,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
             <h2 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">
               Preview your listing
             </h2>
-            <p className="text-[#8A9AB5] mb-6">
+            <p className="text-[#5C6E8A] mb-6">
               This is exactly how buyers will see your listing. Make any last
               edits before publishing.
             </p>
@@ -737,7 +737,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                     <p className="text-xs font-semibold text-[#1B2A4A]">
                       Gad M. (You)
                     </p>
-                    <p className="text-xs text-[#8A9AB5]">
+                    <p className="text-xs text-[#5C6E8A]">
                       Inman Park · Just now
                     </p>
                   </div>
@@ -753,7 +753,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
             <h2 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">
               Ready to go live?
             </h2>
-            <p className="text-[#8A9AB5] mb-8">
+            <p className="text-[#5C6E8A] mb-8">
               Choose when to publish your listing.
             </p>
             {publishError && (
@@ -776,7 +776,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                 <p className="text-[#5C6E8A] mb-2">
                   Your listing is live and visible to neighbors nearby.
                 </p>
-                <p className="text-sm text-[#8A9AB5] mb-8">
+                <p className="text-sm text-[#5C6E8A] mb-8">
                   Offers will show up on your dashboard.
                 </p>
                 <div className="flex justify-center gap-3">
@@ -841,7 +841,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                               ? "Saving..."
                               : label}
                         </p>
-                        <p className="text-xs text-[#8A9AB5] mt-0.5">{desc}</p>
+                        <p className="text-xs text-[#5C6E8A] mt-0.5">{desc}</p>
                       </div>
                     </button>
                   ))}
@@ -854,8 +854,8 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                       <p className="font-semibold text-[#1B2A4A] text-sm">
                         🚀 Boost your listing
                       </p>
-                      <p className="text-xs text-[#8A9AB5] mt-0.5">
-                        Promotion isn't available yet. Payments are not connected.
+                      <p className="text-xs text-[#5C6E8A] mt-0.5">
+                        Promotion isn&apos;t available yet. Payments are not connected.
                       </p>
                     </div>
                     <Button variant="secondary" size="sm" disabled>
@@ -882,7 +882,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
             ) : (
               <button
                 onClick={() => onNavigate("home")}
-                className="text-sm text-[#8A9AB5] hover:text-[#1B2A4A]"
+                className="text-sm text-[#5C6E8A] hover:text-[#1B2A4A]"
               >
                 Cancel
               </button>

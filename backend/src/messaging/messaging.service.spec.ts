@@ -9,11 +9,20 @@ describe('MessagingService sendMessage', () => {
   const conversationId = 'conversation-1'
   const message = { id: 'message-1', conversationId, senderId: userId, body: 'On my way' }
   const prisma = {
-    conversationParticipant: { findUnique: jest.fn(), findMany: jest.fn() },
+    conversationParticipant: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      aggregate: jest.fn(async () => ({ _sum: { unreadCount: 3 } })),
+      update: jest.fn(async ({ data }: { data: { unreadCount?: number } }) => ({
+        userId: 'user-1',
+        conversationId: 'conv-1',
+        unreadCount: data.unreadCount ?? 0
+      }))
+    },
     blockedUser: { findFirst: jest.fn() },
     $transaction: jest.fn()
   }
-  const realtime = { publishMessage: jest.fn() }
+  const realtime = { publishMessage: jest.fn(), publishUnreadCounts: jest.fn() }
   let service: MessagingService
 
   beforeAll(async () => {
@@ -34,9 +43,12 @@ describe('MessagingService sendMessage', () => {
     prisma.$transaction.mockImplementation(async (work: (tx: {
       message: { create: () => Promise<typeof message> }
       conversation: { update: () => Promise<unknown> }
+      conversationParticipant: { updateMany: () => Promise<unknown> }
     }) => Promise<typeof message>) => work({
       message: { create: async () => message },
-      conversation: { update: async () => ({ id: conversationId }) }
+      conversation: { update: async () => ({ id: conversationId }) },
+      // Unread counters move in the same transaction as the message.
+      conversationParticipant: { updateMany: async () => ({ count: 1 }) }
     }))
   })
 
@@ -84,12 +96,21 @@ describe('MessagingService createConversation', () => {
     user: { findUnique: jest.fn() },
     listing: { findUnique: jest.fn() },
     conversation: { findFirst: jest.fn(), create: jest.fn() },
-    conversationParticipant: { findUnique: jest.fn(), findMany: jest.fn() },
+    conversationParticipant: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      aggregate: jest.fn(async () => ({ _sum: { unreadCount: 3 } })),
+      update: jest.fn(async ({ data }: { data: { unreadCount?: number } }) => ({
+        userId: 'user-1',
+        conversationId: 'conv-1',
+        unreadCount: data.unreadCount ?? 0
+      }))
+    },
     blockedUser: { findFirst: jest.fn() },
     $transaction: jest.fn()
   }
   const conversationUpdate = jest.fn()
-  const realtime = { publishMessage: jest.fn() }
+  const realtime = { publishMessage: jest.fn(), publishUnreadCounts: jest.fn() }
   let service: MessagingService
 
   beforeAll(async () => {
@@ -121,6 +142,7 @@ describe('MessagingService createConversation', () => {
     prisma.$transaction.mockImplementation(async (work: (tx: {
       conversation: { findFirst: typeof prisma.conversation.findFirst; create: typeof prisma.conversation.create; update: typeof conversationUpdate }
       message: { create: (args: { data: { body: string; conversationId: string; senderId: string } }) => Promise<unknown> }
+      conversationParticipant: { updateMany: () => Promise<{ count: number }> }
     }) => Promise<unknown>) => work({
       conversation: {
         findFirst: prisma.conversation.findFirst,
@@ -134,7 +156,9 @@ describe('MessagingService createConversation', () => {
           senderId: args.data.senderId,
           body: args.data.body
         })
-      }
+      },
+      // Unread counters are maintained in the same transaction as the message.
+      conversationParticipant: { updateMany: async () => ({ count: 1 }) }
     }))
   })
 

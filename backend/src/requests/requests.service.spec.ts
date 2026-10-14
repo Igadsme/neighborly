@@ -2,7 +2,14 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { Test } from '@nestjs/testing'
 import { OfferStatus } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
+import { RequestLifecycleService } from './request-lifecycle.service'
 import { RequestsService } from './requests.service'
+import { OutboxWriter } from '../events/outbox-writer'
+
+const outboxProvider = {
+  provide: OutboxWriter,
+  useValue: { record: jest.fn().mockResolvedValue(undefined) }
+}
 
 type StoredOffer = {
   id: string
@@ -24,21 +31,61 @@ describe('RequestsService accept path', () => {
       conversations: Array<{ id: string; participantIds: string[] }>
       transactions: Array<{ id: string; offerId: string; conversationId: string; status: string; participantIds: string[]; roles: string[] }>
       milestones: Array<{ transactionId: string; toStatus: string; fromStatus?: string }>
+      /** Requests the acceptance path now closes as FULFILLED. */
+      requests: Array<{ id: string; status: string; fulfilledAt: Date | null }>
+      statusEvents: Array<{ requestId: string; toStatus: string }>
     } = {
       offers: [{ id: offerId, requestId, offererId, status, request: { id: requestId, requesterId } }],
       conversations: [],
       transactions: [],
-      milestones: []
+      milestones: [],
+      requests: [{ id: requestId, status: 'PUBLISHED', fulfilledAt: null }],
+      statusEvents: []
     }
     let sequence = 0
     const nextId = (prefix: string) => `${prefix}-${++sequence}`
     const client = {
+      // Acceptance closes the request it fulfilled, in the same transaction.
+      needRequest: {
+        updateMany: async ({ where, data }: { where: { id: string; status: string }; data: { status: string; fulfilledAt: Date } }) => {
+          const row = state.requests.find(item => item.id === where.id && item.status === where.status)
+          if (!row) return { count: 0 }
+          row.status = data.status
+          row.fulfilledAt = data.fulfilledAt
+          return { count: 1 }
+        }
+      },
+      requestStatusEvent: {
+        create: async ({ data }: { data: { requestId: string; toStatus: string } }) => {
+          state.statusEvents.push({ requestId: data.requestId, toStatus: data.toStatus })
+          return data
+        }
+      },
       requestOffer: {
         findUnique: async ({ where }: { where: { id: string } }) => state.offers.find(offer => offer.id === where.id) ?? null,
         update: async ({ where, data }: { where: { id: string }; data: { status: OfferStatus } }) => {
           const offer = state.offers.find(row => row.id === where.id)
           if (!offer) return null
           offer.status = data.status
+          return offer
+        },
+        updateMany: async ({
+          where,
+          data
+        }: {
+          where: { id: string; status?: { in: OfferStatus[] } }
+          data: { status: OfferStatus }
+        }) => {
+          const offer = state.offers.find(
+            row => row.id === where.id && (where.status?.in ?? []).includes(row.status)
+          )
+          if (!offer) return { count: 0 }
+          offer.status = data.status
+          return { count: 1 }
+        },
+        findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
+          const offer = state.offers.find(row => row.id === where.id)
+          if (!offer) throw new Error('Record not found')
           return offer
         }
       },
@@ -89,7 +136,7 @@ describe('RequestsService accept path', () => {
 
   async function serviceFor(prisma: ReturnType<typeof createStore>) {
     const moduleRef = await Test.createTestingModule({
-      providers: [RequestsService, { provide: PrismaService, useValue: prisma }]
+      providers: [RequestsService, outboxProvider, { provide: PrismaService, useValue: prisma }]
     }).compile()
     return moduleRef.get(RequestsService)
   }
@@ -205,14 +252,15 @@ describe('RequestsService public reads', () => {
   it('strips private profile fields from the public request list', async () => {
     const findMany = jest.fn().mockResolvedValue([])
     const moduleRef = await Test.createTestingModule({
-      providers: [RequestsService, { provide: PrismaService, useValue: { needRequest: { findMany } } }]
+      providers: [RequestsService, outboxProvider, { provide: PrismaService, useValue: { needRequest: { findMany } } }]
     }).compile()
     const service = moduleRef.get(RequestsService)
 
     await service.list()
 
     const query = findMany.mock.calls[0][0]
-    expect(query.include.requester).toEqual(publicRequester)
+    expect(query.select.requester).toEqual(publicRequester)
+    expect(query.select.offers.select).toEqual({ id: true, status: true })
     const serialized = JSON.stringify(query)
     expect(serialized).not.toContain('passwordHash')
     expect(serialized).not.toContain('email')
@@ -221,34 +269,37 @@ describe('RequestsService public reads', () => {
     expect(serialized).not.toContain('phoneVerified')
   })
 
-  it('returns a request with offers for compare and a public offerer profile', async () => {
+  it('keeps offers out of the public projection so one provider cannot price-shop', async () => {
     const findFirst = jest.fn().mockResolvedValue({ id: 'request-1', offers: [] })
     const moduleRef = await Test.createTestingModule({
-      providers: [RequestsService, { provide: PrismaService, useValue: { needRequest: { findFirst } } }]
+      providers: [RequestLifecycleService, outboxProvider, { provide: PrismaService, useValue: { needRequest: { findFirst } } }]
     }).compile()
-    const service = moduleRef.get(RequestsService)
+    const service = moduleRef.get(RequestLifecycleService)
 
     await service.get('request-1')
 
     const query = findFirst.mock.calls[0][0]
-    expect(query.where).toEqual({ id: 'request-1', status: 'PUBLISHED', deletedAt: null })
-    expect(query.include.requester).toEqual(publicRequester)
-    expect(query.include.offers.include.offerer).toEqual(publicRequester)
-    expect(query.include.offers.include.items.include.listing.select).toEqual({
-      id: true,
-      title: true,
-      priceCents: true,
-      status: true
+    // A paused or fulfilled request is still public history; only drafts and
+    // cancelled ones are hidden.
+    expect(query.where).toEqual({
+      id: 'request-1',
+      status: { notIn: ['DRAFT', 'CANCELLED'] },
+      deletedAt: null
     })
+    expect(query.select.requester).toEqual(publicRequester)
+    // Offers moved to GET /requests/:id/offers, which is authenticated and
+    // party-scoped. Embedding them here would expose every competitor's
+    // price to any reader.
+    expect(query.select.offers).toBeUndefined()
     expect(JSON.stringify(query)).not.toContain('passwordHash')
   })
 
-  it('returns 404 when the request is not published', async () => {
+  it('returns 404 when the request is a draft or missing', async () => {
     const findFirst = jest.fn().mockResolvedValue(null)
     const moduleRef = await Test.createTestingModule({
-      providers: [RequestsService, { provide: PrismaService, useValue: { needRequest: { findFirst } } }]
+      providers: [RequestLifecycleService, outboxProvider, { provide: PrismaService, useValue: { needRequest: { findFirst } } }]
     }).compile()
-    const service = moduleRef.get(RequestsService)
+    const service = moduleRef.get(RequestLifecycleService)
 
     await expect(service.get('missing')).rejects.toBeInstanceOf(NotFoundException)
   })

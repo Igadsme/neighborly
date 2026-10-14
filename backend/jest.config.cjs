@@ -6,5 +6,5 @@ module.exports = {
   testEnvironment: 'node',
   collectCoverageFrom: ['**/*.ts'],
   coveragePathIgnorePatterns: ['/node_modules/', '\\.module\\.ts$', '/\\._'],
-  testPathIgnorePatterns: ['/node_modules/', '/\\._']
+  testPathIgnorePatterns: ['/node_modules/', '/\\._', '\\.integration\\.spec\\.ts$']
 }

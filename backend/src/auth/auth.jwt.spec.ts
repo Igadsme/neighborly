@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing'
 import { PrismaService } from '../prisma/prisma.service'
 import { AuthGuard } from './auth.guard'
 import { AuthService } from './auth.service'
+import { EMAIL_SENDER } from './email-sender'
 
 type AccessPayload = { sub: string; email?: string }
 type Authenticated = { id: string; email: string }
@@ -35,7 +36,17 @@ describe('JWT subject mapping', () => {
       providers: [
         AuthService,
         AuthGuard,
-        { provide: PrismaService, useValue: { user: { findUnique: jest.fn().mockResolvedValue(user) } } }
+        // Login creates a session row and issues a verification email, so
+        // the doubles below must cover those writes.
+        { provide: EMAIL_SENDER, useValue: { send: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: PrismaService,
+          useValue: {
+            user: { findUnique: jest.fn().mockResolvedValue(user) },
+            refreshSession: { create: jest.fn().mockResolvedValue({ id: 'session-1' }) },
+            emailVerificationToken: { create: jest.fn().mockResolvedValue({ id: 'token-1' }) }
+          }
+        }
       ]
     }).compile()
 

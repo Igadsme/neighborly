@@ -14,7 +14,7 @@ const listingId = '33333333-3333-4333-8333-333333333333'
 const conversationId = '44444444-4444-4444-8444-444444444444'
 
 describe('Conversations HTTP', () => {
-  const realtime = { publishMessage: jest.fn() }
+  const realtime = { publishMessage: jest.fn(), publishUnreadCounts: jest.fn() }
   const prisma = {
     user: { findUnique: jest.fn() },
     listing: { findUnique: jest.fn() },
@@ -65,6 +65,7 @@ describe('Conversations HTTP', () => {
     prisma.$transaction.mockImplementation(async (work: (tx: {
       conversation: { findFirst: typeof prisma.conversation.findFirst; create: typeof prisma.conversation.create; update: () => Promise<unknown> }
       message: { create: (args: { data: { body: string; conversationId: string; senderId: string } }) => Promise<unknown> }
+      conversationParticipant: { updateMany: () => Promise<{ count: number }> }
     }) => Promise<unknown>) => work({
       conversation: {
         findFirst: prisma.conversation.findFirst,
@@ -79,7 +80,8 @@ describe('Conversations HTTP', () => {
           body: args.data.body,
           createdAt: '2026-09-23T18:00:00.000Z'
         })
-      }
+      },
+      conversationParticipant: { updateMany: async () => ({ count: 1 }) }
     }))
   })
 
