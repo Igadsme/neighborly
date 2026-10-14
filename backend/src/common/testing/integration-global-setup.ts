@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -53,38 +52,44 @@ function assertDisposable(url: string) {
  */
 const MIGRATION_SEEDED_TABLES = new Set(['CommunityBadge'])
 
-/** Every application table, excluding the Prisma migration ledger. */
-function applicationTables(): string[] {
-  // The connection string is read from the same place the specs read it, so
-  // the reset and the tests can never disagree about which database is in use.
-  const url = process.env.NEIGHBORLY_TEST_DATABASE_URL ?? process.env.DATABASE_URL ?? ''
-  const sql = `
-    SELECT table_name FROM information_schema.tables
-    WHERE table_schema = 'public'
-      AND table_type = 'BASE TABLE'
-      AND table_name <> '_prisma_migrations'
-    ORDER BY table_name;`
+/**
+ * Connects to the same URL the specs use.
+ *
+ * Deliberately not shelling out to `docker exec`: the database may be a
+ * container, the Compose service, or a local server, and hardcoding a
+ * container name made the reset fail for anyone not using the runner
+ * script's exact container.
+ */
+async function withClient<T>(
+  url: string,
+  run: (client: import('pg').Client) => Promise<T>
+): Promise<T> {
+  const { Client } = await import('pg')
+  const client = new Client({ connectionString: url })
+  await client.connect()
+  try {
+    return await run(client)
+  } finally {
+    await client.end()
+  }
+}
 
-  const out = execFileSync(
-    'docker',
-    ['exec', '-i', containerName(), 'psql', '-U', 'postgres', '-d', databaseName(url), '-t', '-A', '-c', sql],
-    { encoding: 'utf8' }
+/** Every application table, excluding the Prisma migration ledger. */
+async function applicationTables(url: string): Promise<string[]> {
+  const result = await withClient(url, client =>
+    client.query<{ table_name: string }>(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_schema = 'public'
+         AND table_type = 'BASE TABLE'
+         AND table_name <> '_prisma_migrations'
+       ORDER BY table_name;`,
+    ),
   )
-  return out
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean)
-    .filter(table => !MIGRATION_SEEDED_TABLES.has(table))
+  return result.rows.map(row => row.table_name).filter(table => !MIGRATION_SEEDED_TABLES.has(table))
 }
 
 function databaseName(url: string): string {
   return url.split('?')[0].split('/').filter(Boolean).pop() ?? ''
-}
-
-function containerName(): string {
-  // The disposable container the runner script creates. Overridable so a
-  // developer pointing at their own container can still run the suite.
-  return process.env.NEIGHBORLY_TEST_CONTAINER ?? 'neighborly-m2-test'
 }
 
 /**
@@ -146,7 +151,7 @@ export default async function globalSetup() {
     throw new Error('Refusing to reset: no integration specs matched, so the discovery is broken')
   }
 
-  const tables = applicationTables()
+  const tables = await applicationTables(url)
   if (tables.length === 0) {
     throw new Error(
       'Refusing to proceed: no tables found. The database is probably unmigrated; ' +
@@ -157,11 +162,7 @@ export default async function globalSetup() {
   // TRUNCATE ... CASCADE in one statement so foreign keys cannot block it and
   // so a partial reset cannot leave a half-cleared database behind.
   const list = tables.map(t => `"public"."${t}"`).join(', ')
-  execFileSync(
-    'docker',
-    ['exec', '-i', containerName(), 'psql', '-U', 'postgres', '-d', databaseName(url), '-c', `TRUNCATE ${list} CASCADE;`],
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
-  )
+  await withClient(url, client => client.query(`TRUNCATE ${list} CASCADE;`))
 
   process.stdout.write(
     `Integration reset: cleared ${tables.length} tables in ${databaseName(url)} for ${all.length} spec files\n`

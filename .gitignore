@@ -63,3 +63,12 @@ artifacts/milestone12-check/*.png
 # beside it.
 /.plugins/
 /.opencode-skills/
+
+# Final 12-milestone audit. Same policy as the passes above: the JSON report
+# is the record of what was measured, the screenshots are regenerable
+# binaries. Re-create with:
+#   CHECK_OUT=artifacts/final-audit-auth \
+#     APP_URL=http://localhost:4173 API_URL=http://localhost:3001/api/v1 \
+#     node scripts/milestone10-auth-check.mjs
+artifacts/final-audit-*/._*
+artifacts/final-audit-*/*.png

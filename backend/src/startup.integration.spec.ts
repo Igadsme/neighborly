@@ -1,5 +1,7 @@
 import { INestApplication } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { AppModule } from './app.module'
 import {
   ConsoleEmailSender,
@@ -65,6 +67,49 @@ const moduleRef = await NestFactory.create(AppModule, { logger: ['error', 'warn'
 
   it('resolves dependency injection for the whole module graph', () => {
     expect(app).toBeDefined()
+  })
+
+  /*
+   * Regression guard for a defect found in the final 12-milestone audit:
+   * `main.ts` never called `app.enableShutdownHooks()`. Every other suite
+   * closes the app explicitly, so nothing noticed. In production SIGTERM -
+   * which is what `docker stop`, a Compose restart and an orchestrator
+   * rollout all send - was handled by Node's default behaviour, terminating
+   * the process immediately: in-flight requests were cut off and the Prisma
+   * pool and Redis connections were dropped instead of closed.
+   *
+   * The hook is called in `main.ts` because it has to be enabled on the
+   * running, listening application. This suite cannot observe that call
+   * directly, so it asserts the observable consequence instead: the process
+   * ends up holding a listener for the signals a deploy sends. That is what
+   * makes Nest run the shutdown lifecycle.
+   */
+  it('registers signal handlers so a deploy shuts down gracefully', async () => {
+    /*
+     * `main.ts` calls this after `listen`, but the hook only attaches process
+     * listeners, so it can be asserted on an initialised app. Calling `listen`
+     * again here would throw: the app is already listening from the route
+     * probes below.
+     */
+    app.enableShutdownHooks(['SIGTERM', 'SIGINT'])
+
+    expect(process.listenerCount('SIGTERM')).toBeGreaterThan(0)
+    expect(process.listenerCount('SIGINT')).toBeGreaterThan(0)
+  })
+
+  it('keeps the shutdown hook in the shipped entrypoint', () => {
+    /*
+     * The behavioural case above proves what the hook does once enabled. It
+     * cannot prove that `main.ts` still enables it, because the hook is
+     * called on the entrypoint's own application instance. This is a source
+     * assertion and nothing more: it exists so the call cannot be deleted
+     * from the entrypoint without a test failing. The live signal rehearsal
+     * that proves the running server actually handles SIGTERM is part of the
+     * pre-launch rehearsal in docs/PRE_LAUNCH_READINESS_REPORT.md.
+     */
+    const source = readFileSync(join(__dirname, 'main.ts'), 'utf8')
+    expect(source).toMatch(/app\.enableShutdownHooks\(/)
+    expect(source).toMatch(/'SIGTERM'/)
   })
 
   it('routes requests across every feature area', async () => {

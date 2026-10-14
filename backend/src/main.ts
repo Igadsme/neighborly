@@ -37,6 +37,21 @@ async function bootstrap() {
   }
 
   await app.listen(process.env.PORT ?? 3000)
+
+  /*
+   * Graceful shutdown.
+   *
+   * Without this, SIGTERM does nothing Nest knows about: Node's default
+   * handler terminates the process immediately, so `docker stop`, a Compose
+   * restart and an orchestrator rollout all cut in-flight requests mid-flight
+   * and drop the Prisma pool and Redis connections without closing them.
+   * Prisma and the notification worker rely on onModuleDestroy to release
+   * their resources, so that path is what a deploy actually depends on.
+   *
+   * Signal handling has to be enabled on the running application, which is
+   * only possible after the server is listening, hence the placement here.
+   */
+  app.enableShutdownHooks(['SIGTERM', 'SIGINT'])
 }
 
 bootstrap()
