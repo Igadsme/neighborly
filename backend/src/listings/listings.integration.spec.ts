@@ -297,14 +297,18 @@ describe('Listing lifecycle and discovery against real PostgreSQL', () => {
 
   it('filters by radius and reports the distance', async () => {
     const marker = randomUUID().slice(0, 8)
+    const origin = { latitude: 33.75, longitude: -84.35 }
     const near = await makeListing({ title: `Near ${marker}`, latitude: 33.755, longitude: -84.35 })
     const far = await makeListing({ title: `Far ${marker}`, latitude: 34.15, longitude: -84.35 })
+    const inside = await makeListing({ title: `Inside ${marker}`, ...shift(origin, 4.9, 0) })
+    const outside = await makeListing({ title: `Outside ${marker}`, ...shift(origin, 5.1, 0) })
 
-    const origin = { latitude: 33.75, longitude: -84.35 }
-    const nearby = await service.list({ ...origin, radiusMiles: 5 })
+    const nearby = await service.list({ ...origin, radiusMiles: 5, query: marker })
     const ids = nearby.items.map(item => item.id)
     expect(ids).toContain(near.id)
+    expect(ids).toContain(inside.id)
     expect(ids).not.toContain(far.id)
+    expect(ids).not.toContain(outside.id)
 
     const nearRow = nearby.items.find(item => item.id === near.id)
     // ~0.35 miles from the origin, to one decimal place.
@@ -313,6 +317,8 @@ describe('Listing lifecycle and discovery against real PostgreSQL', () => {
 
     await service.remove(seller, near.id)
     await service.remove(seller, far.id)
+    await service.remove(seller, inside.id)
+    await service.remove(seller, outside.id)
   })
 
   it('rejects coordinates and a radius the server cannot search', async () => {
