@@ -2,7 +2,7 @@
 
 Completion record for branch `cursor/phase5-staging-e5f6`. **Release readiness is not claimed.** Nothing here was deployed to production. No domain was registered. No DNS record was changed. No paid host was purchased. Phase 7 stays blocked until the product owner approves it.
 
-The record below describes that branch. On current `main` the staging object store is `rustfs/rustfs:1.0.1` (Compose service name `minio`), dev Postgres and Redis bind to `127.0.0.1`, and listing image upload is mounted. The edge falls back to `index.html` for History API paths. See `docker-compose.yml`.
+The record below describes that branch. On current `main` the staging object store is `rustfs/rustfs:1.0.1` (Compose service name `minio`) on the new volume `rustfs-staging-data`. `neighborly-staging-minio` remains declared and unused so an existing MinIO disk is not deleted and is not mounted into RustFS. Dev Postgres and Redis bind to `127.0.0.1`, and listing image upload is mounted. The edge falls back to `index.html` for History API paths. See `docker-compose.yml` and `docs/STORAGE.md`.
 
 Base: `8564a0a` (`feat: Phase 4 security and reliability hardening`).
 

@@ -65,6 +65,10 @@ stack, the staging rustfs volume, or any production host.
 
 **Object store image.** `scripts/run-storage-tests.sh`, the storage CI job, and the staging Compose profile all use `rustfs/rustfs:1.0.1`. `minio/minio` was withdrawn from Docker Hub, and `quay.io/minio` is not anonymously pullable. Do not point staging back at that pin. The storage layer speaks the S3 API (path-style, `us-east-1`).
 
+**Staging healthcheck binary.** The staging service probes `GET /minio/health/live` with `curl` inside the container. The published `rustfs/rustfs:1.0.1` linux/amd64 image ships that binary. Its index points at manifest `sha256:7465b31993156ca5cc0eb4b3c59a01ff69651961be62bcfeb6ce569f22034a56`. Image history step 6 is `apk add --no-cache ca-certificates coreutils curl tzdata`. Layer `sha256:6a4ac81fe189f8ad06b56d60236c80f721f3e213206474082887f032710b9945` contains `/usr/bin/curl`, `/usr/bin/wcurl`, and `libcurl.so.4`. That layer has no `wget`. The healthcheck stays on `curl`.
+
+**Staging volume.** RustFS mounts the named volume `rustfs-staging-data` at `/data`. `neighborly-staging-minio` is the previous MinIO volume. It stays declared and unused. Do not delete it with `docker compose down -v` or `docker volume rm`. RustFS cannot read MinIO's on-disk layout, so a machine that already has the old volume starts empty on the new one. Copy objects out through the S3 API before relying on the old files. The script above never touches either volume.
+
 ## Configuration
 
 | Variable | Purpose |

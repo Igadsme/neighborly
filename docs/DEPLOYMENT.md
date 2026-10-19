@@ -50,8 +50,8 @@ POSTGRES_PASSWORD=neighborly
 REDIS_URL=redis://redis:6379
 
 # Auth
-JWT_SECRET=change-me
-JWT_REFRESH_SECRET=change-me
+JWT_SECRET=replace-with-jwt-secret
+JWT_REFRESH_SECRET=replace-with-jwt-refresh-secret
 JWT_ACCESS_TTL=15m
 JWT_REFRESH_TTL=7d
 
@@ -59,7 +59,7 @@ JWT_REFRESH_TTL=7d
 S3_ENDPOINT=http://minio:9000
 S3_BUCKET=neighborly-media
 S3_ACCESS_KEY=neighborly
-S3_SECRET_KEY=neighborly-secret
+S3_SECRET_KEY=replace-with-object-store-secret
 S3_REGION=us-east-1
 
 # Maps
@@ -101,13 +101,16 @@ Dev `docker compose up -d` starts only:
 
 There is no API container in that default project. The API runs on the host with `pnpm start:dev`.
 
-The `staging` profile adds its own Postgres (`127.0.0.1:5433`), Redis (`127.0.0.1:6380`), rustfs object store (`rustfs/rustfs:1.0.1` on `127.0.0.1:9000`, Compose service name `minio`), the API, the web image, and Caddy. See `docker-compose.yml` and `docs/PHASE_5_STAGING.md`. Do not publish the dev database ports on `0.0.0.0`.
+The `staging` profile adds its own Postgres (`127.0.0.1:5433`), Redis (`127.0.0.1:6380`), rustfs object store (`rustfs/rustfs:1.0.1` on `127.0.0.1:9000`, Compose service name `minio`, volume `rustfs-staging-data`), the API, the web image, and Caddy. `neighborly-staging-minio` stays declared and unused. Do not delete it. See `docker-compose.yml` and `docs/PHASE_5_STAGING.md`. Do not publish the dev database ports on `0.0.0.0`. Dev Redis has a `redis-cli ping` healthcheck. Nothing in the default project waits on it, because the API runs on the host.
 
 History API paths need a fallback to `index.html`. Staging Caddy (`deploy/staging/Caddyfile`) sends `/api` and `/socket.io` to the API and `/assets` plus every other path to nginx. nginx (`deploy/staging/nginx.conf`) serves real files and falls back to `index.html` only for unknown extensionless paths. `deploy/production/Caddyfile` is the same split for a future host. The production workflow does not read it and still refuses. `vite preview` uses the same rule.
 
 ## 4. CI/CD expectations
 
 - Run frontend and backend typecheck, tests, and build on every pull request (`.github/workflows/ci.yml`)
+- The same workflow renders `docker compose config` for the default project and the staging profile. Every published port must use `127.0.0.1`. A staging image with no tag, or a `:latest` tag, fails the job. The Compose `minio` image must equal the storage job pin `rustfs/rustfs:1.0.1`
+- That workflow also rejects an assignment of `change-me` or `neighborly-secret` under `docs/` and in `env*.example`. Naming those strings as rejected placeholders is still allowed
+- A separate job starts only `minio` and `minio-init` and requires `minio-init` to exit 0, which depends on the RustFS healthcheck. It does not delete volumes
 - Apply Prisma migrations with `prisma migrate deploy` before the staging API listens
 - Run the staging seed and check `/health` and `/ready` before calling the stack up
 - Keep production deploy behind a product-owner approval. This repository does not deploy to production. Phase 7 did not change that.

@@ -23,6 +23,12 @@ services:
       - "127.0.0.1:6379:6379"
     volumes:
       - neighborly-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   # Staging profile. Does not replace the dev Postgres and Redis services above.
   # Start with: scripts/staging-up.sh
@@ -66,9 +72,19 @@ services:
   # The Compose service name stays `minio` so S3_ENDPOINT=http://minio:9000
   # in env.staging.example keeps resolving. The access keys and bucket name
   # stay the staging fixtures, not the disposable CI test keys.
-  # The named volume is kept. The image user is 10001 and cannot write a
-  # root-owned Docker volume, so this process runs as root. Do not delete
-  # the volume to change that ownership.
+  # Data is on rustfs-staging-data, a new volume. neighborly-staging-minio
+  # is the retired MinIO volume: still declared below, not mounted, and must
+  # not be deleted (`down -v` or `docker volume rm`). RustFS cannot read a
+  # MinIO on-disk layout. The new volume is still root-owned, and the image
+  # user is 10001, so this process runs as root.
+  # The healthcheck calls curl inside the container. Tag 1.0.1 ships it.
+  # linux/amd64 manifest
+  # sha256:7465b31993156ca5cc0eb4b3c59a01ff69651961be62bcfeb6ce569f22034a56
+  # history runs `apk add --no-cache ca-certificates coreutils curl tzdata`,
+  # and layer
+  # sha256:6a4ac81fe189f8ad06b56d60236c80f721f3e213206474082887f032710b9945
+  # contains /usr/bin/curl (and libcurl). That layer has no wget. See
+  # docs/STORAGE.md.
   minio:
     profiles: ["staging"]
     image: rustfs/rustfs:1.0.1
@@ -79,7 +95,7 @@ services:
     ports:
       - "127.0.0.1:9000:9000"
     volumes:
-      - neighborly-staging-minio:/data
+      - rustfs-staging-data:/data
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
       interval: 5s
@@ -216,5 +232,8 @@ volumes:
   neighborly-redis:
   neighborly-staging-postgres:
   neighborly-staging-redis:
+  # Retired MinIO on-disk data from before the rustfs pin. Unused. Do not
+  # delete this volume. RustFS mounts rustfs-staging-data instead.
   neighborly-staging-minio:
+  rustfs-staging-data:
   neighborly-staging-caddy:

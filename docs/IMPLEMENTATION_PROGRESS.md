@@ -40,8 +40,8 @@ Status values: `not started`, `in progress`, `blocked`, `done`. `done` requires 
 | BL-016 | Appointments | blocked | Owner chooses create versus remove |
 | BL-017 | Photos on first publish | not started | |
 | BL-018 | Loopback dev ports | done | `docker-compose.yml` publishes Postgres `127.0.0.1:5432` and Redis `127.0.0.1:6379`. A live bind was not probed on this VM (no Docker daemon) |
-| BL-019 | Docs drift | done | README, the map, project status, the terms placeholder, and the six takeover docs match `main` after BL-001–BL-010. Doc-only for application behavior |
-| BL-020 | Staging object store image | done | Staging profile uses `rustfs/rustfs:1.0.1` with the same S3 API shape as CI. The image was not pulled on this VM |
+| BL-019 | Docs drift | done | README, the map, project status, the terms placeholder, and the six takeover docs match `main` after BL-001–BL-010. The older inventory in `docs/DEPLOYMENT.md` assigns `replace-with-*` placeholders. CI rejects `NAME=change-me` and `NAME=neighborly-secret` in `docs/` and `env*.example`. Doc-only for application behavior |
+| BL-020 | Staging object store image | done | Staging profile uses `rustfs/rustfs:1.0.1` with the same S3 API shape as CI. Published linux/amd64 layers include `/usr/bin/curl`, which the healthcheck calls. Data is on `rustfs-staging-data`. The old `neighborly-staging-minio` volume stays declared and unused |
 | BL-021 | Multi-process realtime | not started | |
 | BL-022 | Error tracking | blocked | Vendor decision. The no-op hook is confirmed |
 | BL-023 | Package name and Figma shell | done | Root package name is `neighborly-web`, matching `neighborly-api` and the `neighborly-web` image. `noindex` stays. Figma HTML markers stay because the Vite title plugin reads them |

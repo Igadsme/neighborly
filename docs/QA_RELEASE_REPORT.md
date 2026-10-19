@@ -44,6 +44,28 @@ These did not run, and are not passes: staging Compose boot, nginx and Caddy ins
 
 Verdict for this lane: **not a release sign-off.**
 
+## Review follow-up, 19 Oct 2026
+
+Same branch, after the DevOps and QA review notes. Node v22.14.0. pnpm 10.34.3. Docker daemon: not installed. Compose config used the standalone Compose v2.40.3 binary. `.env.staging` was copied from `env.staging.example` for the staging render and then deleted.
+
+| Command | Exit | Count |
+| --- | --- | --- |
+| Root `pnpm lint` | 0 | |
+| Root `pnpm exec tsc --noEmit` | 0 | |
+| Root `pnpm test` | 0 | 266 passed, 25 files. None skipped |
+| Root `pnpm build` with `VITE_API_URL=https://api.neighborly.invalid/api/v1` | 0 | |
+| Backend `pnpm exec prisma generate` | 0 | |
+| Backend `pnpm lint` | 0 | |
+| Backend `pnpm exec tsc --noEmit` | 0 | |
+| Backend `pnpm test` | 0 | 321 passed, 41 suites. None skipped |
+| Backend `pnpm build` | 0 | |
+| `docker compose config` | 0 | Published `host_ip` is `127.0.0.1`. Dev Redis healthcheck is `redis-cli ping` |
+| `docker compose --profile staging config` | 0 | `minio` image `rustfs/rustfs:1.0.1` on volume `rustfs-staging-data`. No `quay.io/minio` |
+| `python3 scripts/check-placeholder-assignments.py` | 0 | |
+| `python3 scripts/check-compose-config.py` | 0 | |
+
+The staging object-store containers were not started on this VM. That boot is the new CI job. Integration, storage, backup/restore, journey, and axe suites did not run and are not passes.
+
 ## Takeover audit (unchanged record)
 
 Date: 2026-10-19
