@@ -87,6 +87,8 @@ On the future host, after a backup exists and the product owner has approved the
 
 Migrations `0004_trust_safety` and `0005_query_indexes` are forward-only. Take a dump before the first migrate on a database you might want to undo. Restoring that dump is the data rollback.
 
+`0015_postgis_geography` runs `CREATE EXTENSION IF NOT EXISTS postgis`. A managed Postgres needs a superuser or the provider admin role to create that extension, or `postgis` must already exist before `prisma migrate deploy`. The manual rollback for the geography columns is in `docs/DATABASE_DESIGN.md`. It does not drop the extension.
+
 ## Promote path
 
 This is the order to follow after approval. Phase 7 stops before step 4.

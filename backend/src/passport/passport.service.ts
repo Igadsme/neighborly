@@ -328,50 +328,51 @@ export class PassportService {
    *
    * The rank is completed exchanges, the count the passport card shows.
    * That sort happens in SQL before LIMIT, with the member id as the tie
-   * break, so a later page cannot outrank an earlier one. Exchange and
-   * borrow counts are separate grouped subqueries so those joins do not
-   * multiply each other.
+   * break, so a later page cannot outrank an earlier one. Each count is
+   * pre-aggregated in its own CTE, matching trustInputs, so a member is
+   * not multiplied by transactions times borrowings.
    */
   async leaderboard(query: ListPassportsQuery) {
     const limit = Math.min(Math.max(query.limit ?? 25, 1), 100)
     const offset = query.offset ?? 0
     const rows = await this.prisma.$queryRaw<LeaderboardRow[]>(Prisma.sql`
+      WITH ex AS (
+        SELECT tp."userId" AS uid, COUNT(*)::int AS n
+        FROM "TransactionParticipant" AS tp
+        JOIN "Transaction" AS t ON t.id = tp."transactionId"
+        WHERE t.status = 'COMPLETED'
+        GROUP BY 1
+      ),
+      br AS (
+        SELECT uid,
+               COUNT(*)::int AS total,
+               (COUNT(*) FILTER (WHERE is_lender))::int AS as_lender
+        FROM (
+          SELECT "lenderId" AS uid, true AS is_lender
+          FROM "BorrowRequest"
+          WHERE status = 'COMPLETED'
+          UNION ALL
+          SELECT "borrowerId", false
+          FROM "BorrowRequest"
+          WHERE status = 'COMPLETED' AND "borrowerId" <> "lenderId"
+        ) AS s
+        GROUP BY uid
+      )
       SELECT u.id::text AS id,
              profile."displayName" AS display_name,
              profile."firstName" AS first_name,
              profile."avatarUrl" AS avatar_url,
-             COALESCE(exchanges.completed_exchanges, 0)::int AS completed_exchanges,
-             COALESCE(borrows.completed_borrowings, 0)::int AS completed_borrowings,
-             COALESCE(borrows.borrowings_as_lender, 0)::int AS borrowings_as_lender
+             COALESCE(ex.n, 0)::int AS completed_exchanges,
+             COALESCE(br.total, 0)::int AS completed_borrowings,
+             COALESCE(br.as_lender, 0)::int AS borrowings_as_lender
       FROM "PassportPrivacySettings" AS privacy
       INNER JOIN "User" AS u ON u.id = privacy."userId"
       LEFT JOIN "Profile" AS profile ON profile."userId" = u.id
-      LEFT JOIN (
-        SELECT tp."userId" AS user_id,
-               COUNT(DISTINCT t.id)::int AS completed_exchanges
-        FROM "TransactionParticipant" AS tp
-        INNER JOIN "Transaction" AS t ON t.id = tp."transactionId"
-        WHERE t.status::text = 'COMPLETED'
-        GROUP BY tp."userId"
-      ) AS exchanges ON exchanges.user_id = u.id
-      LEFT JOIN (
-        SELECT participant.user_id,
-               COUNT(DISTINCT participant.borrow_id)::int AS completed_borrowings,
-               (COUNT(DISTINCT participant.borrow_id) FILTER (WHERE participant.side = 'lender'))::int AS borrowings_as_lender
-        FROM (
-          SELECT br.id AS borrow_id, br."lenderId" AS user_id, 'lender'::text AS side
-          FROM "BorrowRequest" AS br
-          WHERE br.status::text = 'COMPLETED'
-          UNION ALL
-          SELECT br.id, br."borrowerId", 'borrower'::text
-          FROM "BorrowRequest" AS br
-          WHERE br.status::text = 'COMPLETED'
-        ) AS participant
-        GROUP BY participant.user_id
-      ) AS borrows ON borrows.user_id = u.id
+      LEFT JOIN ex ON ex.uid = u.id
+      LEFT JOIN br ON br.uid = u.id
       WHERE privacy."leaderboardOptIn" = true
         AND u."deletedAt" IS NULL
-        AND u.status::text = 'ACTIVE'
+        AND u.status = 'ACTIVE'
       ORDER BY completed_exchanges DESC, u.id ASC
       LIMIT ${limit} OFFSET ${offset}
     `)

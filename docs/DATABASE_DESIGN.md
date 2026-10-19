@@ -86,6 +86,34 @@ Added in `0003_verticals`. Screens still read `src/data/index.ts` until the wiri
 
 Latitude and longitude stay `Decimal(9, 6)` and are write-only on public reads. Migration `0015_postgis_geography` enables PostGIS and adds a nullable `geog geography(Point,4326)` column, maintained by a trigger, on `Listing`, `NeedRequest`, `HousingListing`, `JobListing`, and `ServiceListing`. Each has a GiST index. Prisma Client does not read or write `geog`. Profile coordinates stay off the public card. Service quote `address` is stored and returned to the requester, and to the provider only after `ACCEPTED`.
 
+#### Manual rollback for `0015_postgis_geography`
+
+There is no down migration. `0015_postgis_geography/migration.sql` stays as approved. Stop the API that reads `geog` before running this. The statements drop the five triggers, the five GiST indexes, the five `geog` columns, and `neighborly_sync_location()`. They keep the `postgis` extension. Do not run `DROP EXTENSION postgis`.
+
+```sql
+DROP TRIGGER IF EXISTS listing_geog_sync ON "Listing";
+DROP TRIGGER IF EXISTS need_request_geog_sync ON "NeedRequest";
+DROP TRIGGER IF EXISTS housing_listing_geog_sync ON "HousingListing";
+DROP TRIGGER IF EXISTS job_listing_geog_sync ON "JobListing";
+DROP TRIGGER IF EXISTS service_listing_geog_sync ON "ServiceListing";
+
+DROP INDEX IF EXISTS "Listing_geog_idx";
+DROP INDEX IF EXISTS "NeedRequest_geog_idx";
+DROP INDEX IF EXISTS "HousingListing_geog_idx";
+DROP INDEX IF EXISTS "JobListing_geog_idx";
+DROP INDEX IF EXISTS "ServiceListing_geog_idx";
+
+ALTER TABLE "Listing" DROP COLUMN IF EXISTS "geog";
+ALTER TABLE "NeedRequest" DROP COLUMN IF EXISTS "geog";
+ALTER TABLE "HousingListing" DROP COLUMN IF EXISTS "geog";
+ALTER TABLE "JobListing" DROP COLUMN IF EXISTS "geog";
+ALTER TABLE "ServiceListing" DROP COLUMN IF EXISTS "geog";
+
+DROP FUNCTION IF EXISTS neighborly_sync_location();
+```
+
+Revert the Prisma schema in the same change: remove `geog Unsupported("geography(Point,4326)")?` and `@@index([geog], type: Gist)` from `Listing`, `NeedRequest`, `HousingListing`, `JobListing`, and `ServiceListing`. Latitude and longitude stay. A later `prisma migrate deploy` does not re-apply an already recorded `0015`, so this rollback is the operator SQL plus that schema revert, not an edit to the migration file.
+
 `verified`, `backgroundCheck`, `rating`, and `reviewCount` are columns the API does not accept from clients. Seed writes them.
 
 - `HousingListing` — owner, `propertyType` (Apartment, House, Room, Studio, Condo, Sublet), `listingType` (`rent` or `sale`), `priceCents`, optional `priceUnit`, beds, baths, sqft, neighborhood, city, `available`, `lease`, pets, furnished, utilities, verified, `PublishStatus`, write-only lat/lng, `deletedAt`. `HousingImage.objectKey` is the unsplash id the card already uses. Indexes: `[status, listingType, createdAt]`, `[ownerId, status]`, `[city, neighborhood]`.

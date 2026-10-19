@@ -345,7 +345,13 @@ describe('Passport and trust against real PostgreSQL', () => {
         }
         previousCount = row.completedExchanges
         previousId = row.userId
-        if (wanted.includes(row.userId)) found.push(row.userId)
+        if (wanted.includes(row.userId)) {
+          found.push(row.userId)
+          const inputs = await passport.trustInputs(row.userId)
+          expect(row.completedExchanges).toBe(inputs.completedExchanges)
+          expect(row.completedBorrowings).toBe(inputs.completedBorrowings)
+          expect(row.borrowingsAsLender).toBe(inputs.borrowingsAsLender)
+        }
         if (row.userId === borrowed) borrowedRow = row
         expect([quiet, suspended, removed, partner]).not.toContain(row.userId)
       }

@@ -131,6 +131,43 @@ describe('migration 0015 PostGIS geography', () => {
     `)
     const filled = await sql(name, `SELECT (geog IS NOT NULL) AS filled FROM "Listing" WHERE id = 'c2000000-0000-4000-8000-000000000001'`)
     expect(filled[0]?.filled).toBe(true)
+
+    const inserted = await sql(name, `
+      SELECT ST_X(geog::geometry) AS x, ST_Y(geog::geometry) AS y
+      FROM "Listing" WHERE id = 'c2000000-0000-4000-8000-000000000001'
+    `)
+    expect(Number(inserted[0]?.x)).toBeCloseTo(-84.35, 4)
+    expect(Number(inserted[0]?.y)).toBeCloseTo(33.75, 4)
+
+    await sql(name, `
+      UPDATE "Listing"
+      SET latitude = 40.71, longitude = -74.00
+      WHERE id = 'c2000000-0000-4000-8000-000000000001'
+    `)
+    const moved = await sql(name, `
+      SELECT ST_X(geog::geometry) AS x, ST_Y(geog::geometry) AS y
+      FROM "Listing" WHERE id = 'c2000000-0000-4000-8000-000000000001'
+    `)
+    expect(Number(moved[0]?.x)).toBeCloseTo(-74, 4)
+    expect(Number(moved[0]?.y)).toBeCloseTo(40.71, 4)
+
+    await sql(name, `
+      UPDATE "Listing" SET latitude = NULL
+      WHERE id = 'c2000000-0000-4000-8000-000000000001'
+    `)
+    const cleared = await sql(name, `
+      SELECT (geog IS NULL) AS cleared FROM "Listing" WHERE id = 'c2000000-0000-4000-8000-000000000001'
+    `)
+    expect(cleared[0]?.cleared).toBe(true)
+
+    await sql(name, `
+      UPDATE "Listing" SET latitude = 33.75, longitude = 181
+      WHERE id = 'c2000000-0000-4000-8000-000000000001'
+    `)
+    const invalid = await sql(name, `
+      SELECT (geog IS NULL) AS cleared FROM "Listing" WHERE id = 'c2000000-0000-4000-8000-000000000001'
+    `)
+    expect(invalid[0]?.cleared).toBe(true)
   }, 600_000)
 
   it('backfills geography for listings that existed before the column', async () => {

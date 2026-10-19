@@ -188,7 +188,7 @@ describe('ListingsService public reads', () => {
   })
 
   it('searches with ST_DWithin and keeps paused, draft, and suspended rows out of the SQL', async () => {
-    const queryRaw = jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ total: 0 }])
+    const queryRaw = jest.fn().mockResolvedValue([])
     const moduleRef = await Test.createTestingModule({
       providers: [
         ListingsService,
@@ -206,10 +206,14 @@ describe('ListingsService public reads', () => {
     })
 
     expect(page).toEqual({ items: [], total: 0, limit: 24, offset: 0 })
+    expect(queryRaw).toHaveBeenCalledTimes(1)
     const queries = queryRaw.mock.calls.map(call => sqlOf(call[0]))
     const text = queries.map(query => query.text).join('\n')
     const values = queries.flatMap(query => query.values)
     expect(text).toContain('ST_DWithin')
+    expect(text).toContain('COUNT(*) OVER()')
+    expect(text).toContain('owner.status = \'ACTIVE\'')
+    expect(text).not.toContain('owner.status::text')
     expect(text).toContain('deletedAt')
     expect(text).toContain('ACTIVE')
     expect(text).toContain('geog')

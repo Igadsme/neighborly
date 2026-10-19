@@ -84,6 +84,8 @@ function round1(value: number) {
  * Published, non-deleted rows whose owner is ACTIVE, inside the radius,
  * ordered by distance. Drafts, paused rows, archived rows, and suspended
  * sellers are excluded by the WHERE clause, not by a later filter.
+ * COUNT(*) OVER() is the full match count. A page past the last row has
+ * no row to carry that count, so its total is 0.
  */
 export async function pageWithinRadius(
   prisma: PrismaService,
@@ -95,9 +97,9 @@ export async function pageWithinRadius(
 ): Promise<RadiusPage> {
   const from = TABLES[table]
   const meters = origin.radiusMiles * METERS_PER_MILE
-  const where = () => Prisma.sql`
+  const where = Prisma.sql`
     row."deletedAt" IS NULL
-    AND owner.status::text = 'ACTIVE'
+    AND owner.status = 'ACTIVE'
     AND owner."deletedAt" IS NULL
     AND row.geog IS NOT NULL
     AND ST_DWithin(
@@ -107,21 +109,17 @@ export async function pageWithinRadius(
     )
     AND ${extra}
   `
-  const rows = await prisma.$queryRaw<Array<{ id: string; distance_miles: number | string }>>(Prisma.sql`
+  const rows = await prisma.$queryRaw<Array<{ id: string; distance_miles: number | string; total: number | string }>>(Prisma.sql`
     SELECT row.id::text AS id,
            (ST_Distance(
              row.geog,
              ST_SetSRID(ST_MakePoint(CAST(${origin.longitude} AS double precision), CAST(${origin.latitude} AS double precision)), 4326)::geography
-           ) / ${METERS_PER_MILE}) AS distance_miles
+           ) / ${METERS_PER_MILE}) AS distance_miles,
+           (COUNT(*) OVER())::int AS total
     ${from}
-    WHERE ${where()}
+    WHERE ${where}
     ORDER BY distance_miles ASC, row.id ASC
     LIMIT ${limit} OFFSET ${offset}
-  `)
-  const totals = await prisma.$queryRaw<Array<{ total: number | string }>>(Prisma.sql`
-    SELECT COUNT(*)::int AS total
-    ${from}
-    WHERE ${where()}
   `)
   const distances = new Map<string, number>()
   const ids: string[] = []
@@ -130,5 +128,5 @@ export async function pageWithinRadius(
     const miles = Number(row.distance_miles)
     distances.set(row.id, Number.isFinite(miles) ? round1(miles) : 0)
   }
-  return { ids, distances, total: Number(totals[0]?.total ?? 0) }
+  return { ids, distances, total: Number(rows[0]?.total ?? 0) }
 }
