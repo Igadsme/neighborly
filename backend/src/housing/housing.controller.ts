@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
@@ -17,7 +17,7 @@ export class HousingController {
   }
 
   @Get(':id')
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUUIDPipe) id: string) {
     return this.housing.get(id)
   }
 
@@ -32,7 +32,7 @@ export class HousingController {
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async update(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdateHousingDto) {
+  async update(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateHousingDto) {
     await enforceRateLimit('housing', request.user.id)
     return this.housing.update(request.user.id, id, input)
   }
@@ -40,7 +40,7 @@ export class HousingController {
   @Delete(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async archive(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async archive(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     await enforceRateLimit('housing', request.user.id)
     return this.housing.archive(request.user.id, id)
   }

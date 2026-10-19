@@ -53,7 +53,7 @@ export const envValidationSchema = Joi.object({
   JWT_REFRESH_TTL: Joi.string().default('7d'),
   // Absolute https origin of the web app, used to build verification and
   // reset links. Must be set in production or links point nowhere useful.
-  PUBLIC_WEB_ORIGIN: Joi.string().uri({ scheme: ['http', 'https'] }).default('http://localhost:5173'),
+  PUBLIC_WEB_ORIGIN: Joi.string().uri({ scheme: ['http', 'https'] }).default('http://localhost:8443'),
   // `outbox` persists messages for a delivery provider to drain and is the
   // only value allowed in production. `console` is local development only.
   EMAIL_SENDER: Joi.string().valid('outbox', 'console').default('outbox'),

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
@@ -32,7 +32,7 @@ export class MessagingController {
   @Get(':id/messages')
   messages(
     @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Query('limit') limit?: string,
     @Query('before') before?: string
   ) {
@@ -45,18 +45,18 @@ export class MessagingController {
   @Get(':id/messages/more')
   async moreMessages(
     @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Query('before') before?: string
   ) {
     return { hasMore: await this.messaging.hasMoreMessages(req.user.id, id, before) }
   }
 
   @Post(':id/messages')
-  async send(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() input: SendMessageDto) {
+  async send(@Req() req: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: SendMessageDto) {
     await enforceRateLimit('messaging', req.user.id)
     return this.messaging.sendMessage(req.user.id, id, input.body)
   }
 
   @Patch(':id/read')
-  read(@Req() req: AuthenticatedRequest, @Param('id') id: string) { return this.messaging.markRead(req.user.id, id) }
+  read(@Req() req: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) { return this.messaging.markRead(req.user.id, id) }
 }

@@ -24,7 +24,6 @@ const publicHousingSelect = {
   pets: true,
   furnished: true,
   utilities: true,
-  verified: true,
   status: true,
   createdAt: true,
   updatedAt: true,
@@ -34,7 +33,9 @@ const publicHousingSelect = {
 
 function presentHousing<T extends { propertyType: string }>(row: T) {
   const { propertyType, ...rest } = row
-  return { ...rest, type: propertyType }
+  const publicRow = rest as T & { verified?: boolean }
+  delete publicRow.verified
+  return { ...publicRow, type: propertyType }
 }
 
 @Injectable()

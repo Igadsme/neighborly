@@ -41,7 +41,7 @@ describe('suspended accounts are omitted from public reads', () => {
     expect(findFirst.mock.calls[0][0].where).toEqual({
       id: 'listing-1',
       deletedAt: null,
-      status: { not: 'DRAFT' },
+      status: { in: ['PUBLISHED', 'SOLD'] },
       seller: activeAccountWhere
     })
     expect(groupBy.mock.calls[0][0].where).toEqual({

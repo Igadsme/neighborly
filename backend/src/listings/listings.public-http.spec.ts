@@ -275,7 +275,7 @@ describe('Public listing HTTP reads', () => {
   })
 
   it('GET /api/v1/listings/:id returns the public seller card only', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/listings/listing-1`)
+    const response = await fetch(`${baseUrl}/api/v1/listings/11111111-1111-4111-8111-111111111113`)
     expect(response.status).toBe(200)
     expectPublicListing(await response.json())
     expect(queries.get).toBeDefined()
@@ -292,5 +292,12 @@ describe('Public listing HTTP reads', () => {
     expect(body[0].user).toBeUndefined()
     expectPublicListing(body[0].listing)
     expect(queries.favorites).toMatchObject({ where: { userId: 'buyer-1' } })
+  })
+
+  it('GET /api/v1/listings/:id rejects a non-UUID with 400 before Prisma', async () => {
+    prisma.listing.findFirst.mockClear()
+    const response = await fetch(`${baseUrl}/api/v1/listings/not-a-uuid`)
+    expect(response.status).toBe(400)
+    expect(prisma.listing.findFirst).not.toHaveBeenCalled()
   })
 })

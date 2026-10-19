@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
@@ -43,14 +43,14 @@ export class CommunityController {
   }
 
   @Get('posts/:id')
-  getPost(@Param('id') id: string) {
+  getPost(@Param('id', ParseUUIDPipe) id: string) {
     return this.community.getPost(id)
   }
 
   @Patch('posts/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async updatePost(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdatePostDto) {
+  async updatePost(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdatePostDto) {
     await enforceRateLimit('community', request.user.id)
     return this.community.updatePost(request.user.id, id, input)
   }
@@ -58,7 +58,7 @@ export class CommunityController {
   @Delete('posts/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async archivePost(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async archivePost(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     await enforceRateLimit('community', request.user.id)
     return this.community.archivePost(request.user.id, id)
   }
@@ -66,20 +66,20 @@ export class CommunityController {
   @Post('posts/:id/reactions')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async react(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: ReactionDto) {
+  async react(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: ReactionDto) {
     await enforceRateLimit('community', request.user.id)
     return this.community.react(request.user.id, id, input)
   }
 
   @Get('posts/:id/comments')
-  comments(@Param('id') id: string) {
+  comments(@Param('id', ParseUUIDPipe) id: string) {
     return this.community.listComments(id)
   }
 
   @Post('posts/:id/comments')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async comment(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: CreateCommentDto) {
+  async comment(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: CreateCommentDto) {
     await enforceRateLimit('community', request.user.id)
     return this.community.createComment(request.user.id, id, input)
   }
@@ -98,14 +98,14 @@ export class CommunityController {
   }
 
   @Get('events/:id')
-  getEvent(@Param('id') id: string) {
+  getEvent(@Param('id', ParseUUIDPipe) id: string) {
     return this.community.getEvent(id)
   }
 
   @Patch('events/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async updateEvent(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdateEventDto) {
+  async updateEvent(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateEventDto) {
     await enforceRateLimit('community', request.user.id)
     return this.community.updateEvent(request.user.id, id, input)
   }
@@ -113,7 +113,7 @@ export class CommunityController {
   @Delete('events/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async archiveEvent(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async archiveEvent(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     await enforceRateLimit('community', request.user.id)
     return this.community.archiveEvent(request.user.id, id)
   }
@@ -121,7 +121,7 @@ export class CommunityController {
   @Post('events/:id/rsvp')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async rsvp(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async rsvp(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     await enforceRateLimit('community', request.user.id)
     return this.community.toggleRsvp(request.user.id, id)
   }
@@ -140,14 +140,14 @@ export class CommunityController {
   }
 
   @Get('lost-found/:id')
-  getLostFound(@Param('id') id: string) {
+  getLostFound(@Param('id', ParseUUIDPipe) id: string) {
     return this.community.getLostFound(id)
   }
 
   @Patch('lost-found/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async updateLostFound(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdateLostFoundDto) {
+  async updateLostFound(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateLostFoundDto) {
     await enforceRateLimit('community', request.user.id)
     return this.community.updateLostFound(request.user.id, id, input)
   }
@@ -155,7 +155,7 @@ export class CommunityController {
   @Delete('lost-found/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async archiveLostFound(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async archiveLostFound(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     await enforceRateLimit('community', request.user.id)
     return this.community.archiveLostFound(request.user.id, id)
   }
@@ -174,14 +174,14 @@ export class CommunityController {
   }
 
   @Get('giveaways/:id')
-  getGiveaway(@Param('id') id: string) {
+  getGiveaway(@Param('id', ParseUUIDPipe) id: string) {
     return this.community.getGiveaway(id)
   }
 
   @Patch('giveaways/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async updateGiveaway(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdateGiveawayDto) {
+  async updateGiveaway(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateGiveawayDto) {
     await enforceRateLimit('community', request.user.id)
     return this.community.updateGiveaway(request.user.id, id, input)
   }
@@ -189,7 +189,7 @@ export class CommunityController {
   @Delete('giveaways/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async archiveGiveaway(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async archiveGiveaway(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     await enforceRateLimit('community', request.user.id)
     return this.community.archiveGiveaway(request.user.id, id)
   }
@@ -197,7 +197,7 @@ export class CommunityController {
   @Post('giveaways/:id/claim')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async claim(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async claim(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     await enforceRateLimit('community', request.user.id)
     return this.community.claimGiveaway(request.user.id, id)
   }

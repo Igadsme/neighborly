@@ -22,13 +22,14 @@ describe('Listing draft HTTP', () => {
     listing: {
       create: jest.fn(async (args: { data: Record<string, unknown> }) => {
         created = args
-        stored = { id: 'listing-1', deletedAt: null, ...args.data }
+        stored = { id: '11111111-1111-4111-8111-111111111112', deletedAt: null, ...args.data }
         return stored
       }),
       findUnique: jest.fn(async () => stored),
-      findFirst: jest.fn(async (args: { where: { id: string; status?: { not?: string } } }) => {
+      findFirst: jest.fn(async (args: { where: { id: string; status?: { not?: string; in?: string[] } } }) => {
         if (!stored || stored.id !== args.where.id || stored.deletedAt) return null
         if (args.where.status?.not === 'DRAFT' && stored.status === 'DRAFT') return null
+        if (args.where.status?.in && !args.where.status.in.includes(String(stored.status))) return null
         return stored
       }),
       update: jest.fn(async (args: { data: Record<string, unknown> }) => {
@@ -98,7 +99,7 @@ describe('Listing draft HTTP', () => {
     expect(response.status).toBe(201)
     expect(created?.data?.status).toBe('DRAFT')
 
-    const hidden = await fetch(`${baseUrl}/api/v1/listings/listing-1`)
+    const hidden = await fetch(`${baseUrl}/api/v1/listings/11111111-1111-4111-8111-111111111112`)
     expect(hidden.status).toBe(404)
   })
 
@@ -113,18 +114,18 @@ describe('Listing draft HTTP', () => {
   })
 
   it('POST /api/v1/listings/:id/publish turns the owner draft into PUBLISHED', async () => {
-    stored = { id: 'listing-1', sellerId, deletedAt: null, status: 'DRAFT', title: 'Oak chair', description: 'Solid oak dining chair' }
-    const response = await fetch(`${baseUrl}/api/v1/listings/listing-1/publish`, {
+    stored = { id: '11111111-1111-4111-8111-111111111112', sellerId, deletedAt: null, status: 'DRAFT', title: 'Oak chair', description: 'Solid oak dining chair' }
+    const response = await fetch(`${baseUrl}/api/v1/listings/11111111-1111-4111-8111-111111111112/publish`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}` }
     })
     expect(response.status).toBe(201)
-    expect(await response.json()).toMatchObject({ id: 'listing-1', status: 'PUBLISHED' })
+    expect(await response.json()).toMatchObject({ id: '11111111-1111-4111-8111-111111111112', status: 'PUBLISHED' })
   })
 
   it('POST /api/v1/listings/:id/publish by someone else is 403', async () => {
-    stored = { id: 'listing-1', sellerId: 'someone-else', deletedAt: null, status: 'DRAFT', title: 'Oak chair', description: 'Solid oak dining chair' }
-    const response = await fetch(`${baseUrl}/api/v1/listings/listing-1/publish`, {
+    stored = { id: '11111111-1111-4111-8111-111111111112', sellerId: 'someone-else', deletedAt: null, status: 'DRAFT', title: 'Oak chair', description: 'Solid oak dining chair' }
+    const response = await fetch(`${baseUrl}/api/v1/listings/11111111-1111-4111-8111-111111111112/publish`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}` }
     })
@@ -133,8 +134,8 @@ describe('Listing draft HTTP', () => {
   })
 
   it('POST /api/v1/listings/:id/publish rejects a sold listing', async () => {
-    stored = { id: 'listing-1', sellerId, deletedAt: null, status: 'SOLD', title: 'Oak chair', description: 'Solid oak dining chair' }
-    const response = await fetch(`${baseUrl}/api/v1/listings/listing-1/publish`, {
+    stored = { id: '11111111-1111-4111-8111-111111111112', sellerId, deletedAt: null, status: 'SOLD', title: 'Oak chair', description: 'Solid oak dining chair' }
+    const response = await fetch(`${baseUrl}/api/v1/listings/11111111-1111-4111-8111-111111111112/publish`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}` }
     })

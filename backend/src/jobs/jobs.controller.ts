@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
@@ -33,12 +33,12 @@ export class JobsController {
   @Get(':id/applications')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  applicants(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  applicants(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.jobs.listApplicants(request.user.id, id)
   }
 
   @Get(':id')
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUUIDPipe) id: string) {
     return this.jobs.get(id)
   }
 
@@ -53,7 +53,7 @@ export class JobsController {
   @Post(':id/apply')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async apply(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: ApplyJobDto) {
+  async apply(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: ApplyJobDto) {
     await enforceRateLimit('jobs', request.user.id)
     return this.jobs.apply(request.user.id, id, input)
   }
@@ -61,7 +61,7 @@ export class JobsController {
   @Post(':id/save')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async save(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async save(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     await enforceRateLimit('jobs', request.user.id)
     return this.jobs.toggleSave(request.user.id, id)
   }
@@ -69,7 +69,7 @@ export class JobsController {
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async update(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdateJobDto) {
+  async update(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateJobDto) {
     await enforceRateLimit('jobs', request.user.id)
     return this.jobs.update(request.user.id, id, input)
   }
@@ -77,7 +77,7 @@ export class JobsController {
   @Delete(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  async archive(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async archive(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     await enforceRateLimit('jobs', request.user.id)
     return this.jobs.archive(request.user.id, id)
   }

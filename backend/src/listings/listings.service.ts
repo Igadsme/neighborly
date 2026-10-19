@@ -126,7 +126,11 @@ export class ListingsService {
 
   async get(id: string, viewer?: { latitude?: number; longitude?: number }) {
     const listing = await this.prisma.listing.findFirst({
-      where: { id, deletedAt: null, status: { not: 'DRAFT' }, seller: activeAccountWhere },
+      // Paused rows are ARCHIVED with deletedAt left null so the owner can
+      // publish them again. They are not a public detail read. Sold rows stay
+      // readable; drafts never are. A suspended seller's rows stay in the
+      // database and reappear when the account is ACTIVE again.
+      where: { id, deletedAt: null, status: { in: ['PUBLISHED', 'SOLD'] }, seller: activeAccountWhere },
       select: { ...listingWithImages.select, latitude: true, longitude: true }
     })
     if (!listing) throw new NotFoundException('Listing not found')

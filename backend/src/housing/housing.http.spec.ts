@@ -3,6 +3,8 @@ import { HousingService } from './housing.service'
 import { bootApi } from '../common/testing/http-app'
 import { projectSelect, SelectSpec } from '../common/testing/project-prisma'
 
+const housingId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'
+
 const owner = {
   id: 'owner-1',
   email: 'secret-owner@example.com',
@@ -22,7 +24,7 @@ const owner = {
 }
 
 const housing = {
-  id: 'housing-1',
+  id: housingId,
   ownerId: 'owner-1',
   title: 'Sunny 2BR in Inman Park',
   description: 'Bright two-bedroom a short walk from the BeltLine.',
@@ -52,7 +54,7 @@ const housing = {
 }
 
 function expectPublic(body: unknown) {
-  const row = body as { type?: string; owner?: unknown; latitude?: unknown; longitude?: unknown }
+  const row = body as { type?: string; owner?: unknown; latitude?: unknown; longitude?: unknown; verified?: boolean }
   expect(row.type).toBe('Apartment')
   expect(row.owner).toEqual({
     id: 'owner-1',
@@ -60,6 +62,7 @@ function expectPublic(body: unknown) {
   })
   expect(row.latitude).toBeUndefined()
   expect(row.longitude).toBeUndefined()
+  expect(row.verified).toBeUndefined()
   const serialized = JSON.stringify(body)
   for (const secret of ['secret-owner@example.com', 'secret-hash-value', 'Lovelace', 'Private bio', '33.761111', '-84.363333', '33.770001', '-84.370001', 'passwordHash']) {
     expect(serialized).not.toContain(secret)
@@ -134,7 +137,7 @@ describe('Housing HTTP', () => {
   })
 
   it('GET /api/v1/housing/:id returns the public owner card and hides coordinates', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/housing/housing-1`)
+    const response = await fetch(`${baseUrl}/api/v1/housing/${housingId}`)
     expect(response.status).toBe(200)
     expectPublic(await response.json())
   })
@@ -179,7 +182,7 @@ describe('Housing HTTP', () => {
 
   it('PATCH /api/v1/housing/:id by someone else is 403', async () => {
     ownerId = 'someone-else'
-    const response = await fetch(`${baseUrl}/api/v1/housing/housing-1`, {
+    const response = await fetch(`${baseUrl}/api/v1/housing/${housingId}`, {
       method: 'PATCH',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
       body: JSON.stringify({ title: 'Taken over' })
@@ -189,17 +192,24 @@ describe('Housing HTTP', () => {
   })
 
   it('DELETE /api/v1/housing/:id without a token is 401', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/housing/housing-1`, { method: 'DELETE' })
+    const response = await fetch(`${baseUrl}/api/v1/housing/${housingId}`, { method: 'DELETE' })
     expect(response.status).toBe(401)
     expect(prisma.housingListing.update).not.toHaveBeenCalled()
   })
 
   it('DELETE /api/v1/housing/:id by the owner archives the row', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/housing/housing-1`, {
+    const response = await fetch(`${baseUrl}/api/v1/housing/${housingId}`, {
       method: 'DELETE',
       headers: { authorization: `Bearer ${token}` }
     })
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ id: 'housing-1', status: 'ARCHIVED' })
+    expect(await response.json()).toEqual({ id: housingId, status: 'ARCHIVED' })
+  })
+
+  it('GET /api/v1/housing/:id rejects a non-UUID with 400 before Prisma', async () => {
+    prisma.housingListing.findFirst.mockClear()
+    const response = await fetch(`${baseUrl}/api/v1/housing/not-a-uuid`)
+    expect(response.status).toBe(400)
+    expect(prisma.housingListing.findFirst).not.toHaveBeenCalled()
   })
 })

@@ -18,9 +18,6 @@ const publicServiceSelect = {
   availability: true,
   tags: true,
   imageKey: true,
-  backgroundCheck: true,
-  rating: true,
-  reviewCount: true,
   status: true,
   createdAt: true,
   updatedAt: true,
@@ -42,15 +39,17 @@ const quoteForProviderSelect = {
 
 type ProviderQuote = Prisma.ServiceQuoteGetPayload<{ select: typeof quoteForProviderSelect }>
 
-function toRating(value: Prisma.Decimal | number | string | null) {
-  if (value === null || value === undefined) return null
-  const number = Number(value)
-  return Number.isFinite(number) ? number : null
-}
-
-function presentService<T extends { imageKey: string | null; rating: Prisma.Decimal | number | string | null }>(row: T) {
-  const { imageKey, rating, ...rest } = row
-  return { ...rest, image: imageKey, rating: toRating(rating) }
+function presentService<T extends { imageKey: string | null }>(row: T) {
+  const { imageKey, ...rest } = row
+  const publicRow = rest as T & {
+    backgroundCheck?: boolean
+    rating?: Prisma.Decimal | number | string | null
+    reviewCount?: number
+  }
+  delete publicRow.backgroundCheck
+  delete publicRow.rating
+  delete publicRow.reviewCount
+  return { ...publicRow, image: imageKey }
 }
 
 function presentQuoteForProvider(quote: ProviderQuote) {
