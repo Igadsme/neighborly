@@ -55,6 +55,7 @@ type Page =
   | "notifications"
   | "notification-preferences"
   | "saved-searches"
+  | "not-found"
 
 interface NavProps {
   currentPage: Page

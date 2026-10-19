@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { housingCard, jobCard, serviceCard } from "./verticals"
+import { housingCard, jobCard, serviceCard, serviceProviderVerified } from "./verticals"
 import type { ApiHousing, ApiJob, ApiServiceListing } from "../api/types"
 
 const owner = {
@@ -89,5 +89,29 @@ describe("vertical field mapping", () => {
     expect(card.providerName).toBe("Ada L")
     expect(card.provider).toBe("Rosa's Spotless Cleaning")
     expect(card.reviews).toBe(142)
+    expect(card.providerVerified).toBe(false)
+  })
+
+  it("treats email or identity verification as the only avatar signal", () => {
+    const base = {
+      id: "s1",
+      title: "House Cleaning",
+      businessName: "Rosa's Spotless Cleaning",
+      description: "Deep cleans for apartments.",
+      category: "Cleaning",
+      startingPriceCents: 8900,
+      location: "Decatur",
+      availability: "Mon–Sat",
+      backgroundCheck: true,
+      rating: 5,
+      reviewCount: 9,
+      createdAt: new Date().toISOString(),
+      owner,
+    } satisfies ApiServiceListing
+
+    expect(serviceProviderVerified(base)).toBe(false)
+    expect(serviceProviderVerified({ ...base, owner: { ...owner, emailVerified: true } })).toBe(true)
+    expect(serviceProviderVerified({ ...base, owner: { ...owner, idVerified: true } })).toBe(true)
+    expect(serviceProviderVerified({ ...base, owner: { ...owner, emailVerified: false } })).toBe(false)
   })
 })

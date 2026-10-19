@@ -373,6 +373,12 @@ export interface PublicUserCard {
     neighborhood?: string | null
     city?: string | null
   } | null
+  /**
+   * Present only when the API computed them. The public service card does
+   * not include either field today, so a missing value is not verification.
+   */
+  emailVerified?: boolean
+  idVerified?: boolean
 }
 
 export interface BorrowItemQuery {

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import ListingDetail from "./ListingDetail"
 
@@ -324,11 +324,32 @@ describe("Listing detail", () => {
     expect(await screen.findByRole("button", { name: "Saved" })).toBeTruthy()
   })
 
-  it("says sharing a link is not available from the photo control", async () => {
+  it("copies the listing path from the photo control", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
     listingRoutes({})
     render(<ListingDetail listingId={listingId} onNavigate={() => undefined} />)
     fireEvent.click(await screen.findByRole("button", { name: "Share listing" }))
-    expect((await screen.findAllByText("Sharing a link isn't available in this version.")).length).toBeGreaterThan(0)
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+    expect(writeText.mock.calls[0]?.[0]).toBe(`${window.location.origin}/listings/${listingId}`)
+    expect((await screen.findAllByText("Link copied.")).length).toBeGreaterThan(0)
+  })
+
+  it("does not pretend a listing was shared when the clipboard is missing", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: undefined,
+    })
+    listingRoutes({})
+    render(<ListingDetail listingId={listingId} onNavigate={() => undefined} />)
+    fireEvent.click(await screen.findByRole("button", { name: "Share listing" }))
+    expect(
+      (await screen.findAllByText("Sharing a link isn't available in this version.")).length,
+    ).toBeGreaterThan(0)
+    expect(screen.queryByText("Link copied.")).toBeNull()
   })
 
   it("submits a listing report from the existing control", async () => {

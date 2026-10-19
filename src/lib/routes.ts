@@ -1,3 +1,5 @@
+import { pathFor } from "./paths"
+
 /**
  * Translates an API-provided link into the app's own routing vocabulary.
  *
@@ -8,6 +10,9 @@
  * renders, otherwise tapping a notification lands the user on a blank screen.
  * A link that matches nothing falls back to the notification list, which is a
  * real destination, rather than a route that renders nothing.
+ *
+ * `notificationPath` is the address bar path for that page. Navigation writes
+ * it with `history.pushState`, so a notification target survives refresh.
  */
 export function routeFor(link: string): [page: string, id?: string] {
   const id = (pattern: RegExp): string | undefined => link.match(pattern)?.[1]
@@ -39,8 +44,23 @@ export function routeFor(link: string): [page: string, id?: string] {
   const mission = id(/^\/missions\/([^/?]+)/)
   if (mission) return ["mission-detail", mission]
 
+  const conversation = id(/^\/(?:messages|conversations)\/([^/?]+)/)
+  if (conversation) return ["messages", conversation]
+
+  const profile = id(/^\/(?:profile|users)\/([^/?]+)/)
+  if (profile) return ["profile", profile]
+
+  const borrowItem = id(/^\/borrow\/items\/([^/?]+)/)
+  if (borrowItem) return ["borrow-item", borrowItem]
+
   // `/borrow` and other bare area links open the area's landing screen.
   if (/^\/borrow\/?$/.test(link)) return ["borrow-lent"]
 
   return ["notifications"]
+}
+
+/** Addressable path a notification should open. */
+export function notificationPath(link: string): string {
+  const [page, id] = routeFor(link)
+  return pathFor(page, id) ?? "/notifications"
 }

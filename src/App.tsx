@@ -5,6 +5,13 @@ import { LiveRegion, RouteFallback, SkipLink } from "./components/a11y"
 import { api, onSessionExpired, readStatus } from "./api/client"
 import type { ApiRequestSummary } from "./api/types"
 import { unreadConversations } from "./lib/activity"
+import {
+  bootFromLocation,
+  parsePath,
+  pathFor,
+  resetRememberedAccountToken,
+  type ParsedRoute,
+} from "./lib/paths"
 
 /*
  * Route-level code splitting.
@@ -115,6 +122,7 @@ type Page =
   | "request-create"
   | "request-edit"
   | "request-detail"
+  | "not-found"
 
 /**
  * Loads the request being edited. Kept out of App so the edit screen only
@@ -248,15 +256,24 @@ function OwnPassportRoute({
   return <PassportView userId={userId} viewerId={userId} onNavigate={onNavigate} />
 }
 
+function readBoot() {
+  const next = bootFromLocation(window.location.pathname, window.location.search)
+  if (next.replaceWith) {
+    window.history.replaceState({ neighborly: next.replaceWith }, "", next.replaceWith)
+  }
+  return next
+}
+
 export default function App() {
-  const [page, setPage] = useState<Page>("landing")
-  const [listingId, setListingId] = useState<string | null>(null)
-  const [conversationId, setConversationId] = useState<string | null>(null)
-  const [profileUserId, setProfileUserId] = useState<string | null>(null)
-  const [requestId, setRequestId] = useState<string | null>(null)
-  const [disputeId, setDisputeId] = useState<string | null>(null)
-  const [passportUserId, setPassportUserId] = useState<string | null>(null)
-  const [missionId, setMissionId] = useState<string | null>(null)
+  const [boot] = useState(readBoot)
+  const [page, setPage] = useState<Page>(boot.route.page as Page)
+  const [listingId, setListingId] = useState<string | null>(boot.route.listingId)
+  const [conversationId, setConversationId] = useState<string | null>(boot.route.conversationId)
+  const [profileUserId, setProfileUserId] = useState<string | null>(boot.route.profileUserId)
+  const [requestId, setRequestId] = useState<string | null>(boot.route.requestId)
+  const [disputeId, setDisputeId] = useState<string | null>(boot.route.disputeId)
+  const [passportUserId, setPassportUserId] = useState<string | null>(boot.route.passportUserId)
+  const [missionId, setMissionId] = useState<string | null>(boot.route.missionId)
   const [isSignedIn, setIsSignedIn] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
   const [viewerId, setViewerId] = useState<string | null>(null)
@@ -265,40 +282,34 @@ export default function App() {
   // Single-use deep-link tokens. They are read from the URL once, handed
   // to the relevant screen, and stripped from the address bar so they are
   // not left in history or in a shared link.
-  const [accountToken, setAccountToken] = useState<string | null>(null)
+  const [accountToken, setAccountToken] = useState<string | null>(boot.token)
   // Marketplace screens need the category list and a place to land after a
   // successful create, so they are loaded once here rather than per screen.
   const [categories, setCategories] = useState<Array<{ id: string; name: string; slug: string }>>([])
 
-  const navigate = useCallback((p: string, id?: string) => {
-    if (p === "listing") setListingId(id ?? null)
-    if (p === "messages") setConversationId(id ?? null)
-    if (p === "profile") setProfileUserId(id ?? null)
-    // Request routes reuse the id slot, so a deep link to a request keeps
-    // its own addressable id.
-    if (p === "request-detail" || p === "request-edit") setRequestId(id ?? null)
-    // Borrow routes reuse the same id slot, so a notification deep link to a
-    // borrowing lands on the right record.
-    if (p === "borrow-item" || p === "borrow-edit") setRequestId(id ?? null)
-    if (p === "borrow-detail") setRequestId(id ?? null)
-    if (p === "borrow-dispute") setDisputeId(id ?? null)
-    if (p === "passport" || p === "passport-me") setPassportUserId(id ?? null)
-    if (p === "mission-detail" || p === "mission-manage") setMissionId(id ?? null)
-    if (p === "mission-edit") setMissionId(id ?? null)
-    setPage(p as Page)
-    window.scrollTo({ top: 0, behavior: "instant" })
+  const applyRoute = useCallback((next: ParsedRoute) => {
+    setPage(next.page as Page)
+    setListingId(next.listingId)
+    setConversationId(next.conversationId)
+    setProfileUserId(next.profileUserId)
+    setRequestId(next.requestId)
+    setDisputeId(next.disputeId)
+    setPassportUserId(next.passportUserId)
+    setMissionId(next.missionId)
   }, [])
 
-  // Verification and reset links arrive as `/?verify=…` and `/?reset=…`.
-  const consumeDeepLink = useCallback(() => {
-    const params = new URLSearchParams(window.location.search)
-    const token = params.get("verify") ?? params.get("verifyEmailChange") ?? params.get("reset")
-    if (!token) return
-    setAccountToken(token)
-    setPage(params.get("reset") ? "reset-password" : "verify-email")
-    // Replace rather than push so the token does not survive a back button.
-    window.history.replaceState({}, "", window.location.pathname)
-  }, [])
+  const navigate = useCallback((p: string, id?: string) => {
+    if (p !== "verify-email" && p !== "reset-password") resetRememberedAccountToken()
+    const path = pathFor(p, id)
+    if (path) {
+      window.history.pushState({ neighborly: path }, "", path)
+      applyRoute(parsePath(path))
+    } else {
+      // A page name with no path keeps the previous in-memory behavior.
+      setPage(p as Page)
+    }
+    window.scrollTo({ top: 0, behavior: "instant" })
+  }, [applyRoute])
 
   const signIn = (next?: string, id?: string) => {
     setIsSignedIn(true)
@@ -322,7 +333,19 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    consumeDeepLink()
+    const onPop = () => {
+      const next = bootFromLocation(window.location.pathname, window.location.search)
+      if (next.replaceWith) {
+        window.history.replaceState({ neighborly: next.replaceWith }, "", next.replaceWith)
+      }
+      applyRoute(next.route)
+      setAccountToken(next.token)
+    }
+    window.addEventListener("popstate", onPop)
+    return () => window.removeEventListener("popstate", onPop)
+  }, [applyRoute])
+
+  useEffect(() => {
     // A refresh that fails ends the session wherever the user happens to be.
     return onSessionExpired(() => {
       setViewerId(null)
@@ -330,7 +353,7 @@ export default function App() {
       setIsSignedIn(false)
       navigate("landing")
     })
-  }, [consumeDeepLink, navigate])
+  }, [navigate])
 
   useEffect(() => {
     if (!api.auth.hasSession()) {
@@ -344,7 +367,12 @@ export default function App() {
         if (cancelled) return
         setViewerId(me.id)
         setIsSignedIn(true)
-        setPage((current) => (current === "landing" ? "home" : current))
+        setPage((current) => {
+          if (current !== "landing") return current
+          const path = pathFor("home")!
+          window.history.replaceState({ neighborly: path }, "", path)
+          return "home"
+        })
       })
       .catch(() => {
         if (cancelled) return
@@ -680,6 +708,27 @@ export default function App() {
           <Community onNavigate={navigate} />
         )}
 
+        {page === "not-found" && (
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-5xl mb-4">🏡</div>
+              <h1 className="font-display text-2xl font-semibold text-[#1B2A4A] mb-2">
+                Page not found
+              </h1>
+              <p className="text-[#5C6E8A] mb-6">
+                That address is not part of Neighborly.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate(isSignedIn ? "home" : "landing")}
+                className="bg-[#2D6A4F] text-white px-6 py-3 rounded-xl font-semibold hover:bg-[#1B4332] transition-colors"
+              >
+                Go home
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Redirect to sign in if accessing signed-in pages without auth */}
         {!isSignedIn &&
           page !== "landing" &&
@@ -687,6 +736,7 @@ export default function App() {
           page !== "forgot-password" &&
           page !== "reset-password" &&
           page !== "verify-email" &&
+          page !== "not-found" &&
           page !== "my-listings" &&
           page !== "my-requests" &&
           page !== "requests" &&

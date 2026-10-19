@@ -3,6 +3,7 @@ import { Avatar, StarRating, Badge, Button, Icon, ListingCard } from '../compone
 import { listings, type Listing } from '../data'
 import { api, ApiError, readError, readStatus } from '../api/client'
 import type { ApiListing } from '../api/types'
+import { copyShareUrl, pathFor } from '../lib/paths'
 import { isUuid, listingFromApi, mediaSrc } from '../lib/view'
 
 type Page = 'listing' | 'messages' | 'profile' | 'explore'
@@ -289,7 +290,21 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                   <button
                     type="button"
                     aria-label="Share listing"
-                    onClick={e => { e.stopPropagation(); setActionNote("Sharing a link isn't available in this version.") }}
+                    onClick={e => {
+                      e.stopPropagation()
+                      const path = pathFor('listing', listing.id)
+                      if (!path) {
+                        setActionNote("Sharing a link isn't available in this version.")
+                        return
+                      }
+                      void copyShareUrl(path).then(result => {
+                        setActionNote(
+                          result === 'copied'
+                            ? 'Link copied.'
+                            : "Sharing a link isn't available in this version.",
+                        )
+                      })
+                    }}
                     className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-md hover:scale-110 transition-transform"
                   >
                     <Icon name="share" size={16} className="stroke-[#5C6E8A]" />

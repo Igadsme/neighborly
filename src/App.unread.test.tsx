@@ -1,5 +1,5 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import App from "./App"
 import Navigation from "./components/Navigation"
 import type { ApiConversation } from "./api/types"
@@ -58,10 +58,15 @@ function requestedPaths(fetchMock: ReturnType<typeof route>) {
   return fetchMock.mock.calls.map((call) => String(call[0]))
 }
 
+beforeEach(() => {
+  window.history.replaceState({}, "", "/")
+})
+
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
   window.localStorage.clear()
+  window.history.replaceState({}, "", "/")
 })
 
 describe("navigation unread badge", () => {

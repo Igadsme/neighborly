@@ -1,4 +1,5 @@
-import { defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type HtmlTagDescriptor, type Plugin } from 'vite'
+import { LOCALHOST_API_URL, productionApiUrlProblem } from './src/api/require-api-url'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
@@ -19,6 +20,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      requireProductionApiUrl(),
       figmaSiteConfiguration(siteConfiguration),
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
@@ -80,6 +82,41 @@ type FigmaSiteConfiguration = {
   }
   accessibility?: {
     addBypassLinks?: boolean
+  }
+}
+
+/**
+ * `vite build` (production mode) refuses to run without `VITE_API_URL`, and
+ * refuses a bundle that still contains the dev localhost API unless that
+ * string was the explicit value. Dev server and `--mode development` builds
+ * are unchanged.
+ */
+function requireProductionApiUrl(): Plugin {
+  let mode = 'production'
+  let explicitUrl = ''
+  return {
+    name: 'neighborly-require-api-url',
+    apply: 'build',
+    configResolved(config) {
+      mode = config.mode
+      const fromFiles = loadEnv(config.mode, config.envDir, 'VITE_').VITE_API_URL
+      explicitUrl = (process.env.VITE_API_URL ?? fromFiles ?? '').trim()
+      const problem = productionApiUrlProblem(config.mode, explicitUrl)
+      if (problem) {
+        throw new Error(problem)
+      }
+    },
+    generateBundle(_options, bundle) {
+      if (mode !== 'production') return
+      if (explicitUrl === LOCALHOST_API_URL) return
+      for (const item of Object.values(bundle)) {
+        if (item.type === 'chunk' && item.code.includes(LOCALHOST_API_URL)) {
+          this.error(
+            `Production bundle contains ${LOCALHOST_API_URL}. Set VITE_API_URL to the public API base URL.`,
+          )
+        }
+      }
+    },
   }
 }
 

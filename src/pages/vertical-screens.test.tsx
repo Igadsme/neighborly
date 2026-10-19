@@ -179,6 +179,10 @@ describe("Services screen", () => {
     render(<Services onNavigate={() => undefined} />)
     expect(await screen.findByText("House Cleaning")).toBeTruthy()
     expect(document.body.textContent).toContain("$89")
+    // A background check and a rating are not an identity check. The avatar
+    // tick stays off unless the payload says the provider is verified.
+    expect(document.querySelector("[data-verified-badge]")).toBeNull()
+    expect(screen.getByText(/BG Check/)).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Request quote" }))
     fireEvent.change(screen.getByPlaceholderText(/2BR apartment/), { target: { value: "Deep clean before move-in" } })
     fireEvent.change(screen.getByPlaceholderText(/Street address/), { target: { value: "12 Peachtree St" } })
@@ -225,6 +229,55 @@ describe("Services screen", () => {
     fireEvent.change(screen.getByPlaceholderText(/2BR apartment/), { target: { value: "Need a clean" } })
     fireEvent.click(screen.getByRole("button", { name: "Send request →" }))
     expect(await screen.findByText("Sign in to continue.")).toBeTruthy()
+  })
+
+  it("renders the verified avatar only for providers the payload marks verified", async () => {
+    route(() =>
+      json([
+        {
+          id: "svc-1",
+          title: "House Cleaning",
+          businessName: "Rosa's Spotless",
+          description: "Apartment deep cleans.",
+          category: "Cleaning",
+          startingPriceCents: 8900,
+          location: "Decatur",
+          availability: "Mon–Sat",
+          tags: [],
+          image: null,
+          backgroundCheck: true,
+          rating: 4.9,
+          reviewCount: 12,
+          createdAt: "2026-09-22T12:00:00.000Z",
+          owner,
+        },
+        {
+          id: "svc-2",
+          title: "Yard Work",
+          businessName: "Bo's Lawn",
+          description: "Mowing and edging.",
+          category: "Lawn Care",
+          startingPriceCents: 4000,
+          location: "Decatur",
+          availability: "Weekends",
+          tags: [],
+          image: null,
+          backgroundCheck: false,
+          rating: null,
+          reviewCount: 0,
+          createdAt: "2026-09-22T12:00:00.000Z",
+          owner: { ...owner, id: "owner-2", emailVerified: true },
+        },
+      ]),
+    )
+    render(<Services onNavigate={() => undefined} />)
+    expect(await screen.findByText("House Cleaning")).toBeTruthy()
+    expect(screen.getByText("Yard Work")).toBeTruthy()
+    const badges = document.querySelectorAll("[data-verified-badge]")
+    // Fails if every card paints the verified treatment, and fails if a real
+    // email or identity signal is ignored.
+    expect(badges.length).toBe(1)
+    expect(badges.length).toBeLessThan(2)
   })
 })
 

@@ -63,7 +63,7 @@ Account deletion: `docs/ACCOUNT_DELETION.md`.
 
 The API listens on port 3000. Health is `GET http://localhost:3000/api/v1/health`. Swagger is `http://localhost:3000/docs`.
 
-Frontend, from the repo root. `VITE_API_URL` defaults to `http://localhost:3000/api/v1` in the client when the variable is unset; set it in the root `.env` copied above, or inline:
+Frontend, from the repo root. In dev, `VITE_API_URL` defaults to `http://localhost:3000/api/v1` when the variable is unset. `pnpm build` fails if it is unset, and the production bundle does not substitute localhost. Set it in the root `.env` copied above, or inline:
 
 ```bash
 pnpm install
