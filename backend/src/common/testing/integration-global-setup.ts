@@ -53,6 +53,21 @@ function assertDisposable(url: string) {
 const MIGRATION_SEEDED_TABLES = new Set(['CommunityBadge'])
 
 /**
+ * PostGIS keeps `spatial_ref_sys` in `public`. Truncating it removes SRID
+ * 4326, and the next `ST_Distance` fails with "Cannot find SRID (4326)".
+ * Extension-owned tables are reference data, same as the badge catalogue.
+ */
+const EXTENSION_OWNED_TABLES = `
+  SELECT c.relname
+  FROM pg_depend d
+  JOIN pg_class c ON c.oid = d.objid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE d.deptype = 'e'
+    AND n.nspname = 'public'
+    AND c.relkind = 'r'
+`
+
+/**
  * Connects to the same URL the specs use.
  *
  * Deliberately not shelling out to `docker exec`: the database may be a
@@ -82,6 +97,8 @@ async function applicationTables(url: string): Promise<string[]> {
        WHERE table_schema = 'public'
          AND table_type = 'BASE TABLE'
          AND table_name <> '_prisma_migrations'
+         AND table_name <> 'spatial_ref_sys'
+         AND table_name NOT IN (${EXTENSION_OWNED_TABLES})
        ORDER BY table_name;`,
     ),
   )

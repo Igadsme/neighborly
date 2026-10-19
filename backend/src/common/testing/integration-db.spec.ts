@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { integrationDatabaseUrl } from './integration-db'
 
 describe('integrationDatabaseUrl', () => {
@@ -16,6 +18,12 @@ describe('integrationDatabaseUrl', () => {
   it('fails loudly when the variable is unset', () => {
     delete process.env.NEIGHBORLY_TEST_DATABASE_URL
     expect(() => integrationDatabaseUrl()).toThrow(/NEIGHBORLY_TEST_DATABASE_URL is not set/)
+  })
+
+  it('leaves the PostGIS spatial_ref_sys table out of the integration reset', () => {
+    const source = readFileSync(join(__dirname, 'integration-global-setup.ts'), 'utf8')
+    expect(source).toContain("table_name <> 'spatial_ref_sys'")
+    expect(source).toContain('deptype')
   })
 
   it.each([
