@@ -44,7 +44,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`. `done` requires 
 | BL-018 | Loopback dev ports | not started | |
 | BL-019 | Docs drift | not started | |
 | BL-020 | Staging object store image | not started | |
-| BL-021 | Multi-process realtime | done | `pnpm test` exit 0 (342 tests). `messaging.redis-fanout.spec.ts` starts two gateways and delivers a message over an in-memory pub/sub. `REDIS_URL` unset stays single-node. A live Redis across two OS processes was not run. |
+| BL-021 | Multi-process realtime | done | `main.ts` calls `SocketRedis.connect()` before `useWebSocketAdapter`, because Nest builds the Socket.IO server before `onModuleInit`. `messaging.redis-fanout.spec.ts` follows that order from a fresh single-node client and delivers a message across two gateways. `REDIS_URL` unset stays single-node. A live Redis across two OS processes was not run. |
 | BL-022 | Error tracking | blocked | Vendor decision. The no-op hook is confirmed |
 | BL-023 | Package name and Figma shell | not started | |
 | BL-024 | Tracked smoke PNGs | blocked | Owner must agree to remove them |

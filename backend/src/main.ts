@@ -14,7 +14,11 @@ import { allowMultipartForListingImages } from './common/uploads'
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false })
-  app.useWebSocketAdapter(new RedisIoAdapter(app, app.get(SocketRedis)))
+  // Nest 11 builds the Socket.IO server inside init() before onModuleInit.
+  // Connecting here is what makes createIOServer see a live pub/sub pair.
+  const sockets = app.get(SocketRedis)
+  await sockets.connect()
+  app.useWebSocketAdapter(new RedisIoAdapter(app, sockets))
   app.use(requestContextMiddleware)
   app.use(allowMultipartForListingImages)
   app.use(json({ limit: jsonBodyLimit }))

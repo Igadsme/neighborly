@@ -70,9 +70,37 @@ export async function connectIoredis(url: string): Promise<{ pub: RedisClient; s
 export class SocketRedis implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(SocketRedis.name)
   connection: SocketRedisConnection = { mode: 'single' }
+  /** Tests swap this for an in-memory pub/sub pair. The app uses ioredis. */
+  factory: RedisFactory = connectIoredis
+  private opening?: Promise<void>
 
+  /**
+   * Opens the pub/sub pair. Idempotent: a second call waits on the first
+   * attempt instead of opening another pair. main.ts must finish this before
+   * Nest builds the Socket.IO server, which happens before onModuleInit.
+   */
+  async connect() {
+    if (!this.opening) this.opening = this.open()
+    return this.opening
+  }
+
+  /**
+   * Nest calls this after the Socket.IO server already exists. If connect()
+   * has started, do nothing so a late hook cannot replace the clients the
+   * adapter is already using.
+   */
   async onModuleInit() {
-    this.connection = await openSocketRedis(process.env.REDIS_URL, process.env.NODE_ENV ?? 'development', connectIoredis)
+    if (this.opening) return
+    await this.connect()
+  }
+
+  private async open() {
+    try {
+      this.connection = await openSocketRedis(process.env.REDIS_URL, process.env.NODE_ENV ?? 'development', this.factory)
+    } catch (error) {
+      this.opening = undefined
+      throw error
+    }
     if (this.connection.mode === 'single') {
       this.logger.log('REDIS_URL unset or unavailable; Socket.IO is single-node')
     }

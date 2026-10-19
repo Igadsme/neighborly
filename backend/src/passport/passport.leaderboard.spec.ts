@@ -42,6 +42,10 @@ describe('PassportService leaderboard', () => {
     expect(sql.text).toContain('u."deletedAt" IS NULL')
     expect(sql.text).toContain("u.status::text = 'ACTIVE'")
     expect(sql.text).toContain('ORDER BY completed_exchanges DESC, u.id ASC')
+    expect(sql.text).toContain('AS exchanges')
+    expect(sql.text).toContain('AS borrows')
+    expect(sql.text).not.toContain('LEFT JOIN "TransactionParticipant"')
+    expect(sql.text).not.toContain('LEFT JOIN "BorrowRequest"')
     expect(sql.text.indexOf('ORDER BY')).toBeLessThan(sql.text.indexOf('LIMIT'))
     expect(sql.values).toEqual([2, 4])
     // The service keeps the SQL order. It does not re-sort the page by borrowings.

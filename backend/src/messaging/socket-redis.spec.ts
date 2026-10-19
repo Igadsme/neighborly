@@ -78,9 +78,46 @@ describe('SocketRedis lifecycle', () => {
   it('boots a single node without errors when REDIS_URL is unset', async () => {
     delete process.env.REDIS_URL
     const sockets = new SocketRedis()
+    await expect(sockets.connect()).resolves.toBeUndefined()
     await expect(sockets.onModuleInit()).resolves.toBeUndefined()
     expect(sockets.connection.mode).toBe('single')
     expect(sockets.adapter()).toBeUndefined()
     await expect(sockets.onApplicationShutdown()).resolves.toBeUndefined()
+  })
+
+  it('opens Redis once when connect runs before onModuleInit', async () => {
+    process.env.REDIS_URL = 'redis://127.0.0.1:6379'
+    const pub = client()
+    const sub = client()
+    const factory = jest.fn(async () => ({ pub, sub }))
+    const sockets = new SocketRedis()
+    sockets.factory = factory
+
+    await sockets.connect()
+    await sockets.connect()
+    await sockets.onModuleInit()
+
+    expect(factory).toHaveBeenCalledTimes(1)
+    expect(sockets.connection.mode).toBe('redis')
+    expect(sockets.adapter()).toBeDefined()
+    await sockets.onApplicationShutdown()
+    expect(pub.quit).toHaveBeenCalledTimes(1)
+    expect(sub.quit).toHaveBeenCalledTimes(1)
+  })
+
+  it('rethrows from connect when production Redis is unreachable', async () => {
+    process.env.REDIS_URL = 'redis://127.0.0.1:6379'
+    const previousEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    try {
+      const sockets = new SocketRedis()
+      sockets.factory = async () => {
+        throw new Error('ECONNREFUSED')
+      }
+      await expect(sockets.connect()).rejects.toThrow('ECONNREFUSED')
+    } finally {
+      if (previousEnv === undefined) delete process.env.NODE_ENV
+      else process.env.NODE_ENV = previousEnv
+    }
   })
 })

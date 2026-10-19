@@ -328,8 +328,9 @@ export class PassportService {
    *
    * The rank is completed exchanges, the count the passport card shows.
    * That sort happens in SQL before LIMIT, with the member id as the tie
-   * break, so a later page cannot outrank an earlier one. Counts come from
-   * one grouped query rather than a trustInputs call per member.
+   * break, so a later page cannot outrank an earlier one. Exchange and
+   * borrow counts are separate grouped subqueries so those joins do not
+   * multiply each other.
    */
   async leaderboard(query: ListPassportsQuery) {
     const limit = Math.min(Math.max(query.limit ?? 25, 1), 100)
@@ -339,19 +340,38 @@ export class PassportService {
              profile."displayName" AS display_name,
              profile."firstName" AS first_name,
              profile."avatarUrl" AS avatar_url,
-             (COUNT(DISTINCT t.id) FILTER (WHERE t.status::text = 'COMPLETED'))::int AS completed_exchanges,
-             (COUNT(DISTINCT br.id) FILTER (WHERE br.status::text = 'COMPLETED'))::int AS completed_borrowings,
-             (COUNT(DISTINCT br.id) FILTER (WHERE br.status::text = 'COMPLETED' AND br."lenderId" = u.id))::int AS borrowings_as_lender
+             COALESCE(exchanges.completed_exchanges, 0)::int AS completed_exchanges,
+             COALESCE(borrows.completed_borrowings, 0)::int AS completed_borrowings,
+             COALESCE(borrows.borrowings_as_lender, 0)::int AS borrowings_as_lender
       FROM "PassportPrivacySettings" AS privacy
       INNER JOIN "User" AS u ON u.id = privacy."userId"
       LEFT JOIN "Profile" AS profile ON profile."userId" = u.id
-      LEFT JOIN "TransactionParticipant" AS tp ON tp."userId" = u.id
-      LEFT JOIN "Transaction" AS t ON t.id = tp."transactionId"
-      LEFT JOIN "BorrowRequest" AS br ON br."lenderId" = u.id OR br."borrowerId" = u.id
+      LEFT JOIN (
+        SELECT tp."userId" AS user_id,
+               COUNT(DISTINCT t.id)::int AS completed_exchanges
+        FROM "TransactionParticipant" AS tp
+        INNER JOIN "Transaction" AS t ON t.id = tp."transactionId"
+        WHERE t.status::text = 'COMPLETED'
+        GROUP BY tp."userId"
+      ) AS exchanges ON exchanges.user_id = u.id
+      LEFT JOIN (
+        SELECT participant.user_id,
+               COUNT(DISTINCT participant.borrow_id)::int AS completed_borrowings,
+               (COUNT(DISTINCT participant.borrow_id) FILTER (WHERE participant.side = 'lender'))::int AS borrowings_as_lender
+        FROM (
+          SELECT br.id AS borrow_id, br."lenderId" AS user_id, 'lender'::text AS side
+          FROM "BorrowRequest" AS br
+          WHERE br.status::text = 'COMPLETED'
+          UNION ALL
+          SELECT br.id, br."borrowerId", 'borrower'::text
+          FROM "BorrowRequest" AS br
+          WHERE br.status::text = 'COMPLETED'
+        ) AS participant
+        GROUP BY participant.user_id
+      ) AS borrows ON borrows.user_id = u.id
       WHERE privacy."leaderboardOptIn" = true
         AND u."deletedAt" IS NULL
         AND u.status::text = 'ACTIVE'
-      GROUP BY u.id, profile."displayName", profile."firstName", profile."avatarUrl"
       ORDER BY completed_exchanges DESC, u.id ASC
       LIMIT ${limit} OFFSET ${offset}
     `)
