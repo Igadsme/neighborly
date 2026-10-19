@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Real-PostgreSQL + real-object-storage integration tests for Milestone 4.
 #
-# Starts a DISPOSABLE PostgreSQL 16 container on localhost:55435 and a
+# Starts a DISPOSABLE PostGIS 16 container on localhost:55435 and a
 # DISPOSABLE S3-compatible object store (rustfs, the MinIO API) on
 # localhost:59000, applies all Prisma migrations, runs the storage suite
 # against both, and removes both containers on exit.
@@ -18,6 +18,7 @@ PG_PORT="55435"
 S3_PORT="59000"
 BUCKET="neighborly-m4-media"
 DB_URL="postgresql://postgres:postgres@localhost:${PG_PORT}/neighborly_m4"
+PG_IMAGE="${PG_IMAGE:-postgis/postgis:16-3.4}"
 S3_ACCESS_KEY="neighborly-m4-local"
 S3_SECRET_KEY="neighborly-m4-local-only"
 
@@ -40,11 +41,16 @@ fi
 
 docker rm -f "$PG_CONTAINER" "$S3_CONTAINER" >/dev/null 2>&1 || true
 
+if ! docker image inspect "$PG_IMAGE" >/dev/null 2>&1; then
+  echo "Pulling database image $PG_IMAGE" >&2
+  docker pull "$PG_IMAGE" >/dev/null
+fi
+
 docker run -d --name "$PG_CONTAINER" \
   -e POSTGRES_PASSWORD=postgres \
   -e POSTGRES_DB=neighborly_m4 \
   -p "${PG_PORT}:5432" \
-  postgres:16 >/dev/null
+  "$PG_IMAGE" >/dev/null
 
 docker run -d --name "$S3_CONTAINER" \
   -e RUSTFS_ACCESS_KEY="$S3_ACCESS_KEY" \
@@ -77,6 +83,10 @@ if [ "$ready" -ne 1 ]; then
 fi
 
 cd "$(dirname "$0")/../backend"
+
+# Generate the Prisma client on clean runners before applying migrations or
+# compiling storage integration specs.
+DATABASE_URL="$DB_URL" pnpm exec prisma generate >/dev/null
 
 # Verify the migration chain applies from a clean database.
 DATABASE_URL="$DB_URL" pnpm exec prisma migrate deploy >/dev/null
