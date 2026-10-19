@@ -345,7 +345,7 @@ A suite that could not run is not a closed item and is not a pass.
 
 - Priority: P1
 - Evidence: confirmed
-- Cause: `genuine code defect` for `figma-make-app` and the `figma:*` markers. `noindex` stays until BL-039.
+- Cause: `genuine code defect` for `figma-make-app` and the `figma:*` markers. `noindex` stays until BL-037.
 - Owner: Nova
 - Depends on: Vite's use of `.figma/make/site.json` for the title. Do not drop `noindex` in this item.
 - Complexity: S
@@ -353,7 +353,7 @@ A suite that could not run is not a closed item and is not a pass.
 - Acceptance criteria:
   - Root `package.json` name is `neighborly` or another owner-approved name, not `figma-make-app`.
   - Built `index.html` title remains "Neighborly — Your local community marketplace".
-  - `robots` stays `noindex, nofollow` until BL-039.
+  - `robots` stays `noindex, nofollow` until BL-037.
   - `pnpm lint`, `tsc`, and `pnpm build` pass.
 
 ### BL-024 Tracked browser-smoke PNGs
