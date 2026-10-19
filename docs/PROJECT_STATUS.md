@@ -102,10 +102,11 @@ Signed-out visitors can open `landing` and `onboarding`. Any other id shows the 
 
 ## Workspace (T7 Shield)
 
-- **Canonical local path:** `/Volumes/T7 Shield/Projects/neighborly`
+- **Canonical Git workspace:** `/Users/gadimani/Projects/neighborly-main` (APFS; `main` at the verified GitHub tip)
+- **Staging workspace/data:** `/Volumes/T7 Shield/Projects/neighborly` and the existing Docker-managed staging volumes; preserve this checkout and its evidence
 - **Backup only (do not modify):** `~/Desktop/Neighborly/app`
-- **Paused:** 2026-09-23 00:00 EDT for SSD transfer; see `docs/PAUSE_CHECKPOINT.md`.
-- **Resumed:** 2026-09-23 — feature work continues from this path only. Node 22 via `.mise.toml` (Vite/Rolldown). Do not weaken for Node 20.
+- **Historical T7 checkout:** `/Volumes/T7 Shield/Projects/neighborly` is retained for staging compatibility and recovery; do not use its exFAT `.git` for development because of AppleDouble metadata warnings.
+- **Resumed:** 2026-09-23 — feature work continues from the APFS Git workspace. Node 22 via `.mise.toml` (Vite/Rolldown). Do not weaken for Node 20.
 - **GitHub remote:** `https://github.com/Igadsme/neighborly.git`
 - **Secrets:** recreate local `.env` from `env.example` on T7; never commit real secrets. Required to boot API: `DATABASE_URL`, `JWT_SECRET` (≥32 chars), `CORS_ORIGIN`. Frontend: `VITE_API_URL`.
 
@@ -115,4 +116,3 @@ Signed-out visitors can open `landing` and `onboarding`. Any other id shows the 
 - Branch `main` after June docs merge; frontend `tsc` + `vite build` pass under Node 22; backend prisma generate, `tsc`, tests, nest build pass.
 - `prisma validate` needs `DATABASE_URL` (expected without local `.env`).
 - Offer accept/reject → conversation + transaction is in the API and on Dashboard/Messages. Vertical screens are wired to the same client. Release is not complete. Mac `.env`, Compose, migrate, seed, and signed-in e2e are still open (`docs/RELEASE_CHECKLIST.md` Section E).
-

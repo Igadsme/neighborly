@@ -198,7 +198,7 @@ pnpm run
 Use the scripts listed in the package manifests for the web and API processes. The application URL and ports depend on your local configuration; no public demo URL is currently advertised.
 
 > [!CAUTION]
-> For the existing Mac setup, the canonical working copy was reported at `/Volumes/T7 Shield/Projects/neighborly`. Keep it separate from any outdated desktop copy. Do not wipe or recreate existing Docker volumes just to set up a test run.
+> The canonical Git workspace is `/Users/gadimani/Projects/neighborly-main` on APFS. The T7 checkout at `/Volumes/T7 Shield/Projects/neighborly` is retained for local staging data, evidence, and recovery; do not use its exFAT `.git` for development because AppleDouble metadata can corrupt Git indexes. Do not wipe or recreate existing Docker volumes just to set up a test run.
 
 ## Quality assurance
 
