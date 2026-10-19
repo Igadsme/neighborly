@@ -5,7 +5,7 @@ import { resolve } from "node:path"
 import NotificationCenter from "./NotificationCenter"
 import NotificationPreferencesScreen from "./NotificationPreferencesScreen"
 import SavedSearches from "./SavedSearches"
-import { routeFor } from "../../lib/routes"
+import { notificationPath, routeFor } from "../../lib/routes"
 
 const listingId = "22222222-2222-4222-8222-222222222222"
 
@@ -111,6 +111,21 @@ describe("routeFor", () => {
   it("falls back to the notification list rather than a dead route", () => {
     expect(routeFor("/something/unknown")).toEqual(["notifications"])
     expect(routeFor("")).toEqual(["notifications"])
+  })
+
+  it("sends notification targets to addressable paths", () => {
+    expect(notificationPath(`/listings/${listingId}`)).toBe(`/listings/${listingId}`)
+    expect(notificationPath("/requests/r-1/offers")).toBe("/requests/r-1")
+    expect(notificationPath("/transactions/t-1")).toBe("/dashboard")
+    expect(notificationPath("/borrow/requests/b-1")).toBe("/borrow/requests/b-1")
+    expect(notificationPath("/borrow/disputes/d-9")).toBe("/borrow/disputes/d-9")
+    expect(notificationPath("/borrow/items/item-1")).toBe("/borrow/items/item-1")
+    expect(notificationPath("/missions/m-1")).toBe("/missions/m-1")
+    expect(notificationPath("/missions/m-1/manage")).toBe("/missions/m-1/manage")
+    expect(notificationPath("/missions/contributions")).toBe("/missions/contributions")
+    expect(notificationPath("/messages/c-1")).toBe("/messages/c-1")
+    expect(notificationPath("/profile/u-1")).toBe("/profile/u-1")
+    expect(notificationPath("/something/unknown")).toBe("/notifications")
   })
 })
 

@@ -83,9 +83,14 @@ import type {
   ServiceQuoteInput,
 } from "./types"
 
-const API_URL = (
-  import.meta.env.VITE_API_URL ?? "http://localhost:3000/api/v1"
-).replace(/\/$/, "")
+/**
+ * Dev may call the local API when `VITE_API_URL` is unset. A production
+ * build fails in Vite before this module is emitted without the variable,
+ * and the localhost string is not part of that branch (`import.meta.env.DEV`
+ * is false), so the shipped bundle does not fall back to localhost.
+ */
+const DEV_API_URL = import.meta.env.DEV ? "http://localhost:3000/api/v1" : ""
+const API_URL = (import.meta.env.VITE_API_URL || DEV_API_URL).replace(/\/$/, "")
 const ACCESS_TOKEN_KEY = "neighborly.access_token"
 
 export class ApiError extends Error {

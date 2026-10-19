@@ -202,6 +202,7 @@ export function Avatar({
       )}
       {verified && (
         <span
+          data-verified-badge=""
           className={`absolute -bottom-0.5 -right-0.5 ${badgeSizes[size]} bg-[#2D6A4F] rounded-full flex items-center justify-center`}
           // The tick is decorative: the surrounding context already states
           // that the member is verified.

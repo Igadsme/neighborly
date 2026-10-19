@@ -62,6 +62,8 @@ export interface ServiceCard {
   provider: string
   avatar: string
   providerName: string
+  /** Email or identity verification from the payload. Never inferred. */
+  providerVerified: boolean
   rating: number
   reviews: number
   startingPrice: number
@@ -71,6 +73,14 @@ export interface ServiceCard {
   tags: string[]
   image: string
   ownerId: string
+}
+
+/**
+ * Avatar tick only for a verification signal the API actually sent.
+ * A background check, rating, or review count is not that signal.
+ */
+export function serviceProviderVerified(row: ApiServiceListing): boolean {
+  return row.owner.emailVerified === true || row.owner.idVerified === true
 }
 
 export interface CommunityPostCard {
@@ -182,6 +192,7 @@ export function serviceCard(row: ApiServiceListing): ServiceCard {
     provider: row.businessName,
     avatar: "",
     providerName: personName(row.owner, row.businessName),
+    providerVerified: serviceProviderVerified(row),
     rating: row.rating ?? 0,
     reviews: row.reviewCount,
     startingPrice: dollarsFromCents(row.startingPriceCents),

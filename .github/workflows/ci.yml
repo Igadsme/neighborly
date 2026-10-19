@@ -28,7 +28,11 @@ jobs:
       - run: pnpm lint
       - run: pnpm exec tsc --noEmit
       - run: pnpm test
+      # Production builds fail closed without this variable. The value is a
+      # non-routable placeholder so CI does not bake the dev localhost API.
       - run: pnpm build
+        env:
+          VITE_API_URL: https://api.neighborly.invalid/api/v1
 
   # Real-PostgreSQL integration tests. A disposable PostgreSQL 16 service
   # container stands in for production Postgres; the suite refuses any

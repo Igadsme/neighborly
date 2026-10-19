@@ -272,7 +272,7 @@ export default function Services({ onNavigate }: ServicesProps) {
                   <div className="p-4">
                     {/* Provider */}
                     <div className="flex items-center gap-3 mb-3">
-                      <Avatar src={svc.avatar} name={svc.providerName} size="sm" verified />
+                      <Avatar src={svc.avatar} name={svc.providerName} size="sm" verified={svc.providerVerified} />
                       <div>
                         <p className="font-semibold text-sm text-[#1B2A4A]">{svc.providerName}</p>
                         <p className="text-xs text-[#5C6E8A]">{svc.location}</p>
@@ -342,7 +342,7 @@ export default function Services({ onNavigate }: ServicesProps) {
             </div>
 
             <div className="flex items-center gap-3 p-3 bg-[#F5F4EF] rounded-xl mb-5">
-              <Avatar src={bookingService.avatar} name={bookingService.providerName} size="sm" verified />
+              <Avatar src={bookingService.avatar} name={bookingService.providerName} size="sm" verified={bookingService.providerVerified} />
               <div>
                 <p className="font-semibold text-sm text-[#1B2A4A]">{bookingService.providerName}</p>
                 <p className="text-xs text-[#5C6E8A]">{bookingService.title} · from ${bookingService.startingPrice.toLocaleString()}</p>
