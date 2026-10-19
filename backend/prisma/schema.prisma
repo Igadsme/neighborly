@@ -733,6 +733,8 @@ model Listing {
   city                String?
   latitude            Decimal?                   @db.Decimal(9, 6)
   longitude           Decimal?                   @db.Decimal(9, 6)
+  /// Kept in sync with latitude/longitude by neighborly_sync_location. Not read by Prisma Client.
+  geog                Unsupported("geography(Point,4326)")?
   radiusMiles         Int?
   pickupAvailable     Boolean                    @default(true)
   deliveryAvailable   Boolean                    @default(false)
@@ -773,6 +775,7 @@ model Listing {
   @@index([status, createdAt, id])
   @@index([status, categoryId, createdAt, id])
   @@index([latitude, longitude])
+  @@index([geog], type: Gist)
   @@index([city, status])
   @@index([neighborhood, status])
   @@index([priceCents])
@@ -841,6 +844,8 @@ model NeedRequest {
   requirements    Json?
   latitude        Decimal?             @db.Decimal(9, 6)
   longitude       Decimal?             @db.Decimal(9, 6)
+  /// Kept in sync with latitude/longitude by neighborly_sync_location. Not read by Prisma Client.
+  geog            Unsupported("geography(Point,4326)")?
   neighborhood    String?
   city            String?
   radiusMiles     Int                  @default(10)
@@ -867,6 +872,7 @@ model NeedRequest {
   @@index([status, deadline])
   @@index([status, budgetCents])
   @@index([latitude, longitude])
+  @@index([geog], type: Gist)
   @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([description(ops: raw("gin_trgm_ops"))], type: Gin)
 }
@@ -1292,6 +1298,8 @@ model HousingListing {
   status       PublishStatus  @default(PUBLISHED)
   latitude     Decimal?       @db.Decimal(9, 6)
   longitude    Decimal?       @db.Decimal(9, 6)
+  /// Kept in sync with latitude/longitude by neighborly_sync_location. Not read by Prisma Client.
+  geog         Unsupported("geography(Point,4326)")?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   deletedAt    DateTime?
@@ -1299,6 +1307,7 @@ model HousingListing {
   images       HousingImage[]
 
   @@index([status, listingType, createdAt])
+  @@index([geog], type: Gist)
   @@index([ownerId, status])
   @@index([city, neighborhood])
 }
@@ -1333,6 +1342,8 @@ model JobListing {
   status           PublishStatus    @default(PUBLISHED)
   latitude         Decimal?         @db.Decimal(9, 6)
   longitude        Decimal?         @db.Decimal(9, 6)
+  /// Kept in sync with latitude/longitude by neighborly_sync_location. Not read by Prisma Client.
+  geog             Unsupported("geography(Point,4326)")?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   deletedAt        DateTime?
@@ -1341,6 +1352,7 @@ model JobListing {
   saves            JobSave[]
 
   @@index([status, employmentType, createdAt])
+  @@index([geog], type: Gist)
   @@index([ownerId, status])
 }
 
@@ -1386,6 +1398,8 @@ model ServiceListing {
   status             PublishStatus  @default(PUBLISHED)
   latitude           Decimal?       @db.Decimal(9, 6)
   longitude          Decimal?       @db.Decimal(9, 6)
+  /// Kept in sync with latitude/longitude by neighborly_sync_location. Not read by Prisma Client.
+  geog               Unsupported("geography(Point,4326)")?
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   deletedAt          DateTime?
@@ -1393,6 +1407,7 @@ model ServiceListing {
   quotes             ServiceQuote[]
 
   @@index([status, category, createdAt])
+  @@index([geog], type: Gist)
   @@index([ownerId, status])
 }
 

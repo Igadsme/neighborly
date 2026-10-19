@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { BadRequestException } from '@nestjs/common'
 import { ListingsService } from '../listings/listings.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { createTestPrisma } from '../common/testing/integration-fixtures'
@@ -56,6 +57,14 @@ describe('Listing lifecycle and discovery against real PostgreSQL', () => {
       longitude: -84.35,
       ...overrides
     } as never)
+  }
+
+  /** Moves `milesNorth` and `milesEast` from an origin using the WGS84 degree lengths PostGIS uses. */
+  function shift(origin: { latitude: number; longitude: number }, milesNorth: number, milesEast: number) {
+    const meters = 1609.344
+    const latitude = origin.latitude + (milesNorth * meters) / 111319.9
+    const longitude = origin.longitude + (milesEast * meters) / (111319.9 * Math.cos((origin.latitude * Math.PI) / 180))
+    return { latitude, longitude }
   }
 
   // ------------------------------------------------------------------ lifecycle
@@ -288,14 +297,18 @@ describe('Listing lifecycle and discovery against real PostgreSQL', () => {
 
   it('filters by radius and reports the distance', async () => {
     const marker = randomUUID().slice(0, 8)
+    const origin = { latitude: 33.75, longitude: -84.35 }
     const near = await makeListing({ title: `Near ${marker}`, latitude: 33.755, longitude: -84.35 })
     const far = await makeListing({ title: `Far ${marker}`, latitude: 34.15, longitude: -84.35 })
+    const inside = await makeListing({ title: `Inside ${marker}`, ...shift(origin, 4.9, 0) })
+    const outside = await makeListing({ title: `Outside ${marker}`, ...shift(origin, 5.1, 0) })
 
-    const origin = { latitude: 33.75, longitude: -84.35 }
-    const nearby = await service.list({ ...origin, radiusMiles: 5 })
+    const nearby = await service.list({ ...origin, radiusMiles: 5, query: marker })
     const ids = nearby.items.map(item => item.id)
     expect(ids).toContain(near.id)
+    expect(ids).toContain(inside.id)
     expect(ids).not.toContain(far.id)
+    expect(ids).not.toContain(outside.id)
 
     const nearRow = nearby.items.find(item => item.id === near.id)
     // ~0.35 miles from the origin, to one decimal place.
@@ -304,6 +317,93 @@ describe('Listing lifecycle and discovery against real PostgreSQL', () => {
 
     await service.remove(seller, near.id)
     await service.remove(seller, far.id)
+    await service.remove(seller, inside.id)
+    await service.remove(seller, outside.id)
+  })
+
+  it('keeps the radius total when the page offset is past the last row', async () => {
+    const marker = randomUUID().slice(0, 8)
+    const origin = { latitude: 33.75, longitude: -84.35 }
+    const first = await makeListing({ title: `Past ${marker} a`, ...origin })
+    const second = await makeListing({ title: `Past ${marker} b`, ...shift(origin, 1, 0) })
+
+    const page = await service.list({ ...origin, radiusMiles: 5, query: marker, limit: 1, offset: 10 })
+    expect(page.items).toEqual([])
+    expect(page.total).toBe(2)
+
+    await service.remove(seller, first.id)
+    await service.remove(seller, second.id)
+  })
+
+  it('rejects coordinates and a radius the server cannot search', async () => {
+    await expect(service.list({ latitude: 91, longitude: 0, radiusMiles: 5 })).rejects.toBeInstanceOf(BadRequestException)
+    await expect(service.list({ latitude: 0, longitude: 181, radiusMiles: 5 })).rejects.toBeInstanceOf(BadRequestException)
+    await expect(service.list({ latitude: 33.75, longitude: -84.35, radiusMiles: 10000 })).rejects.toBeInstanceOf(BadRequestException)
+  })
+
+  it('excludes the corner of the old bounding box and orders the circle by distance', async () => {
+    const marker = randomUUID().slice(0, 8)
+    const origin = { latitude: 33.75, longitude: -84.35 }
+    const inside = await makeListing({ title: `Inside ${marker}`, ...shift(origin, 3, 0) })
+    const corner = await makeListing({ title: `Corner ${marker}`, ...shift(origin, 5, 5) })
+    const farthest = await makeListing({ title: `Far ${marker} 4`, ...shift(origin, 4, 0) })
+    const nearest = await makeListing({ title: `Near ${marker} 1`, ...shift(origin, 1, 0) })
+    const middle = await makeListing({ title: `Mid ${marker} 2`, ...shift(origin, 2.5, 0) })
+
+    const page = await service.list({ ...origin, radiusMiles: 5, query: marker })
+    const ids = page.items.map(item => item.id)
+    expect(ids).toContain(inside.id)
+    expect(ids).toContain(nearest.id)
+    expect(ids).not.toContain(corner.id)
+    expect(ids.indexOf(nearest.id)).toBeLessThan(ids.indexOf(middle.id))
+    expect(ids.indexOf(middle.id)).toBeLessThan(ids.indexOf(farthest.id))
+    const nearestRow = page.items.find(item => item.id === nearest.id)
+    expect(nearestRow?.distanceMiles).toBeGreaterThan(0.5)
+    expect(nearestRow?.distanceMiles).toBeLessThan(1.5)
+
+    for (const listing of [inside, corner, farthest, nearest, middle]) await service.remove(seller, listing.id)
+  })
+
+  it('keeps paused, archived, draft, and suspended-seller rows out of a radius search', async () => {
+    const marker = randomUUID().slice(0, 8)
+    const origin = { latitude: 33.75, longitude: -84.35 }
+    const visible = await makeListing({ title: `Visible ${marker}`, ...origin })
+    const paused = await makeListing({ title: `Paused ${marker}`, ...origin })
+    await service.pause(seller, paused.id)
+    const archived = await makeListing({ title: `Archived ${marker}`, ...origin })
+    await service.archive(seller, archived.id)
+    const draft = await service.saveDraft(seller, {
+      categoryId: category,
+      title: `Draft ${marker}`,
+      description: 'Not ready for the map',
+      latitude: origin.latitude,
+      longitude: origin.longitude
+    } as never)
+    const suspendedSeller = await makeUser('suspended')
+    const suspendedListing = await service.create(suspendedSeller, {
+      categoryId: category,
+      title: `Suspended ${marker}`,
+      description: 'Hidden while the account is suspended',
+      neighborhood: 'Inman Park',
+      city: 'Atlanta',
+      latitude: origin.latitude,
+      longitude: origin.longitude
+    } as never)
+    await prisma.user.update({ where: { id: suspendedSeller }, data: { status: 'SUSPENDED' } })
+
+    const page = await service.list({ ...origin, radiusMiles: 5, query: marker })
+    const ids = page.items.map(item => item.id)
+    expect(ids).toContain(visible.id)
+    expect(ids).not.toContain(paused.id)
+    expect(ids).not.toContain(archived.id)
+    expect(ids).not.toContain(draft.id)
+    expect(ids).not.toContain(suspendedListing.id)
+
+    await service.remove(seller, visible.id)
+    await service.remove(seller, paused.id)
+    await service.remove(seller, archived.id)
+    await service.remove(seller, draft.id)
+    await service.remove(suspendedSeller, suspendedListing.id)
   })
 
   it('returns no distance without an origin', async () => {

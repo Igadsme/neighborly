@@ -1,6 +1,8 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { activeAccountWhere } from '../common/active-account'
+import { assertGeoQuery, ilikeContains, orderByIds, pageWithinRadius } from '../common/geo-search'
+import { publicRating, ratingsForOwners, type PublicRating } from '../common/public-rating'
 import { publicUserSelect } from '../common/public-user.select'
 import { cleanList, cleanText, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
@@ -43,6 +45,16 @@ export class HousingService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(query: ListHousingQuery) {
+    const origin = assertGeoQuery(query)
+    if (origin) {
+      const page = await pageWithinRadius(this.prisma, 'HousingListing', origin, housingRadiusExtra(query), query.limit, query.offset)
+      if (page.ids.length === 0) return []
+      const rows = await this.prisma.housingListing.findMany({
+        where: { id: { in: page.ids } },
+        select: publicHousingSelect
+      })
+      return this.withRatings(orderByIds(rows, page.ids).map(presentHousing))
+    }
     const search = query.query?.trim()
     const rows = await this.prisma.housingListing.findMany({
       where: {
@@ -89,7 +101,7 @@ export class HousingService {
       take: query.limit,
       skip: query.offset
     })
-    return rows.map(presentHousing)
+    return this.withRatings(rows.map(presentHousing))
   }
 
   async get(id: string) {
@@ -98,7 +110,8 @@ export class HousingService {
       select: publicHousingSelect
     })
     if (!row) throw new NotFoundException('Housing listing not found')
-    return presentHousing(row)
+    const [presented] = await this.withRatings([presentHousing(row)])
+    return presented
   }
 
   async create(ownerId: string, input: CreateHousingDto) {
@@ -130,7 +143,8 @@ export class HousingService {
       },
       select: publicHousingSelect
     })
-    return presentHousing(created)
+    const [presented] = await this.withRatings([presentHousing(created)])
+    return presented
   }
 
   async update(userId: string, id: string, input: UpdateHousingDto) {
@@ -179,9 +193,37 @@ export class HousingService {
     return { id, status: 'ARCHIVED' as const }
   }
 
+  private async withRatings<T extends { owner: { id: string } }>(rows: T[]): Promise<Array<T & PublicRating>> {
+    const summaries = await ratingsForOwners(this.prisma, rows.map(row => row.owner.id))
+    return rows.map(row => ({ ...row, ...publicRating(summaries, row.owner.id) }))
+  }
+
   private async requireOwner(id: string, userId: string) {
     const row = await this.prisma.housingListing.findUnique({ where: { id }, select: { ownerId: true, deletedAt: true } })
     if (!row || row.deletedAt) throw new NotFoundException('Housing listing not found')
     if (row.ownerId !== userId) throw new ForbiddenException('You can only change your own housing listing')
   }
+}
+
+function housingRadiusExtra(query: ListHousingQuery): Prisma.Sql {
+  const parts: Prisma.Sql[] = [Prisma.sql`row.status = 'PUBLISHED'`]
+  if (query.listingType) parts.push(Prisma.sql`row."listingType" = ${query.listingType}`)
+  if (query.type) parts.push(Prisma.sql`row."propertyType" = ${query.type}`)
+  if (query.minBeds) parts.push(Prisma.sql`row.beds >= ${query.minBeds}`)
+  if (query.maxPriceCents !== undefined) parts.push(Prisma.sql`row."priceCents" <= ${query.maxPriceCents}`)
+  if (query.pets) parts.push(Prisma.sql`row.pets = true`)
+  if (query.furnished) parts.push(Prisma.sql`row.furnished = true`)
+  if (query.verified) parts.push(Prisma.sql`row.verified = true`)
+  if (query.utilitiesIncluded) {
+    parts.push(Prisma.sql`row.utilities IS NOT NULL AND row.utilities <> 'N/A' AND row.utilities <> '' AND row.utilities NOT ILIKE 'Resident%'`)
+  }
+  const search = query.query?.trim()
+  if (search) {
+    parts.push(Prisma.sql`(
+      ${ilikeContains('row.title', search)}
+      OR ${ilikeContains('row.description', search)}
+      OR ${ilikeContains('row.neighborhood', search)}
+    )`)
+  }
+  return Prisma.join(parts, ' AND ')
 }

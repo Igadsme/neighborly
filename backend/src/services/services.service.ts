@@ -2,6 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { Prisma, QuoteStatus } from '@prisma/client'
 import { assertNotBlocked } from '../common/blocks'
 import { activeAccountWhere } from '../common/active-account'
+import { assertGeoQuery, ilikeContains, orderByIds, pageWithinRadius } from '../common/geo-search'
+import { publicRating, ratingsForOwners, type PublicRating } from '../common/public-rating'
 import { publicUserSelect } from '../common/public-user.select'
 import { cleanList, cleanText, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
@@ -73,6 +75,16 @@ export class ServicesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(query: ListServicesQuery) {
+    const origin = assertGeoQuery(query)
+    if (origin) {
+      const page = await pageWithinRadius(this.prisma, 'ServiceListing', origin, serviceRadiusExtra(query), query.limit, query.offset)
+      if (page.ids.length === 0) return []
+      const rows = await this.prisma.serviceListing.findMany({
+        where: { id: { in: page.ids } },
+        select: publicServiceSelect
+      })
+      return this.withRatings(orderByIds(rows, page.ids).map(presentService))
+    }
     const search = query.query?.trim()
     const rows = await this.prisma.serviceListing.findMany({
       where: {
@@ -95,7 +107,7 @@ export class ServicesService {
       take: query.limit,
       skip: query.offset
     })
-    return rows.map(presentService)
+    return this.withRatings(rows.map(presentService))
   }
 
   async get(id: string) {
@@ -104,7 +116,8 @@ export class ServicesService {
       select: publicServiceSelect
     })
     if (!row) throw new NotFoundException('Service not found')
-    return presentService(row)
+    const [presented] = await this.withRatings([presentService(row)])
+    return presented
   }
 
   async create(ownerId: string, input: CreateServiceDto) {
@@ -126,7 +139,8 @@ export class ServicesService {
       },
       select: publicServiceSelect
     })
-    return presentService(created)
+    const [presented] = await this.withRatings([presentService(created)])
+    return presented
   }
 
   async update(userId: string, id: string, input: UpdateServiceDto) {
@@ -205,7 +219,12 @@ export class ServicesService {
       },
       orderBy: { createdAt: 'desc' }
     })
-    return rows.map(row => ({ ...row, service: presentService(row.service) }))
+    const presented = rows.map(row => ({ ...row, service: presentService(row.service) }))
+    const summaries = await ratingsForOwners(this.prisma, presented.map(row => row.service.owner.id))
+    return presented.map(row => ({
+      ...row,
+      service: { ...row.service, ...publicRating(summaries, row.service.owner.id) }
+    }))
   }
 
   async listQuotesForProvider(userId: string, serviceId: string) {
@@ -242,4 +261,23 @@ export class ServicesService {
     if (!row || row.deletedAt) throw new NotFoundException('Service not found')
     if (row.ownerId !== userId) throw new ForbiddenException('You can only change your own service')
   }
+
+  private async withRatings<T extends { owner: { id: string } }>(rows: T[]): Promise<Array<T & PublicRating>> {
+    const summaries = await ratingsForOwners(this.prisma, rows.map(row => row.owner.id))
+    return rows.map(row => ({ ...row, ...publicRating(summaries, row.owner.id) }))
+  }
+}
+
+function serviceRadiusExtra(query: ListServicesQuery): Prisma.Sql {
+  const parts: Prisma.Sql[] = [Prisma.sql`row.status = 'PUBLISHED'`]
+  if (query.category) parts.push(Prisma.sql`row.category = ${query.category}`)
+  const search = query.query?.trim()
+  if (search) {
+    parts.push(Prisma.sql`(
+      ${ilikeContains('row.title', search)}
+      OR ${ilikeContains('row."businessName"', search)}
+      OR ${ilikeContains('row.description', search)}
+    )`)
+  }
+  return Prisma.join(parts, ' AND ')
 }

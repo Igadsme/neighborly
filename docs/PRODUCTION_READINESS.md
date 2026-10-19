@@ -24,9 +24,9 @@ This file records the honest state. It is a skeleton for later updates. Empty se
 
 | Check | State |
 | --- | --- |
-| Single-process API | Implemented in source. Not booted in production. This branch's CI is not counted until the Actions run on the PR head finishes |
-| More than one API process | Not ready. No Socket.IO Redis adapter |
-| Auth, refresh, logout | Implemented in source. Not booted in production |
+| Single-process API | Implemented in source. CI integration on this SHA passed. Not booted in production. This branch's CI is not counted until the Actions run on the PR head finishes |
+| More than one API process | Socket.IO Redis adapter is wired when `REDIS_URL` is set. Unset, the process stays single-node. A Jest spec starts two gateways and delivers a message across an in-memory pub/sub. A live Redis across two OS processes was not run in this environment |
+| Auth, refresh, logout | Implemented. CI auth integration passed on this SHA. Not booted in production |
 | Email verification that a person can complete | Not ready. No provider |
 | Marketplace pause and suspension privacy | Merged (BL-001, BL-002, PRs #29 and #30). Not booted in production |
 | Marketplace settlement | Merged (BL-003, PR #30). Not booted in production |

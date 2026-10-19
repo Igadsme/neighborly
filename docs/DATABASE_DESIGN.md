@@ -75,7 +75,6 @@ Offer accept and `POST /conversations` insert `Conversation` and `ConversationPa
 
 ### What the schema does not do
 
-- No PostGIS `geometry`. Latitude and longitude are `Decimal(9, 6)`. The compose image is `postgis/postgis:16-3.4`; the migration does not use it.
 - No full-text index. Search is application `contains`.
 - `0005_query_indexes` adds btree indexes for reads that were filtering or sorting without a matching index: published listing and request feeds (`status, createdAt`), listing images (`listingId, sortOrder`), saved searches (`userId, updatedAt`), counter offers (`offerId, createdAt`), conversation inbox (`ConversationParticipant.userId`, `Conversation.updatedAt`), transaction lists (`TransactionParticipant.userId`, `Transaction.updatedAt`, milestone `transactionId, createdAt`), reviews (`subjectId, createdAt` and `transactionId`), and a caller's own reports (`reporterId, createdAt`). There is still no slow-query log unless `SLOW_QUERY_LOG=1`. Primary keys and the earlier composite indexes are unchanged.
 - No soft-delete on offers, messages, or reviews.
@@ -85,7 +84,35 @@ Offer accept and `POST /conversations` insert `Conversation` and `ConversationPa
 
 Added in `0003_verticals`. Screens still read `src/data/index.ts` until the wiring PR. Seed rows in `backend/prisma/seed.ts` follow those fixtures (dollars converted to cents). Local seed users are `seed.<firstname>@example.com`. The shared password is `SEED_PASSWORD` in that file, for local boot only.
 
-Latitude and longitude on housing, jobs, and services are write-only. Public selects omit them. Profile coordinates stay off the public card. Service quote `address` is stored and returned to the requester, and to the provider only after `ACCEPTED`.
+Latitude and longitude stay `Decimal(9, 6)` and are write-only on public reads. Migration `0015_postgis_geography` enables PostGIS and adds a nullable `geog geography(Point,4326)` column, maintained by a trigger, on `Listing`, `NeedRequest`, `HousingListing`, `JobListing`, and `ServiceListing`. Each has a GiST index. Prisma Client does not read or write `geog`. Profile coordinates stay off the public card. Service quote `address` is stored and returned to the requester, and to the provider only after `ACCEPTED`.
+
+#### Rolling back `0015_postgis_geography`
+
+There is no down migration. `0015_postgis_geography/migration.sql` stays as approved. Ship the drop SQL below as a new forward migration, for example `0016_drop_geography`, in the same change that reverts the Prisma schema. Do not run it by hand. A hand-run drop leaves `_prisma_migrations` saying `0015` is applied while the columns are gone, so migration drift and `prisma migrate dev` break. The statements drop the five triggers, the five GiST indexes, the five `geog` columns, and `neighborly_sync_location()`. They keep the `postgis` extension. Do not run `DROP EXTENSION postgis`.
+
+```sql
+DROP TRIGGER IF EXISTS listing_geog_sync ON "Listing";
+DROP TRIGGER IF EXISTS need_request_geog_sync ON "NeedRequest";
+DROP TRIGGER IF EXISTS housing_listing_geog_sync ON "HousingListing";
+DROP TRIGGER IF EXISTS job_listing_geog_sync ON "JobListing";
+DROP TRIGGER IF EXISTS service_listing_geog_sync ON "ServiceListing";
+
+DROP INDEX IF EXISTS "Listing_geog_idx";
+DROP INDEX IF EXISTS "NeedRequest_geog_idx";
+DROP INDEX IF EXISTS "HousingListing_geog_idx";
+DROP INDEX IF EXISTS "JobListing_geog_idx";
+DROP INDEX IF EXISTS "ServiceListing_geog_idx";
+
+ALTER TABLE "Listing" DROP COLUMN IF EXISTS "geog";
+ALTER TABLE "NeedRequest" DROP COLUMN IF EXISTS "geog";
+ALTER TABLE "HousingListing" DROP COLUMN IF EXISTS "geog";
+ALTER TABLE "JobListing" DROP COLUMN IF EXISTS "geog";
+ALTER TABLE "ServiceListing" DROP COLUMN IF EXISTS "geog";
+
+DROP FUNCTION IF EXISTS neighborly_sync_location();
+```
+
+Revert the Prisma schema in that same change: remove `geog Unsupported("geography(Point,4326)")?` and `@@index([geog], type: Gist)` from `Listing`, `NeedRequest`, `HousingListing`, `JobListing`, and `ServiceListing`. Latitude and longitude stay. Do not edit `0015`. `prisma migrate deploy` applies the new forward migration; it does not re-apply an already recorded `0015`.
 
 `verified`, `backgroundCheck`, `rating`, and `reviewCount` are columns the API does not accept from clients. Seed writes them.
 
@@ -185,7 +212,7 @@ Tables and constraints the earlier design named that are **not** in `schema.pris
 - Unique active conversation membership.
 - One `Review` per `(transactionId, authorId)`.
 - Check constraints for non-negative cents and legal status values (enums already cover status).
-- A real geo column and GiST index when radius search is built. Until then, do not claim PostGIS queries work.
+- Radius search uses `ST_DWithin` on `geog`. The PostGIS behavior is covered by `listings.integration.spec.ts` and `migrations/0015-postgis.integration.spec.ts`, which run in the CI integration job against `postgis/postgis:16-3.4`. Do not treat that job as passed until it has run on the commit.
 - Full-text index on listing and request text as ordinary Postgres text search. Not embeddings.
 
 ### Schema rows that still have no writer

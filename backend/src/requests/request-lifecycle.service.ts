@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma, RequestStatus } from '@prisma/client'
 import { audit } from '../common/logger'
 import { activeAccountWhere } from '../common/active-account'
+import { assertGeoQuery, ilikeContains, orderByIds, pageWithinRadius } from '../common/geo-search'
 import { publicUserSelect } from '../common/public-user.select'
 import { sanitizeOptional, sanitizeText } from '../common/text'
 import { DOMAIN_EVENTS } from '../events/domain-events'
@@ -84,8 +85,23 @@ export class RequestLifecycleService {
     limit?: number
     offset?: number
   }) {
+    const origin = assertGeoQuery(query)
     const limit = clamp(query.limit)
     const offset = query.offset ?? 0
+    if (origin) {
+      const page = await pageWithinRadius(this.prisma, 'NeedRequest', origin, this.radiusExtra(query), limit, offset)
+      if (page.ids.length === 0) return { items: [], total: page.total, limit, offset }
+      const rows = await this.prisma.needRequest.findMany({
+        where: { id: { in: page.ids } },
+        select: { ...publicRequestSelect, latitude: true, longitude: true }
+      })
+      return {
+        items: orderByIds(rows, page.ids).map(row => this.decorate(row)),
+        total: page.total,
+        limit,
+        offset
+      }
+    }
     const where = this.publicWhere(query)
 
     const [rows, total] = await Promise.all([
@@ -485,9 +501,6 @@ export class RequestLifecycleService {
           }
         : {}),
       ...(query.openOnly ? { OR: [{ deadline: null }, { deadline: { gte: new Date() } }] } : {}),
-      ...(query.latitude !== undefined && query.longitude !== undefined && query.radiusMiles !== undefined
-        ? boundingFilter(query.latitude, query.longitude, query.radiusMiles)
-        : {}),
       ...(search
         ? {
             OR: [
@@ -498,6 +511,39 @@ export class RequestLifecycleService {
           }
         : {})
     }
+  }
+
+  private radiusExtra(query: {
+    status?: RequestStatus
+    categoryId?: string
+    mode?: string
+    urgency?: string
+    minBudgetCents?: number
+    maxBudgetCents?: number
+    city?: string
+    neighborhood?: string
+    openOnly?: boolean
+    query?: string
+  }): Prisma.Sql {
+    const status = query.status && query.status !== RequestStatus.DRAFT ? query.status : RequestStatus.PUBLISHED
+    const parts: Prisma.Sql[] = [Prisma.sql`row.status = CAST(${status} AS "RequestStatus")`]
+    if (query.categoryId) parts.push(Prisma.sql`row."categoryId" = CAST(${query.categoryId} AS uuid)`)
+    if (query.mode) parts.push(Prisma.sql`row.mode = CAST(${query.mode} AS "ExchangeMode")`)
+    if (query.urgency) parts.push(Prisma.sql`row.urgency = ${query.urgency}`)
+    if (query.city) parts.push(Prisma.sql`LOWER(row.city) = LOWER(${query.city})`)
+    if (query.neighborhood) parts.push(Prisma.sql`LOWER(row.neighborhood) = LOWER(${query.neighborhood})`)
+    if (query.minBudgetCents !== undefined) parts.push(Prisma.sql`row."budgetCents" >= ${query.minBudgetCents}`)
+    if (query.maxBudgetCents !== undefined) parts.push(Prisma.sql`row."budgetCents" <= ${query.maxBudgetCents}`)
+    if (query.openOnly) parts.push(Prisma.sql`(row.deadline IS NULL OR row.deadline >= ${new Date()})`)
+    const search = query.query?.trim()
+    if (search) {
+      parts.push(Prisma.sql`(
+        ${ilikeContains('row.title', search)}
+        OR ${ilikeContains('row.description', search)}
+        OR ${ilikeContains('row.neighborhood', search)}
+      )`)
+    }
+    return Prisma.join(parts, ' AND ')
   }
 
   private orderBy(sort: string | undefined, search?: string): Prisma.NeedRequestOrderByWithRelationInput[] {
@@ -653,17 +699,6 @@ export function mediaUrl(image: { objectKey: string }) {
   const [, listingId, file] = image.objectKey.split('/')
   return listingId && file ? `/api/v1/media/listings/${listingId}/${file}` : ''
 }
-
-function boundingFilter(lat: number, lng: number, radiusMiles: number): Prisma.NeedRequestWhereInput {
-  const latDelta = radiusMiles / 69.0
-  const lngDelta = radiusMiles / (Math.cos(lat * DEG_TO_RAD) || 0.01)
-  return {
-    latitude: { gte: lat - latDelta, lte: lat + latDelta },
-    longitude: { gte: lng - lngDelta, lte: lng + lngDelta }
-  }
-}
-
-const DEG_TO_RAD = Math.PI / 180
 
 function clamp(limit?: number) {
   if (limit === undefined) return 24

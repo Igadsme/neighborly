@@ -294,6 +294,20 @@ describe('Public listing HTTP reads', () => {
     expect(queries.favorites).toMatchObject({ where: { userId: 'buyer-1' } })
   })
 
+  it.each([
+    ['latitude=abc&longitude=-84.35'],
+    ['latitude=91&longitude=-84.35'],
+    ['latitude=33.75&longitude=-84.35&radiusMiles=2.5'],
+    ['latitude=33.75&longitude=-84.35&radiusMiles=0'],
+    ['latitude=33.75&longitude=-84.35&radiusMiles=501'],
+    ['radiusMiles=5']
+  ])('GET /api/v1/listings?%s returns 400', async query => {
+    prisma.listing.findMany.mockClear()
+    const response = await fetch(`${baseUrl}/api/v1/listings?${query}`)
+    expect(response.status).toBe(400)
+    expect(prisma.listing.findMany).not.toHaveBeenCalled()
+  })
+
   it('GET /api/v1/listings/:id rejects a non-UUID with 400 before Prisma', async () => {
     prisma.listing.findFirst.mockClear()
     const response = await fetch(`${baseUrl}/api/v1/listings/not-a-uuid`)

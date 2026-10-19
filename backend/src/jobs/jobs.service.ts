@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { Prisma } from '@prisma/client'
 import { assertNotBlocked } from '../common/blocks'
 import { activeAccountWhere } from '../common/active-account'
+import { assertGeoQuery, ilikeContains, orderByIds, pageWithinRadius } from '../common/geo-search'
 import { publicUserSelect } from '../common/public-user.select'
 import { cleanList, cleanText, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
@@ -47,6 +48,16 @@ export class JobsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(query: ListJobsQuery) {
+    const origin = assertGeoQuery(query)
+    if (origin) {
+      const page = await pageWithinRadius(this.prisma, 'JobListing', origin, jobRadiusExtra(query), query.limit, query.offset)
+      if (page.ids.length === 0) return []
+      const rows = await this.prisma.jobListing.findMany({
+        where: { id: { in: page.ids } },
+        select: publicJobSelect
+      })
+      return orderByIds(rows, page.ids).map(presentJob)
+    }
     const search = query.query?.trim()
     const rows = await this.prisma.jobListing.findMany({
       where: {
@@ -200,4 +211,20 @@ export class JobsService {
     if (!row || row.deletedAt) throw new NotFoundException('Job not found')
     if (row.ownerId !== userId) throw new ForbiddenException('You can only change your own job')
   }
+}
+
+function jobRadiusExtra(query: ListJobsQuery): Prisma.Sql {
+  const parts: Prisma.Sql[] = [Prisma.sql`row.status = 'PUBLISHED'`]
+  if (query.type) parts.push(Prisma.sql`row."employmentType" = ${query.type}`)
+  if (query.level) parts.push(ilikeContains('row.level', query.level))
+  if (query.remote) parts.push(Prisma.sql`row.remote = ${query.remote}`)
+  const search = query.query?.trim()
+  if (search) {
+    parts.push(Prisma.sql`(
+      ${ilikeContains('row.title', search)}
+      OR ${ilikeContains('row.company', search)}
+      OR ${ilikeContains('row.description', search)}
+    )`)
+  }
+  return Prisma.join(parts, ' AND ')
 }

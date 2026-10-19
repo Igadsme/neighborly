@@ -1,6 +1,23 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
+import { StaffRole } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { CompleteOnboardingDto } from './dto'
+
+const accountInclude = {
+  profile: true,
+  preference: true,
+  notificationPreference: true,
+  staffRoles: { select: { role: true } }
+} as const
+
+/**
+ * Account payload for GET /users/me. `staffRoles` is the role names only.
+ * Moderation routes still authorize from StaffRoleAssignment on the server.
+ */
+export function presentAccount<T extends { passwordHash: string; staffRoles?: { role: StaffRole }[] }>(user: T) {
+  const { passwordHash: _passwordHash, staffRoles = [], ...safeUser } = user
+  return { ...safeUser, staffRoles: staffRoles.map(row => row.role).sort() }
+}
 
 @Injectable()
 export class UsersService {
@@ -9,11 +26,10 @@ export class UsersService {
   async me(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { profile: true, preference: true, notificationPreference: true }
+      include: accountInclude
     })
     if (!user) throw new NotFoundException('User not found')
-    const { passwordHash: _passwordHash, ...safeUser } = user
-    return safeUser
+    return presentAccount(user)
   }
 
   async completeOnboarding(userId: string, input: CompleteOnboardingDto) {

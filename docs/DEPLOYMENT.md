@@ -105,6 +105,8 @@ The `staging` profile adds its own Postgres (`127.0.0.1:5433`), Redis (`127.0.0.
 
 History API paths need a fallback to `index.html`. Staging Caddy (`deploy/staging/Caddyfile`) sends `/api` and `/socket.io` to the API and `/assets` plus every other path to nginx. nginx (`deploy/staging/nginx.conf`) serves real files and falls back to `index.html` only for unknown extensionless paths. `deploy/production/Caddyfile` is the same split for a future host. The production workflow does not read it and still refuses. `vite preview` uses the same rule.
 
+Migration `0015_postgis_geography` runs `CREATE EXTENSION IF NOT EXISTS postgis`. On a managed Postgres service that statement needs a superuser, or the provider's admin role (`rds_superuser` on RDS, the cloudsqlsuperuser role, or the equivalent console action). If the application role cannot create extensions, create `postgis` before `prisma migrate deploy`. The local Compose image `postgis/postgis:16-3.4` already allows the database user to create it. Undoing the geography columns is a new forward migration, described in `docs/DATABASE_DESIGN.md`. It keeps the extension. Do not run that SQL by hand.
+
 ## 4. CI/CD expectations
 
 - Run frontend and backend typecheck, tests, and build on every pull request (`.github/workflows/ci.yml`)

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common'
 import { ListingStatus, Prisma } from '@prisma/client'
 import { activeAccountWhere } from '../common/active-account'
+import { assertGeoQuery, ilikeContains, orderByIds, pageWithinRadius } from '../common/geo-search'
 import { publicUserSelect } from '../common/public-user.select'
 import { sanitizeOptional, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
@@ -99,10 +100,23 @@ export class ListingsService {
    * paginate without a second count query of its own.
    */
   async list(query: ListListingsQuery) {
+    const origin = assertGeoQuery(query)
     const limit = clampLimit(query.limit)
     const offset = query.offset ?? 0
-    const where = this.publicWhere(query)
+    if (origin) {
+      const page = await pageWithinRadius(this.prisma, 'Listing', origin, this.radiusExtra(query), limit, offset)
+      if (page.ids.length === 0) return { items: [], total: page.total, limit, offset }
+      const rows = await this.prisma.listing.findMany({
+        where: { id: { in: page.ids } },
+        select: { ...listingWithImages.select, latitude: true, longitude: true }
+      })
+      const items = orderByIds(rows, page.ids).map(listing =>
+        this.decorate(this.withDistance(listing, query, page.distances.get(listing.id) ?? null))
+      )
+      return { items, total: page.total, limit, offset }
+    }
 
+    const where = this.publicWhere(query)
     const [items, total] = await Promise.all([
       this.prisma.listing.findMany({
         where,
@@ -125,6 +139,7 @@ export class ListingsService {
   }
 
   async get(id: string, viewer?: { latitude?: number; longitude?: number }) {
+    assertGeoQuery(viewer ?? {})
     const listing = await this.prisma.listing.findFirst({
       // Paused rows are ARCHIVED with deletedAt left null so the owner can
       // publish them again. They are not a public detail read. Sold rows stay
@@ -430,10 +445,35 @@ export class ListingsService {
             ]
           }
         : {}),
-      ...this.priceWhere(query),
-      ...this.radiusWhere(query)
+      ...this.priceWhere(query)
     }
     return where
+  }
+
+  /**
+   * Filters that travel with the ST_DWithin query. Status, deletedAt, and
+   * the seller's ACTIVE check live in pageWithinRadius, so a draft, a
+   * paused or archived row, and a suspended seller cannot match.
+   */
+  private radiusExtra(query: ListListingsQuery): Prisma.Sql {
+    this.priceWhere(query)
+    const status = query.status ?? 'PUBLISHED'
+    const parts: Prisma.Sql[] = [Prisma.sql`row.status = CAST(${status} AS "ListingStatus")`]
+    if (query.sellerId) parts.push(Prisma.sql`row."sellerId" = CAST(${query.sellerId} AS uuid)`)
+    if (query.categoryId) parts.push(Prisma.sql`row."categoryId" = CAST(${query.categoryId} AS uuid)`)
+    if (query.city) parts.push(Prisma.sql`LOWER(row.city) = LOWER(${query.city})`)
+    if (query.neighborhood) parts.push(Prisma.sql`LOWER(row.neighborhood) = LOWER(${query.neighborhood})`)
+    if (query.minPriceCents !== undefined) parts.push(Prisma.sql`row."priceCents" IS NOT NULL AND row."priceCents" >= ${query.minPriceCents}`)
+    if (query.maxPriceCents !== undefined) parts.push(Prisma.sql`row."priceCents" IS NOT NULL AND row."priceCents" <= ${query.maxPriceCents}`)
+    const search = query.query?.trim()
+    if (search) {
+      parts.push(Prisma.sql`(
+        ${ilikeContains('row.title', search)}
+        OR ${ilikeContains('row.description', search)}
+        OR ${ilikeContains('row.neighborhood', search)}
+      )`)
+    }
+    return Prisma.join(parts, ' AND ')
   }
 
   private priceWhere(query: ListListingsQuery): Prisma.ListingWhereInput {
@@ -451,22 +491,6 @@ export class ListingsService {
         ...(query.maxPriceCents !== undefined ? { lte: query.maxPriceCents } : {}),
         not: null
       }
-    }
-  }
-
-  /**
-   * Radius filtering uses a bounding box so PostgreSQL can use an index on
-   * the coordinates, then the caller filters the exact great-circle
-   * distance. A bounding box alone would include corner results.
-   */
-  private radiusWhere(query: ListListingsQuery): Prisma.ListingWhereInput {
-    const { latitude, longitude, radiusMiles } = query
-    if (latitude === undefined || longitude === undefined || radiusMiles === undefined) return {}
-    const latDelta = radiusMiles / 69.0
-    const lngDelta = radiusMiles / (Math.cos(latitude * DEG_TO_RAD) || 0.01)
-    return {
-      latitude: { gte: latitude - latDelta, lte: latitude + latDelta },
-      longitude: { gte: longitude - lngDelta, lte: longitude + lngDelta }
     }
   }
 
@@ -503,7 +527,8 @@ export class ListingsService {
    */
   private withDistance<T extends { latitude: unknown; longitude: unknown }>(
     listing: T,
-    query: { latitude?: number; longitude?: number }
+    query: { latitude?: number; longitude?: number },
+    sqlDistance?: number | null
   ) {
     const { latitude: rawLat, longitude: rawLng, ...rest } = listing
     // Prisma returns Decimal columns as objects, so they are coerced before
@@ -512,14 +537,17 @@ export class ListingsService {
     const longitude = toNumber(rawLng)
     const hasCoords = latitude !== null && longitude !== null
     const originProvided = query.latitude !== undefined && query.longitude !== undefined
+    const miles =
+      sqlDistance !== undefined
+        ? sqlDistance
+        : hasCoords && originProvided
+          ? round1(distanceMiles(query.latitude as number, query.longitude as number, latitude, longitude))
+          : null
     return {
       ...rest,
       hasCoordinates: hasCoords,
       approximateLocation: hasCoords ? approximate(latitude, longitude) : null,
-      distanceMiles:
-        hasCoords && originProvided
-          ? round1(distanceMiles(query.latitude as number, query.longitude as number, latitude, longitude))
-          : null
+      distanceMiles: miles
     }
   }
 

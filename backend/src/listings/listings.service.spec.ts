@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { PrismaService } from '../prisma/prisma.service'
 import { ListingsService } from './listings.service'
@@ -154,7 +154,81 @@ describe('ListingsService public reads', () => {
     await service.list({ sellerId, status: 'SOLD', limit: 24, offset: 0 })
     expect(findMany.mock.calls[1][0].where).toMatchObject({ status: 'SOLD', deletedAt: null, sellerId })
   })
+
+  it('rejects a latitude outside -90..90 before it queries', async () => {
+    const queryRaw = jest.fn()
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        ListingsService,
+        stubStorage().provider,
+        { provide: PrismaService, useValue: { listing: { findMany: jest.fn(), count: jest.fn() }, $queryRaw: queryRaw } }
+      ]
+    }).compile()
+
+    await expect(
+      moduleRef.get(ListingsService).list({ latitude: 91, longitude: 0, radiusMiles: 5, limit: 24, offset: 0 })
+    ).rejects.toBeInstanceOf(BadRequestException)
+    await expect(
+      moduleRef.get(ListingsService).list({ latitude: 0, longitude: 181, radiusMiles: 5, limit: 24, offset: 0 })
+    ).rejects.toBeInstanceOf(BadRequestException)
+    await expect(
+      moduleRef.get(ListingsService).list({ latitude: 33.75, longitude: -84.35, radiusMiles: 10000, limit: 24, offset: 0 })
+    ).rejects.toBeInstanceOf(BadRequestException)
+    expect(queryRaw).not.toHaveBeenCalled()
+  })
+
+  it('rejects an out-of-range viewer coordinate on the detail read', async () => {
+    const findFirst = jest.fn()
+    const moduleRef = await Test.createTestingModule({
+      providers: [ListingsService, stubStorage().provider, { provide: PrismaService, useValue: { listing: { findFirst } } }]
+    }).compile()
+
+    await expect(moduleRef.get(ListingsService).get('listing-1', { latitude: 91, longitude: 0 })).rejects.toBeInstanceOf(BadRequestException)
+    expect(findFirst).not.toHaveBeenCalled()
+  })
+
+  it('searches with ST_DWithin and keeps paused, draft, and suspended rows out of the SQL', async () => {
+    const queryRaw = jest.fn().mockResolvedValue([])
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        ListingsService,
+        stubStorage().provider,
+        { provide: PrismaService, useValue: { listing: { findMany: jest.fn() }, $queryRaw: queryRaw } }
+      ]
+    }).compile()
+
+    const page = await moduleRef.get(ListingsService).list({
+      latitude: 33.75,
+      longitude: -84.35,
+      radiusMiles: 5,
+      limit: 24,
+      offset: 0
+    })
+
+    expect(page).toEqual({ items: [], total: 0, limit: 24, offset: 0 })
+    expect(queryRaw).toHaveBeenCalledTimes(1)
+    const queries = queryRaw.mock.calls.map(call => sqlOf(call[0]))
+    const text = queries.map(query => query.text).join('\n')
+    const values = queries.flatMap(query => query.values)
+    expect(text).toContain('ST_DWithin')
+    expect(text).toContain('COUNT(*) OVER()')
+    expect(text).toContain('owner.status = \'ACTIVE\'')
+    expect(text).not.toContain('owner.status::text')
+    expect(text).toContain('deletedAt')
+    expect(text).toContain('ACTIVE')
+    expect(text).toContain('geog')
+    expect(values).toContain('PUBLISHED')
+    expect(values).not.toContain('ARCHIVED')
+    expect(values).not.toContain('DRAFT')
+    expect(values).toContain(5 * 1609.344)
+  })
 })
+
+function sqlOf(query: unknown): { text: string; values: unknown[] } {
+  const sql = query as { text?: string; strings?: string[]; values?: unknown[] }
+  const text = typeof sql.text === 'string' ? sql.text : (sql.strings ?? []).join(' ')
+  return { text, values: sql.values ?? [] }
+}
 
 describe('ListingsService owner actions', () => {
   const listing = {

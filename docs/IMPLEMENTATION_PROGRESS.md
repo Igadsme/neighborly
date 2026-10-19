@@ -1,9 +1,12 @@
 # Implementation progress
 
 Date: 2026-10-19
-Baseline audited: `dc761e51864e03a57c056b4bb2068c6362ced40b`
-`main` when this note was written: `12540f88303f8e5ab2404ee10fc43ec657d02cf0`
+Baseline audited: `dc761e51864e03a57c056b4bb2068c6362ced40b` (`main`)
+`main` when the Orbit note was written: `12540f88303f8e5ab2404ee10fc43ec657d02cf0`
 Orbit lane branch: `cursor/orbit-devops-p1-7a93`
+This document's branch: `cursor/backend-p1-p2-lane-5af4`
+Lane baseline: `12540f88303f8e5ab2404ee10fc43ec657d02cf0` (P0 fixes already on `main`).
+This lane edits backend rows BL-021, BL-026, BL-028, and BL-032 only. Other rows were not re-audited.
 
 ## Current state
 
@@ -42,18 +45,18 @@ Status values: `not started`, `in progress`, `blocked`, `done`. `done` requires 
 | BL-018 | Loopback dev ports | done | `docker-compose.yml` publishes Postgres `127.0.0.1:5432` and Redis `127.0.0.1:6379`. A live bind was not probed on this VM (no Docker daemon) |
 | BL-019 | Docs drift | done | README, the map, project status, the terms placeholder, and the six takeover docs match `main` after BL-001–BL-010. The older inventory in `docs/DEPLOYMENT.md` assigns `replace-with-*` placeholders. CI rejects `NAME=change-me` and `NAME=neighborly-secret` in `docs/` and `env*.example`. Doc-only for application behavior |
 | BL-020 | Staging object store image | done | Staging profile uses `rustfs/rustfs:1.0.1` with the same S3 API shape as CI. Published linux/amd64 layers include `/usr/bin/curl`, which the healthcheck calls. Data is on `rustfs-staging-data`. The old `neighborly-staging-minio` volume stays declared and unused |
-| BL-021 | Multi-process realtime | not started | |
+| BL-021 | Multi-process realtime | done | `main.ts` calls `SocketRedis.connect()` before `useWebSocketAdapter`, because Nest builds the Socket.IO server before `onModuleInit`. `messaging.redis-fanout.spec.ts` follows that order from a fresh single-node client and delivers a message across two gateways. `REDIS_URL` unset stays single-node. A live Redis across two OS processes was not run. |
 | BL-022 | Error tracking | blocked | Vendor decision. The no-op hook is confirmed |
 | BL-023 | Package name and Figma shell | done | Root package name is `neighborly-web`, matching `neighborly-api` and the `neighborly-web` image. `noindex` stays. Figma HTML markers stay because the Vite title plugin reads them |
 | BL-024 | Tracked smoke PNGs | blocked | Owner must agree to remove them |
 | BL-025 | Inactive controls | not started | |
-| BL-026 | PostGIS or honest radius | not started | |
+| BL-026 | PostGIS or honest radius | done | CI integration job on `68390c5` passed (`ST_DWithin`, GiST indexes, fresh and pre-0015 upgrade). Run `39202620698`. The first run failed because the suite reset truncated `spatial_ref_sys`; that reset now keeps extension tables. |
 | BL-027 | Backup rehearsal | not started | Acceptance needs Docker. Not a pass today |
-| BL-028 | Vertical integration specs | not started | |
+| BL-028 | Vertical integration specs | done | Housing, jobs, services, and community integration specs ran in CI integration job `39202620698` on `68390c5`, which passed. Mock HTTP specs stay. |
 | BL-029 | Journey and security probes | not started | Did not run. Not a pass |
 | BL-030 | Axe harness | not started | Did not run. Not a pass |
 | BL-031 | braces dev advisory | partial | `braces@3.0.3` is still the latest npm release. GHSA-vfj7-8cjw-p6xm / CVE-2026-93687 covers `<=3.0.3` and names no patched version. CI keeps `--prod` as the blocking gate. The full audit stays non-blocking and still prints `braces`. Not suppressed |
-| BL-032 | Listing card ratings | not started | |
+| BL-032 | Listing card ratings | done | `pnpm test` exit 0. No reviews returns `rating: null` and `reviewCount: 0`, never `0`. A fixture average of 5 is returned instead of a stored `4.9`. Contract: `docs/FRONTEND_LANE_CONTRACT.md`. The Postgres review-row spec is in the integration job and has not run on this VM. |
 | BL-033 | Access token storage | not started | P2 |
 | BL-034 | Map decision | blocked | Owner |
 | BL-035 | Compare and price alerts | not started | |

@@ -44,8 +44,8 @@ describe('Passport and trust against real PostgreSQL', () => {
     await prisma.$disconnect()
   })
 
-  async function makeUser(prefix: string, overrides: { status?: 'ACTIVE' | 'SUSPENDED'; emailVerified?: boolean } = {}) {
-    const id = randomUUID()
+  async function makeUser(prefix: string, overrides: { status?: 'ACTIVE' | 'SUSPENDED'; emailVerified?: boolean; id?: string } = {}) {
+    const id = overrides.id ?? randomUUID()
     await prisma.user.create({
       data: {
         id,
@@ -272,6 +272,94 @@ describe('Passport and trust against real PostgreSQL', () => {
     const board = await passport.leaderboard({ limit: 100 })
     expect(board.map(row => row.userId)).toContain(loud)
     expect(board.map(row => row.userId)).not.toContain(quiet)
+  })
+
+  it('ranks opted-in active members by completed exchanges before paging, and breaks ties on id', async () => {
+    const partner = await makeUser('board-partner')
+    const high = await makeUser('board-high')
+    const low = await makeUser('board-low')
+    const borrowed = await makeUser('board-borrowed')
+    const quiet = await makeUser('board-quiet')
+    const suspended = await makeUser('board-suspended', { status: 'SUSPENDED' })
+    const removed = await makeUser('board-removed')
+    const tieIds = [randomUUID(), randomUUID()].sort()
+    const tieFirst = await makeUser('board-tie-a', { id: tieIds[0] })
+    const tieSecond = await makeUser('board-tie-b', { id: tieIds[1] })
+
+    for (const member of [high, low, borrowed, tieFirst, tieSecond, suspended, removed]) {
+      await passport.updatePrivacy(member, { leaderboardOptIn: true })
+    }
+    await passport.updatePrivacy(quiet, { leaderboardOptIn: false })
+    await prisma.user.update({ where: { id: removed }, data: { deletedAt: new Date() } })
+
+    for (let count = 0; count < 3; count += 1) await completedExchange(high, partner)
+    await completedExchange(low, partner)
+    await completedExchange(tieFirst, partner)
+    await completedExchange(tieFirst, await makeUser('board-extra-a'))
+    await completedExchange(tieSecond, partner)
+    await completedExchange(tieSecond, await makeUser('board-extra-b'))
+    for (let count = 0; count < 4; count += 1) await completedExchange(suspended, partner)
+    for (let count = 0; count < 4; count += 1) await completedExchange(removed, partner)
+    for (let count = 0; count < 4; count += 1) await completedExchange(quiet, partner)
+
+    const category = randomUUID()
+    await prisma.category.create({ data: { id: category, name: `Board ${category.slice(0, 8)}`, slug: `board-${category}` } })
+    const listing = await prisma.listing.create({
+      data: {
+        sellerId: partner,
+        categoryId: category,
+        title: 'Ladder',
+        description: 'A ladder counted as a borrowing, not an exchange.',
+        status: 'PUBLISHED'
+      }
+    })
+    const now = new Date()
+    await prisma.borrowRequest.create({
+      data: {
+        listingId: listing.id,
+        lenderId: partner,
+        borrowerId: borrowed,
+        status: 'COMPLETED',
+        startAt: new Date(now.getTime() - 10 * DAY),
+        endAt: new Date(now.getTime() - DAY),
+        originalEndAt: new Date(now.getTime() - DAY),
+        returnedAt: new Date(now.getTime() - DAY),
+        completedAt: new Date(now.getTime() - DAY)
+      }
+    })
+
+    const wanted = [high, tieFirst, tieSecond, low, borrowed]
+    const found: string[] = []
+    let borrowedRow: { completedExchanges: number; completedBorrowings: number; borrowingsAsLender: number } | undefined
+    let previousCount = Number.POSITIVE_INFINITY
+    let previousId = ''
+    for (let offset = 0; offset < 200; offset += 2) {
+      const page = await passport.leaderboard({ limit: 2, offset })
+      if (page.length === 0) break
+      for (let index = 0; index < page.length; index += 1) {
+        const row = page[index]
+        const ahead = index === 0 ? { completedExchanges: previousCount, userId: previousId } : page[index - 1]
+        expect(row.completedExchanges).toBeLessThanOrEqual(ahead.completedExchanges)
+        if (row.completedExchanges === ahead.completedExchanges && ahead.userId) {
+          expect(row.userId > ahead.userId).toBe(true)
+        }
+        previousCount = row.completedExchanges
+        previousId = row.userId
+        if (wanted.includes(row.userId)) {
+          found.push(row.userId)
+          const inputs = await passport.trustInputs(row.userId)
+          expect(row.completedExchanges).toBe(inputs.completedExchanges)
+          expect(row.completedBorrowings).toBe(inputs.completedBorrowings)
+          expect(row.borrowingsAsLender).toBe(inputs.borrowingsAsLender)
+        }
+        if (row.userId === borrowed) borrowedRow = row
+        expect([quiet, suspended, removed, partner]).not.toContain(row.userId)
+      }
+      if (page.length < 2) break
+    }
+
+    expect(found).toEqual(wanted)
+    expect(borrowedRow).toMatchObject({ completedExchanges: 0, completedBorrowings: 1, borrowingsAsLender: 0 })
   })
 
   // --------------------------------------------------------- review eligibility

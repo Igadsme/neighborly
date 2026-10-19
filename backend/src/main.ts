@@ -5,6 +5,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { json, urlencoded } from 'express'
 import helmet from 'helmet'
 import { AppModule } from './app.module'
+import { RedisIoAdapter } from './messaging/redis-io.adapter'
+import { SocketRedis } from './messaging/socket-redis'
 import { corsOrigins, helmetOptions, jsonBodyLimit, swaggerEnabled, trustProxyEnabled } from './common/http-security'
 import { LoggingExceptionFilter } from './common/logging.filter'
 import { requestContextMiddleware } from './common/request-context'
@@ -12,6 +14,11 @@ import { allowMultipartForListingImages } from './common/uploads'
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false })
+  // Nest 11 builds the Socket.IO server inside init() before onModuleInit.
+  // Connecting here is what makes createIOServer see a live pub/sub pair.
+  const sockets = app.get(SocketRedis)
+  await sockets.connect()
+  app.useWebSocketAdapter(new RedisIoAdapter(app, sockets))
   app.use(requestContextMiddleware)
   app.use(allowMultipartForListingImages)
   app.use(json({ limit: jsonBodyLimit }))
