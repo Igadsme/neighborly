@@ -5,6 +5,7 @@ export default defineConfig({
   testIgnore: ['**/._*'],
   timeout: 30_000,
   fullyParallel: true,
+  workers: process.env.PLAYWRIGHT_BASE_URL ? 1 : undefined,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
