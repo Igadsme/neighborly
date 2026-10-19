@@ -1,11 +1,13 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const useExistingServer = process.env.PLAYWRIGHT_USE_EXISTING_SERVER === '1'
+
 export default defineConfig({
   testDir: './tests/frontend',
   testIgnore: ['**/._*'],
   timeout: 30_000,
   fullyParallel: true,
-  workers: process.env.PLAYWRIGHT_BASE_URL ? 1 : undefined,
+  workers: useExistingServer ? 1 : undefined,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
@@ -20,7 +22,7 @@ export default defineConfig({
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
     { name: 'mobile', use: { ...devices['Pixel 5'] } },
   ],
-  ...(process.env.PLAYWRIGHT_BASE_URL
+  ...(useExistingServer
     ? {}
     : {
         webServer: {
