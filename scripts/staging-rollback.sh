@@ -14,6 +14,8 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-neighborly-staging-private}"
+
 if [ ! -f .env.staging ]; then
   echo "missing .env.staging — nothing to roll back" >&2
   exit 1

@@ -5,6 +5,8 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-neighborly-staging-private}"
+
 if [ ! -f "$ROOT/.env.staging" ]; then
   echo "missing $ROOT/.env.staging" >&2
   exit 1

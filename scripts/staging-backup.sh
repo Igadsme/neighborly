@@ -8,6 +8,8 @@ ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 OUT=${1:-"$ROOT/artifacts/backups/neighborly-staging-$(date -u +%Y%m%dT%H%M%SZ).dump"}
 mkdir -p "$(dirname "$OUT")"
 
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-neighborly-staging-private}"
+
 if [ ! -f "$ROOT/.env.staging" ]; then
   echo "missing $ROOT/.env.staging — run scripts/staging-up.sh first" >&2
   exit 1
