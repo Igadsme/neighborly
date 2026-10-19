@@ -25,7 +25,7 @@ This file records the honest state. It is a skeleton for later updates. Empty se
 | Check | State |
 | --- | --- |
 | Single-process API | Implemented in source. CI integration on this SHA passed. Not booted in production |
-| More than one API process | Not ready. No Socket.IO Redis adapter |
+| More than one API process | Socket.IO Redis adapter is wired when `REDIS_URL` is set. Unset, the process stays single-node. A Jest spec starts two gateways and delivers a message across an in-memory pub/sub. A live Redis across two OS processes was not run in this environment |
 | Auth, refresh, logout | Implemented. CI auth integration passed on this SHA |
 | Email verification that a person can complete | Not ready. No provider |
 | Marketplace pause and suspension privacy | Not ready. Direct reads still expose paused listings and suspended sellers' rows |

@@ -79,19 +79,20 @@ function expectPublicService(body: unknown) {
     startingPriceCents?: number
     quotes?: unknown
     latitude?: unknown
-    rating?: number
+    rating?: number | null
     backgroundCheck?: boolean
     reviewCount?: number
   }
   expect(row.image).toBe('photo-1527515545081-5db817172677')
   expect(row.startingPriceCents).toBe(8900)
-  expect(row.rating).toBeUndefined()
+  expect(row.rating).toBeNull()
+  expect(row.rating).not.toBe(0)
   expect(row.backgroundCheck).toBeUndefined()
-  expect(row.reviewCount).toBeUndefined()
+  expect(row.reviewCount).toBe(0)
   expect(row.quotes).toBeUndefined()
   expect(row.latitude).toBeUndefined()
   const serialized = JSON.stringify(body)
-  for (const secret of ['SECRET-ADDRESS-9', 'secret-provider@example.com', 'provider-hash', 'secret-requester@example.com', 'requester-hash', 'Mendez', 'Hopper', '33.900001', '-84.400001', '33.910001', '40.712800', 'passwordHash']) {
+  for (const secret of ['SECRET-ADDRESS-9', 'secret-provider@example.com', 'provider-hash', 'secret-requester@example.com', 'requester-hash', 'Mendez', 'Hopper', '33.900001', '-84.400001', '33.910001', '40.712800', 'passwordHash', '4.9']) {
     expect(serialized).not.toContain(secret)
   }
 }
@@ -128,6 +129,9 @@ describe('Services HTTP', () => {
         Object.assign(quote, args.data)
         return projectSelect(quote, args.select)
       })
+    },
+    review: {
+      groupBy: jest.fn(async (): Promise<unknown[]> => [])
     }
   }
 
@@ -160,6 +164,19 @@ describe('Services HTTP', () => {
     expect(response.status).toBe(200)
     const body = (await response.json()) as unknown[]
     expectPublicService(body[0])
+  })
+
+  it('GET /api/v1/services/:id uses the review aggregate instead of the stored 4.9', async () => {
+    prisma.review.groupBy.mockResolvedValueOnce([
+      { subjectId: 'provider-1', _avg: { rating: 5 }, _count: { _all: 1 } }
+    ])
+    const response = await fetch(`${baseUrl}/api/v1/services/${serviceId}`)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { rating?: number | null; reviewCount?: number }
+    expect(body.rating).toBe(5)
+    expect(body.reviewCount).toBe(1)
+    expect(JSON.stringify(body)).not.toContain('4.9')
+    expect(JSON.stringify(body)).not.toContain('"reviewCount":142')
   })
 
   it('GET /api/v1/services/:id hides quote addresses and provider secrets', async () => {

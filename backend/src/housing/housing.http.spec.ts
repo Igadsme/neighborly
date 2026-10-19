@@ -54,8 +54,19 @@ const housing = {
 }
 
 function expectPublic(body: unknown) {
-  const row = body as { type?: string; owner?: unknown; latitude?: unknown; longitude?: unknown; verified?: boolean }
+  const row = body as {
+    type?: string
+    owner?: unknown
+    latitude?: unknown
+    longitude?: unknown
+    verified?: boolean
+    rating?: number | null
+    reviewCount?: number
+  }
   expect(row.type).toBe('Apartment')
+  expect(row.rating).toBeNull()
+  expect(row.reviewCount).toBe(0)
+  expect(row.rating).not.toBe(0)
   expect(row.owner).toEqual({
     id: 'owner-1',
     profile: { displayName: 'Ada L', firstName: 'Ada', neighborhood: 'Inman Park', city: 'Atlanta' }
@@ -90,6 +101,9 @@ describe('Housing HTTP', () => {
     housingImage: {
       deleteMany: jest.fn(async () => ({ count: 0 })),
       createMany: jest.fn(async () => ({ count: 0 }))
+    },
+    review: {
+      groupBy: jest.fn(async (): Promise<unknown[]> => [])
     }
   }
 
@@ -134,6 +148,17 @@ describe('Housing HTTP', () => {
       status: 'PUBLISHED',
       deletedAt: null
     })
+  })
+
+  it('GET /api/v1/housing/:id returns the review average and never a zero score', async () => {
+    prisma.review.groupBy.mockResolvedValueOnce([
+      { subjectId: 'owner-1', _avg: { rating: 5 }, _count: { _all: 1 } }
+    ])
+    const response = await fetch(`${baseUrl}/api/v1/housing/${housingId}`)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { rating?: number | null; reviewCount?: number }
+    expect(body.rating).toBe(5)
+    expect(body.reviewCount).toBe(1)
   })
 
   it('GET /api/v1/housing/:id returns the public owner card and hides coordinates', async () => {

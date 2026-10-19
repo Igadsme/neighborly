@@ -287,7 +287,7 @@ Public list and get responses use the same public card as listings (`id` plus pr
 
 Money is integer cents (`priceCents`, `startingPriceCents`). The Housing and Services screens show dollars; divide cents by 100 when wiring. Job `salary` stays the display string from the screen (`$110k–$145k`, `$16–$19/hr`) because it is a range, not one amount.
 
-`verified` (housing and jobs) and `backgroundCheck`, `rating`, and `reviewCount` (services) are not client fields. Sending them is 400. Seed rows set the badges and ratings. A new row from the API has `verified: false`, `backgroundCheck: false`, `rating: null`, and `reviewCount: 0`.
+`verified` (housing and jobs) and `backgroundCheck`, `rating`, and `reviewCount` (services) are not client fields. Sending them is 400. Public housing and service reads do not return the stored `ServiceListing.rating` or `reviewCount` columns. They return `rating` and `reviewCount` from published, unhidden `Review` rows whose `subjectId` is the owner. With no such reviews, `rating` is `null` and `reviewCount` is `0`. `rating` is never `0`. The user profile field stays `ratingAverage`.
 
 Create always sets `PUBLISHED`. Owner `DELETE` sets `ARCHIVED` and `deletedAt`. A non-owner update or delete is 403. Missing or archived rows are 404.
 
@@ -318,7 +318,7 @@ Pagination matches listings: `limit` (1–100, default 24) and `offset` (default
 
 | Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
-| `GET` | `/housing` | No | Published rows, newest first unless `sort` is `price_asc`, `price_desc`, or `beds`. Query: `query`, `listingType`, `type`, `minBeds`, `maxPriceCents`, `pets`, `furnished`, `verified`, `utilitiesIncluded`, `sort`, `limit`, `offset`. |
+| `GET` | `/housing` | No | Published rows, newest first unless `sort` is `price_asc`, `price_desc`, or `beds`. Query: `query`, `listingType`, `type`, `minBeds`, `maxPriceCents`, `pets`, `furnished`, `verified`, `utilitiesIncluded`, `sort`, `limit`, `offset`, `latitude`, `longitude`, `radiusMiles`. |
 | `GET` | `/housing/:id` | No | One published listing. 404 `"Housing listing not found"`. |
 | `POST` | `/housing` | Yes | Creates `PUBLISHED`. Optional `imageKeys` (max 8). |
 | `PATCH` | `/housing/:id` | Yes | Owner only. |
@@ -356,7 +356,7 @@ Pagination matches listings: `limit` (1–100, default 24) and `offset` (default
 
 | Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
-| `GET` | `/jobs` | No | Published jobs, newest first. Query: `query` (title, company, description), `type`, `level` (contains, so `Mid` matches `Mid-Senior`), `remote`, `limit`, `offset`. Does not include applications. |
+| `GET` | `/jobs` | No | Published jobs, newest first. Query: `query` (title, company, description), `type`, `level` (contains, so `Mid` matches `Mid-Senior`), `remote`, `limit`, `offset`, `latitude`, `longitude`, `radiusMiles`. Does not include applications. |
 | `GET` | `/jobs/:id` | No | One published job. 404 `"Job not found"`. |
 | `POST` | `/jobs` | Yes | Creates `PUBLISHED`. |
 | `PATCH` | `/jobs/:id` | Yes | Owner only. |
@@ -373,7 +373,7 @@ Pagination matches listings: `limit` (1–100, default 24) and `offset` (default
 
 | Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
-| `GET` | `/services` | No | Published services, newest first. Query: `query`, `category`, `limit`, `offset`. No quotes. |
+| `GET` | `/services` | No | Published services, newest first. Query: `query`, `category`, `limit`, `offset`, `latitude`, `longitude`, `radiusMiles`. No quotes. Each row includes `rating` (`null` when the owner has no published review) and `reviewCount` (`0` in that case). |
 | `GET` | `/services/:id` | No | One published service. 404 `"Service not found"`. |
 | `POST` | `/services` | Yes | Creates `PUBLISHED`. |
 | `PATCH` | `/services/:id` | Yes | Owner only. |

@@ -2,8 +2,9 @@
 
 Date: 2026-10-19
 Baseline audited: `dc761e51864e03a57c056b4bb2068c6362ced40b` (`main`)
-This document's branch: `cursor/takeover-audit-m1n2`
-Phase: audit only. No application code has been changed in this phase.
+This document's branch: `cursor/backend-p1-p2-lane-5af4`
+Lane baseline: `12540f88303f8e5ab2404ee10fc43ec657d02cf0` (P0 fixes already on `main`).
+This lane edits backend rows BL-021, BL-026, BL-028, and BL-032 only. Other rows were not re-audited.
 
 ## Current state
 
@@ -43,18 +44,18 @@ Status values: `not started`, `in progress`, `blocked`, `done`. `done` requires 
 | BL-018 | Loopback dev ports | not started | |
 | BL-019 | Docs drift | not started | |
 | BL-020 | Staging object store image | not started | |
-| BL-021 | Multi-process realtime | not started | |
+| BL-021 | Multi-process realtime | done | `pnpm test` exit 0 (342 tests). `messaging.redis-fanout.spec.ts` starts two gateways and delivers a message over an in-memory pub/sub. `REDIS_URL` unset stays single-node. A live Redis across two OS processes was not run. |
 | BL-022 | Error tracking | blocked | Vendor decision. The no-op hook is confirmed |
 | BL-023 | Package name and Figma shell | not started | |
 | BL-024 | Tracked smoke PNGs | blocked | Owner must agree to remove them |
 | BL-025 | Inactive controls | not started | |
-| BL-026 | PostGIS or honest radius | not started | |
+| BL-026 | PostGIS or honest radius | in progress | Migration 0015, `ST_DWithin`, and integration specs are in this branch. PostGIS proof is the CI integration job. Not done until that job passes. |
 | BL-027 | Backup rehearsal | not started | Acceptance needs Docker. Not a pass today |
-| BL-028 | Vertical integration specs | not started | |
+| BL-028 | Vertical integration specs | in progress | Housing, jobs, services, and community integration specs are in this branch and run in the CI integration job. Not done until that job passes. Mock HTTP specs stay. |
 | BL-029 | Journey and security probes | not started | Did not run. Not a pass |
 | BL-030 | Axe harness | not started | Did not run. Not a pass |
 | BL-031 | braces dev advisory | not started | No patched release. Production audit is already clean |
-| BL-032 | Listing card ratings | not started | |
+| BL-032 | Listing card ratings | done | `pnpm test` exit 0. No reviews returns `rating: null` and `reviewCount: 0`, never `0`. A fixture average of 5 is returned instead of a stored `4.9`. Contract: `docs/FRONTEND_LANE_CONTRACT.md`. The Postgres review-row spec is in the integration job and has not run on this VM. |
 | BL-033 | Access token storage | not started | P2 |
 | BL-034 | Map decision | blocked | Owner |
 | BL-035 | Compare and price alerts | not started | |

@@ -15,6 +15,7 @@ import {
   Prisma
 } from '@prisma/client'
 import { activeAccountWhere } from '../common/active-account'
+import { assertGeoQuery, ilikeContains, orderByIds, pageWithinRadius } from '../common/geo-search'
 import { assertNotBlocked } from '../common/blocks'
 import { audit } from '../common/logger'
 import { publicUserSelect } from '../common/public-user.select'
@@ -196,7 +197,23 @@ export class BorrowService {
    * is sliced, so the total is global rather than the length of one page.
    */
   async listItems(query: ListBorrowItemsQuery) {
+    const origin = assertGeoQuery(query)
     const limit = clamp(query.limit)
+    const offset = query.offset ?? 0
+    if (origin) {
+      const page = await pageWithinRadius(this.prisma, 'Listing', origin, borrowRadiusExtra(query), limit, offset)
+      if (page.ids.length === 0) return { items: [], total: page.total, limit, offset }
+      const rows = await this.prisma.listing.findMany({
+        where: { id: { in: page.ids } },
+        select: itemSelect
+      })
+      return {
+        items: orderByIds(rows, page.ids).map(row => this.decorateItem(row, undefined)),
+        total: page.total,
+        limit,
+        offset
+      }
+    }
     const search = query.query?.trim()
     const where: Prisma.ListingWhereInput = {
       borrowable: true,
@@ -206,9 +223,6 @@ export class BorrowService {
       ...(query.categoryId ? { categoryId: query.categoryId } : {}),
       ...(query.city ? { city: { equals: query.city, mode: 'insensitive' } } : {}),
       ...(query.neighborhood ? { neighborhood: { equals: query.neighborhood, mode: 'insensitive' } } : {}),
-      ...(query.latitude !== undefined && query.longitude !== undefined && query.radiusMiles !== undefined
-        ? boundingFilter(query.latitude, query.longitude, query.radiusMiles)
-        : {}),
       // Not the caller's own items: you borrow from a neighbor.
       ...(query.availableNow
         ? {
@@ -1799,13 +1813,29 @@ function clamp(limit?: number) {
   return Math.min(Math.max(limit, 1), 100)
 }
 
-function boundingFilter(lat: number, lng: number, radiusMiles: number): Prisma.ListingWhereInput {
-  const latDelta = radiusMiles / 69.0
-  const lngDelta = radiusMiles / (Math.cos((lat * Math.PI) / 180) || 0.01)
-  return {
-    latitude: { gte: lat - latDelta, lte: lat + latDelta },
-    longitude: { gte: lng - lngDelta, lte: lng + lngDelta }
+function borrowRadiusExtra(query: ListBorrowItemsQuery): Prisma.Sql {
+  const parts: Prisma.Sql[] = [Prisma.sql`row.borrowable = true`, Prisma.sql`row.status::text = 'PUBLISHED'`]
+  if (query.categoryId) parts.push(Prisma.sql`row."categoryId" = CAST(${query.categoryId} AS uuid)`)
+  if (query.city) parts.push(Prisma.sql`LOWER(row.city) = LOWER(${query.city})`)
+  if (query.neighborhood) parts.push(Prisma.sql`LOWER(row.neighborhood) = LOWER(${query.neighborhood})`)
+  if (query.availableNow) {
+    parts.push(Prisma.sql`NOT EXISTS (
+      SELECT 1 FROM "BorrowAvailabilityWindow" w
+      WHERE w."listingId" = row.id
+        AND w.kind::text = 'UNAVAILABLE'
+        AND w."startsAt" < NOW()
+        AND w."endsAt" > NOW()
+    )`)
   }
+  const search = query.query?.trim()
+  if (search) {
+    parts.push(Prisma.sql`(
+      ${ilikeContains('row.title', search)}
+      OR ${ilikeContains('row.description', search)}
+      OR ${ilikeContains('row."usageInstructions"', search)}
+    )`)
+  }
+  return Prisma.join(parts, ' AND ')
 }
 
 function round1(value: number) {

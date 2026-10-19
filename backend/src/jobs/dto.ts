@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer'
 import { ArrayMaxSize, IsArray, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator'
+import { MAX_RADIUS_MILES } from '../common/geo-search'
 import { jobEmploymentTypes, jobWorkplaces } from '../common/vertical-values'
 
 export class CreateJobDto {
@@ -179,6 +180,27 @@ export class ListJobsQuery {
   @IsOptional()
   @IsIn(jobWorkplaces)
   remote?: (typeof jobWorkplaces)[number]
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_RADIUS_MILES)
+  radiusMiles?: number
 
   @IsOptional()
   @Type(() => Number)

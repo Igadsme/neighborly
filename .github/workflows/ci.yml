@@ -34,8 +34,9 @@ jobs:
         env:
           VITE_API_URL: https://api.neighborly.invalid/api/v1
 
-  # Real-PostgreSQL integration tests. A disposable PostgreSQL 16 service
-  # container stands in for production Postgres; the suite refuses any
+  # Real-PostgreSQL integration tests. The service container is PostGIS
+  # (postgis/postgis:16-3.4), the same image as docker-compose, because
+  # migration 0015 runs CREATE EXTENSION postgis. The suite refuses any
   # non-loopback database host, so this job can never reach a shared or
   # production database. The integration specs are excluded from `pnpm test`.
   integration:
@@ -46,7 +47,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55432/neighborly_m2
     services:
       postgres:
-        image: postgres:16
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: neighborly_m2
@@ -92,7 +93,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55436/neighborly_m4
     services:
       postgres:
-        image: postgres:16
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: neighborly_m4
@@ -267,7 +268,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: neighborly_drift
