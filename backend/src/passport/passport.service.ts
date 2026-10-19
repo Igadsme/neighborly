@@ -40,6 +40,16 @@ export const DEFAULT_REVIEW_WINDOW_DAYS = 14
 /** How long after publication a review may still be edited. */
 export const REVIEW_EDIT_WINDOW_DAYS = 7
 
+type LeaderboardRow = {
+  id: string
+  display_name: string | null
+  first_name: string | null
+  avatar_url: string | null
+  completed_exchanges: number
+  completed_borrowings: number
+  borrowings_as_lender: number
+}
+
 @Injectable()
 export class PassportService {
   constructor(private readonly prisma: PrismaService) {}
@@ -315,30 +325,44 @@ export class PassportService {
   /**
    * Opt-in public ranking. Only members who chose to appear are listed, and
    * only their display name and verified contribution counts are shown.
+   *
+   * The rank is completed exchanges, the count the passport card shows.
+   * That sort happens in SQL before LIMIT, with the member id as the tie
+   * break, so a later page cannot outrank an earlier one. Counts come from
+   * one grouped query rather than a trustInputs call per member.
    */
   async leaderboard(query: ListPassportsQuery) {
-    const members = await this.prisma.passportPrivacySettings.findMany({
-      where: { leaderboardOptIn: true, user: { deletedAt: null, status: 'ACTIVE' } },
-      select: { user: { select: { id: true, profile: { select: { displayName: true, firstName: true, avatarUrl: true } } } } },
-      take: Math.min(Math.max(query.limit ?? 25, 1), 100),
-      skip: query.offset ?? 0
-    })
-    const rows = []
-    for (const member of members) {
-      const inputs = await this.trustInputs(member.user.id)
-      rows.push({
-        userId: member.user.id,
-        displayName:
-          member.user.profile?.displayName || member.user.profile?.firstName || 'A neighbor',
-        avatarUrl: member.user.profile?.avatarUrl ?? null,
-        completedBorrowings: inputs.completedBorrowings,
-        borrowingsAsLender: inputs.borrowingsAsLender,
-        completedExchanges: inputs.completedExchanges
-      })
-    }
-    return rows.sort(
-      (a, b) => b.completedBorrowings - a.completedBorrowings || a.userId.localeCompare(b.userId)
-    )
+    const limit = Math.min(Math.max(query.limit ?? 25, 1), 100)
+    const offset = query.offset ?? 0
+    const rows = await this.prisma.$queryRaw<LeaderboardRow[]>(Prisma.sql`
+      SELECT u.id::text AS id,
+             profile."displayName" AS display_name,
+             profile."firstName" AS first_name,
+             profile."avatarUrl" AS avatar_url,
+             (COUNT(DISTINCT t.id) FILTER (WHERE t.status::text = 'COMPLETED'))::int AS completed_exchanges,
+             (COUNT(DISTINCT br.id) FILTER (WHERE br.status::text = 'COMPLETED'))::int AS completed_borrowings,
+             (COUNT(DISTINCT br.id) FILTER (WHERE br.status::text = 'COMPLETED' AND br."lenderId" = u.id))::int AS borrowings_as_lender
+      FROM "PassportPrivacySettings" AS privacy
+      INNER JOIN "User" AS u ON u.id = privacy."userId"
+      LEFT JOIN "Profile" AS profile ON profile."userId" = u.id
+      LEFT JOIN "TransactionParticipant" AS tp ON tp."userId" = u.id
+      LEFT JOIN "Transaction" AS t ON t.id = tp."transactionId"
+      LEFT JOIN "BorrowRequest" AS br ON br."lenderId" = u.id OR br."borrowerId" = u.id
+      WHERE privacy."leaderboardOptIn" = true
+        AND u."deletedAt" IS NULL
+        AND u.status::text = 'ACTIVE'
+      GROUP BY u.id, profile."displayName", profile."firstName", profile."avatarUrl"
+      ORDER BY completed_exchanges DESC, u.id ASC
+      LIMIT ${limit} OFFSET ${offset}
+    `)
+    return rows.map(row => ({
+      userId: row.id,
+      displayName: row.display_name || row.first_name || 'A neighbor',
+      avatarUrl: row.avatar_url ?? null,
+      completedBorrowings: Number(row.completed_borrowings),
+      borrowingsAsLender: Number(row.borrowings_as_lender),
+      completedExchanges: Number(row.completed_exchanges)
+    }))
   }
 
   // --------------------------------------------------------- audit and appeals

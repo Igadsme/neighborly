@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import * as argon2 from 'argon2'
 import { AuthService } from '../auth/auth.service'
 import { AccountService } from './account.service'
+import { UsersService } from './users.service'
 import { OutboxEmailSender } from '../auth/email-sender'
 import { PrismaService } from '../prisma/prisma.service'
 import { hashToken } from '../auth/token-crypto'
@@ -64,6 +65,19 @@ describe('Account lifecycle against real PostgreSQL', () => {
   }
 
   // ------------------------------------------------------------ registration
+
+  it('returns staffRoles from StaffRoleAssignment and an empty array for a regular member', async () => {
+    const users = new UsersService(prisma)
+    const regular = await createUser('roles-regular')
+    expect((await users.me(regular.user.id)).staffRoles).toEqual([])
+
+    const staff = await createUser('roles-staff')
+    await prisma.staffRoleAssignment.create({ data: { userId: staff.user.id, role: 'MODERATOR' } })
+    await prisma.staffRoleAssignment.create({ data: { userId: staff.user.id, role: 'ADMIN' } })
+    const me = await users.me(staff.user.id)
+    expect(me.staffRoles).toEqual(['ADMIN', 'MODERATOR'])
+    expect(me).not.toHaveProperty('passwordHash')
+  })
 
   it('registers a user, persists it, and never exposes the password hash', async () => {
     const result = await createUser('register')

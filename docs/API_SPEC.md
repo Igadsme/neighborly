@@ -71,7 +71,7 @@ There is no `refreshToken` field.
 
 Guarded.
 
-- `GET /users/me` — user without `passwordHash`, plus `profile`, `preference`, `notificationPreference`.
+- `GET /users/me` — user without `passwordHash`, plus `profile`, `preference`, `notificationPreference`, and `staffRoles`. `staffRoles` is `StaffRole[]` (`MODERATOR`, `ADMIN`) from `StaffRoleAssignment`, sorted, and `[]` when the caller has no assignment. It is informational. `GET` and `POST` under `/moderation/**` still return 403 unless the server finds a `StaffRoleAssignment` for that caller.
 - `PATCH /users/me/onboarding` — optional `neighborhood`, `city`, `state`, `interests[]`, `capabilities[]`, `newListings`, `priceDrops`, `messages`, `events`, `community`. Upserts preference (`completedAt` set) and notification preference. Returns the same shape as `GET /users/me`.
 
 Not implemented: `PATCH /users/me/profile`. The Profile screen has no edit control. Follow stays local. Message on another profile calls `POST /conversations`. Report and block call `/safety` (see Safety).
@@ -432,7 +432,7 @@ All guarded. Reports and blocks use the caller id from the access token. A calle
 | `GET` | `/moderation/reports/:id` | Staff only. Includes a short `preview` of the target. 404 `"Report not found"`. |
 | `POST` | `/moderation/reports/:id/actions` | Body `{ "kind", "note?" }`. `kind` is `DISMISS`, `RESOLVE`, `HIDE`, `SUSPEND_USER`, or `RESTORE_USER`. A closed report is 409 `"This report is already closed"`, except `RESTORE_USER` on a `RESOLVED` report whose target account is still `SUSPENDED`. `HIDE` archives a listing or community post (`deletedAt` set) or sets `Message.hiddenAt`. `HIDE` on a user report is 409 `"This action does not apply to that report"`. `SUSPEND_USER` sets that account to `SUSPENDED` and resolves the report. `RESTORE_USER` sets it back to `ACTIVE`, including after that resolve. Staff cannot suspend or restore their own account from a report (409). |
 
-There is no screen that grants `StaffRole`. Insert `StaffRoleAssignment` directly. There is no notification list.
+There is no screen that grants `StaffRole`. Insert `StaffRoleAssignment` directly. `GET /users/me` lists those roles and does not grant them. There is no notification list.
 
 Blocking is symmetric for new interactions: either person blocking the other returns 403 `"You cannot interact with this person"` on a new conversation, a message in an existing thread, an offer, a counter, an accept, a reject, a job application, a service quote, a community reaction, a community comment, and a review of that person. Existing threads stay readable. The original message text stays in the database when a message is hidden; participant reads are redacted.
 

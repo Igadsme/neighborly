@@ -7,6 +7,7 @@ import { EMAIL_SENDER, EmailSender } from '../auth/email-sender'
 import { issueToken } from '../auth/token-crypto'
 import { emailChangeLink, EMAIL_CHANGE_TTL_MS } from '../auth/email-links'
 import { ChangeEmailDto, DeleteAccountDto, UpdatePrivacyDto, UpdateProfileDto } from './dto'
+import { presentAccount } from './users.service'
 
 /**
  * Account settings, privacy, email changes, and deletion.
@@ -263,12 +264,11 @@ export class AccountService {
   private async me(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { profile: true, preference: true, notificationPreference: true }
+      include: { profile: true, preference: true, notificationPreference: true, staffRoles: { select: { role: true } } }
     })
     if (!user) throw new NotFoundException('User not found')
     // Belt and braces: passwordHash never leaves this service.
-    const { passwordHash: _passwordHash, ...safeUser } = user
-    return safeUser
+    return presentAccount(user)
   }
 }
 
