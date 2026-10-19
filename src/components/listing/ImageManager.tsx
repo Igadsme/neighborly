@@ -259,7 +259,7 @@ export default function ImageManager({
           {uploading ? "Uploading…" : "Add a photo"}
         </span>
         <span className="block text-xs text-[#5A6B85]">
-          Drag and drop or browse. JPEG, PNG, or WebP up to 5 MB.
+          Drag and drop or browse. JPEG, PNG or WebP up to 5 MB.
         </span>
       </label>
       <input

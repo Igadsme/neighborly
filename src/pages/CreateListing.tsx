@@ -322,7 +322,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
               Add photos
             </h2>
             <p className="text-[#5C6E8A] mb-6">
-              Photos wait until a draft exists. The first JPEG, PNG, or WebP saves a draft and uploads to it. You can edit the title before publishing.
+              Photos wait until a draft exists. The first JPEG, PNG or WebP saves a draft and uploads to it. You can edit the title before publishing.
             </p>
             <ImageManager
               listingId={draftId}

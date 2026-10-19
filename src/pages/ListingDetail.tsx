@@ -384,7 +384,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
             <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 mb-6">
               <div className="flex items-center gap-2 mb-3">
                 <Icon name="shield" size={16} className="text-[#B94C2A]" />
-                <h2 className="font-semibold text-[#1B2A4A]">Neighborly Safety Check</h2>
+                <h2 className="font-semibold text-[#1B2A4A]">Safety tips</h2>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {safeSpots.map(spot => (

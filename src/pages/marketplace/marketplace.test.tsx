@@ -275,6 +275,7 @@ describe("CreateListingFlow", () => {
     render(<CreateListingFlow categories={categories} onDone={onDone} onNavigate={() => undefined} />)
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Oak chair" } })
     fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Solid oak dining chair" } })
+    expect(screen.getByText(/then choose a JPEG, PNG or WebP/)).toBeTruthy()
 
     const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "photo.png", { type: "image/png" })
     fireEvent.change(document.getElementById("listing-image-input") as HTMLInputElement, { target: { files: [file] } })
@@ -395,6 +396,8 @@ describe("ImageManager", () => {
     render(<ImageManager listingId={listingId} />)
     const input = document.getElementById("listing-image-input") as HTMLInputElement
     expect(input.accept.split(",")).toEqual([...ACCEPTED_IMAGE_TYPES])
+    expect(document.body.textContent).toContain("JPEG, PNG or WebP")
+    expect(document.body.textContent).not.toContain("JPEG, PNG, or WebP")
     expect(document.body.textContent).not.toMatch(/GIF/)
   })
 

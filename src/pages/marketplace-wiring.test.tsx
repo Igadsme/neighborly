@@ -182,6 +182,7 @@ describe("Create listing", () => {
 
     const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "photo.png", { type: "image/png" })
     fireEvent.change(input, { target: { files: [file] } })
+    expect(screen.getByText(/The first JPEG, PNG or WebP saves a draft/)).toBeTruthy()
     expect(await screen.findByAltText("Listing photo 1")).toBeTruthy()
     expect(sent).toHaveLength(1)
     expect(sent[0].url).toContain(`/listings/${draftId}/images`)

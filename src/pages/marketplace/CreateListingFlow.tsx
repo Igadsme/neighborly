@@ -394,7 +394,7 @@ export default function CreateListingFlow({
         {domain === "marketplace" && (
           <div className="space-y-2">
             <p className="text-sm text-[#5A6B85]">
-              Photos wait until a draft exists. Add a title and description, then choose a JPEG, PNG, or WebP.
+              Photos wait until a draft exists. Add a title and description, then choose a JPEG, PNG or WebP.
               The first photo saves the draft and uploads to it.
             </p>
             <ImageManager
