@@ -76,6 +76,41 @@ describe("Housing screen", () => {
     expect(await screen.findByText("Sunny 2BR in Inman Park")).toBeTruthy()
     expect(document.body.textContent).toMatch(/\$1[,.]?850/)
     expect(document.body.textContent).toContain("Ada L")
+    expect(screen.queryByRole("img", { name: /rated/i })).toBeNull()
+    expect(document.body.textContent).not.toContain("0.0")
+    expect(document.body.textContent).not.toContain("(0)")
+  })
+
+  it("shows a housing rating only when the payload has reviews", async () => {
+    route(() =>
+      json([
+        {
+          id: "h1",
+          title: "Reviewed loft",
+          description: "Bright apartment.",
+          type: "Apartment",
+          listingType: "rent",
+          priceCents: 200000,
+          beds: 1,
+          baths: 1,
+          sqft: 700,
+          neighborhood: "Decatur",
+          available: "Now",
+          lease: "12 months",
+          pets: false,
+          furnished: false,
+          utilities: "",
+          verified: false,
+          rating: 4.5,
+          reviewCount: 3,
+          createdAt: "2026-09-22T12:00:00.000Z",
+          owner,
+          images: [],
+        },
+      ]),
+    )
+    render(<Housing onNavigate={() => undefined} />)
+    expect(await screen.findByRole("img", { name: "Rated 4.5 out of 5 from 3 reviews" })).toBeTruthy()
   })
 
   it("shows the empty shell and an unauthorized error", async () => {
@@ -183,6 +218,7 @@ describe("Services screen", () => {
     // tick stays off unless the payload says the provider is verified.
     expect(document.querySelector("[data-verified-badge]")).toBeNull()
     expect(screen.getByText(/BG Check/)).toBeTruthy()
+    expect(screen.getByRole("img", { name: "Rated 4.9 out of 5 from 12 reviews" })).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Request quote" }))
     fireEvent.change(screen.getByPlaceholderText(/2BR apartment/), { target: { value: "Deep clean before move-in" } })
     fireEvent.change(screen.getByPlaceholderText(/Street address/), { target: { value: "12 Peachtree St" } })
@@ -229,6 +265,34 @@ describe("Services screen", () => {
     fireEvent.change(screen.getByPlaceholderText(/2BR apartment/), { target: { value: "Need a clean" } })
     fireEvent.click(screen.getByRole("button", { name: "Send request →" }))
     expect(await screen.findByText("Sign in to continue.")).toBeTruthy()
+    expect(screen.queryByRole("img", { name: /rated/i })).toBeNull()
+    expect(document.body.textContent).not.toContain("0.0")
+  })
+
+  it("hides the rating when the service payload omits it", async () => {
+    route(() =>
+      json([
+        {
+          id: "svc-1",
+          title: "Unrated Help",
+          businessName: "Ada's Help",
+          description: "Errands.",
+          category: "Cleaning",
+          startingPriceCents: 2000,
+          location: "Decatur",
+          availability: "Weekdays",
+          tags: [],
+          image: null,
+          backgroundCheck: false,
+          createdAt: "2026-09-22T12:00:00.000Z",
+          owner,
+        },
+      ]),
+    )
+    render(<Services onNavigate={() => undefined} />)
+    expect(await screen.findByText("Unrated Help")).toBeTruthy()
+    expect(screen.queryByRole("img", { name: /rated/i })).toBeNull()
+    expect(document.body.textContent).not.toContain("0.0")
   })
 
   it("renders the verified avatar only for providers the payload marks verified", async () => {
@@ -385,5 +449,6 @@ describe("Home and Dashboard screens", () => {
     expect(document.body.textContent).toContain("No reviews yet")
     expect(document.body.textContent).not.toContain("Marcus")
     expect(document.body.textContent).not.toContain("$1,925")
+    expect(document.body.textContent).not.toContain("Upcoming meetups")
   })
 })

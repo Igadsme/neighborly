@@ -12,6 +12,12 @@ export interface ImageManagerProps {
   /** The listing being created has no id until the API returns one. */
   onListingCreated?: (listing: ApiListing) => void
   initialImages?: StoredImage[]
+  /**
+   * Creates the draft the first photo attaches to. Photos cannot upload
+   * until that id exists.
+   */
+  createDraft?: () => Promise<ApiListing>
+  onImages?: (images: StoredImage[]) => void
 }
 
 /**
@@ -21,7 +27,13 @@ export interface ImageManagerProps {
  * object storage and the returned record is what the gallery renders, so a
  * reload shows the same images rather than a local preview that disappears.
  */
-export default function ImageManager({ listingId, onListingCreated, initialImages = [] }: ImageManagerProps) {
+export default function ImageManager({
+  listingId,
+  onListingCreated,
+  initialImages = [],
+  createDraft,
+  onImages,
+}: ImageManagerProps) {
   const [images, setImages] = useState<StoredImage[]>(initialImages)
   const [storageReady, setStorageReady] = useState<boolean | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -30,6 +42,11 @@ export default function ImageManager({ listingId, onListingCreated, initialImage
   const [notice, setNotice] = useState("")
   const inputRef = useRef<HTMLInputElement | null>(null)
   const dragActive = useRef(false)
+
+  function remember(next: StoredImage[]) {
+    setImages(next)
+    onImages?.(next)
+  }
 
   useEffect(() => {
     api.listings
@@ -62,15 +79,21 @@ export default function ImageManager({ listingId, onListingCreated, initialImage
 
     let target = listingId
     if (!target) {
-      // A new listing needs an id before media can be attached, so create the
-      // draft first and hand the row back to the parent.
+      if (!createDraft) {
+        setError("Photos wait until a draft exists.")
+        return
+      }
       try {
-        const draft = await api.listings.saveDraft({})
+        const draft = await createDraft()
+        if (!draft?.id) {
+          setError("Photos wait until a draft exists.")
+          return
+        }
         target = draft.id
         onListingCreated?.(draft)
-        setNotice("Draft created. Your image is attached to it.")
+        setNotice("Draft saved. The photo is uploading to it.")
       } catch (cause) {
-        setError(readError(cause, "Could not start a draft for this image."))
+        setError(readError(cause, "Photos wait until a draft exists."))
         return
       }
     }
@@ -82,7 +105,7 @@ export default function ImageManager({ listingId, onListingCreated, initialImage
       // Re-read from the server rather than trusting a local object URL, so
       // the gallery only ever shows persisted rows.
       const refreshed: { images?: StoredImage[] } = await api.listings.manage(target)
-      setImages((refreshed.images as StoredImage[]) ?? [])
+      remember((refreshed.images as StoredImage[]) ?? [])
       setNotice("Image uploaded.")
     } catch (cause) {
       setError(
@@ -102,7 +125,11 @@ export default function ImageManager({ listingId, onListingCreated, initialImage
     setError("")
     try {
       await api.listings.removeImage(listingId, imageId)
-      setImages(current => current.filter(image => image.id !== imageId))
+      setImages(current => {
+        const next = current.filter(image => image.id !== imageId)
+        onImages?.(next)
+        return next
+      })
     } catch (cause) {
       setError(readError(cause, "Could not remove that image."))
     }
@@ -122,12 +149,12 @@ export default function ImageManager({ listingId, onListingCreated, initialImage
         listingId,
         next.map(image => image.id),
       )
-      setImages(reordered)
+      remember(reordered)
     } catch (cause) {
       setError(readError(cause, "Could not reorder the images."))
       await api.listings
         .manage(listingId)
-        .then((row: { images?: StoredImage[] }) => setImages(row.images ?? []))
+        .then((row: { images?: StoredImage[] }) => remember(row.images ?? []))
     }
   }
 

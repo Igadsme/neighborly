@@ -27,7 +27,7 @@ const testimonials = [
     name: "Priya Patel",
     neighborhood: "Inman Park",
     avatar: "photo-1494790108755-2616b612b77c",
-    text: "I sold my old dining table within 2 hours and met the nicest neighbor. Neighborly actually feels safe — verified profiles make all the difference.",
+    text: "I sold my old dining table within 2 hours and met the nicest neighbor. Neighborly actually feels safe — meeting through the app made all the difference.",
     rating: 5,
     stat: "Sold $1,200 in items",
   },
@@ -60,7 +60,7 @@ const howItWorks = [
     step: "02",
     icon: "🤝",
     title: "Connect with confidence",
-    desc: "Every user has a verified profile, transaction history, and community reviews. Message sellers securely through the app — no need to share personal contact info.",
+    desc: "Message neighbors through the app and keep the conversation there. Profiles show the name and neighborhood the member chose to share.",
   },
   {
     step: "03",
@@ -89,7 +89,7 @@ const trustPoints = [
   {
     icon: "📍",
     title: "Safe Meetup Spots",
-    desc: "We suggest verified public locations for in-person exchanges in your area.",
+    desc: "We suggest public meetup locations for in-person exchanges in your area.",
   },
   {
     icon: "🛡️",
@@ -362,7 +362,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 <span className="text-[#74C69D]">✓</span> Free to join
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="text-[#74C69D]">✓</span> Verified sellers
+                <span className="text-[#74C69D]">✓</span> Neighbors nearby
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="text-[#74C69D]">✓</span> Safe messaging
@@ -671,7 +671,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   &quot;{t.text}&quot;
                 </p>
                 <div className="flex items-center gap-3 pt-4 border-t border-white/10">
-                  <Avatar src={t.avatar} name={t.name} size="sm" verified />
+                  <Avatar src={t.avatar} name={t.name} size="sm" />
                   <div className="flex-1">
                     <p className="text-white font-semibold text-sm">{t.name}</p>
                     <p className="text-[#74C69D] text-xs">{t.neighborhood}</p>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
 import { Button, ProgressBar, Badge, Icon } from "../components/ui"
+import ImageManager from "../components/listing/ImageManager"
 import { api, readError } from "../api/client"
-import type { ListingInput } from "../api/types"
+import type { ListingInput, StoredImage } from "../api/types"
 
 type Page = "home" | "dashboard"
 
@@ -85,10 +86,6 @@ const aiSuggestions = {
 export default function CreateListing({ onNavigate }: CreateListingProps) {
   const [step, setStep] = useState(0)
   const [listingType, setListingType] = useState<string | null>(null)
-  const [photos, setPhotos] = useState<string[]>([
-    "photo-1593640408182-31c228067bec",
-    "photo-1614744682560-11d22b92aab4",
-  ])
   const [title, setTitle] = useState("My Herman Miller Standing Desk")
   const [description, setDescription] = useState(
     "Great desk, works perfectly. Minor scratch on top.",
@@ -100,12 +97,14 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
   const [newTag, setNewTag] = useState("")
   const [pickup, setPickup] = useState(true)
   const [delivery, setDelivery] = useState(false)
+  const [shipping, setShipping] = useState(false)
   const [aiApplied, setAiApplied] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
   const [published, setPublished] = useState(false)
-  const [coverImage, setCoverImage] = useState(0)
   const [categoryId, setCategoryId] = useState("")
+  const [draftId, setDraftId] = useState<string | null>(null)
+  const [uploaded, setUploaded] = useState<StoredImage[]>([])
   const [publishError, setPublishError] = useState("")
   const [categoryLoading, setCategoryLoading] = useState(true)
 
@@ -166,6 +165,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
       condition,
       pickupAvailable: pickup,
       deliveryAvailable: delivery,
+      shippingAvailable: shipping,
       ...(priceCents !== undefined ? { priceCents } : {}),
     }
   }
@@ -177,7 +177,12 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
     setPublishing(true)
     setPublishError("")
     try {
-      await api.listings.create(body)
+      if (draftId) {
+        await api.listings.update(draftId, body)
+        await api.listings.publish(draftId)
+      } else {
+        await api.listings.create(body)
+      }
       setPublished(true)
     } catch (cause) {
       setPublishError(
@@ -195,7 +200,8 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
     setSavingDraft(true)
     setPublishError("")
     try {
-      await api.listings.saveDraft(body)
+      if (draftId) await api.listings.update(draftId, body)
+      else await api.listings.saveDraft(body)
       onNavigate("home")
     } catch (cause) {
       setPublishError(
@@ -204,6 +210,15 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
     } finally {
       setSavingDraft(false)
     }
+  }
+
+  async function createPhotoDraft() {
+    const body = listingBody()
+    if (!body) {
+      throw new Error("Photos wait until a draft exists. Add a title, description, and category first.")
+    }
+    if (draftId) return api.listings.update(draftId, body)
+    return api.listings.saveDraft(body)
   }
 
   const addTag = () => {
@@ -307,81 +322,15 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
               Add photos
             </h2>
             <p className="text-[#5C6E8A] mb-6">
-              High-quality photos sell faster. Add up to 12 photos. The first
-              photo is your cover image.
+              Photos wait until a draft exists. The first JPEG, PNG, WebP, or GIF saves a draft and uploads to it. You can edit the title before publishing.
             </p>
-
-            {/* Photo grid */}
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              {photos.map((photo, i) => (
-                <div
-                  key={i}
-                  className={`relative rounded-2xl overflow-hidden aspect-square border-2 ${
-                    coverImage === i ? "border-[#2D6A4F]" : "border-transparent"
-                  }`}
-                >
-                  <img
-                    src={`https://images.unsplash.com/${photo}?w=300&h=300&fit=crop&auto=format`}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                  {coverImage === i && (
-                    <div className="absolute top-2 left-2 bg-[#2D6A4F] text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
-                      COVER
-                    </div>
-                  )}
-                  <div className="absolute top-2 right-2 flex gap-1">
-                    <button
-                      onClick={() => setCoverImage(i)}
-                      className="w-6 h-6 rounded-full bg-white/90 shadow flex items-center justify-center text-[9px]"
-                    >
-                      ⭐
-                    </button>
-                    <button
-                      onClick={() =>
-                        setPhotos(photos.filter((_, j) => j !== i))
-                      }
-                      className="w-6 h-6 rounded-full bg-white/90 shadow flex items-center justify-center"
-                    >
-                      <Icon name="x" size={10} className="text-[#B94C2A]" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {/* Add photo */}
-              {photos.length < 12 && (
-                <button
-                  onClick={() => setPhotos([...photos, `photo-${Date.now()}`])}
-                  className="aspect-square rounded-2xl border-2 border-dashed border-[#E8E6DF] flex flex-col items-center justify-center text-[#5C6E8A] hover:border-[#2D6A4F]/50 hover:text-[#2D6A4F] transition-all bg-white"
-                >
-                  <Icon name="plus" size={22} />
-                  <span className="text-xs mt-1 font-medium">Add photo</span>
-                </button>
-              )}
-            </div>
-
-            {/* AI photo feedback */}
-            <div className="bg-gradient-to-r from-[#F0FBF3] to-[#F0F7FF] border border-[#74C69D]/30 rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span>✨</span>
-                <span className="text-xs font-semibold text-[#2D6A4F]">
-                  AI Photo Review
-                </span>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-xs text-[#1B2A4A]">
-                  <span className="text-[#2D6A4F]">✓</span> Good lighting
-                  detected
-                </div>
-                <div className="flex items-center gap-2 text-xs text-[#1B2A4A]">
-                  <span className="text-[#2D6A4F]">✓</span> Item clearly visible
-                </div>
-                <div className="flex items-center gap-2 text-xs text-[#D97706]">
-                  ⚠️ Try to show multiple angles for best results
-                </div>
-              </div>
-            </div>
+            <ImageManager
+              listingId={draftId}
+              createDraft={createPhotoDraft}
+              initialImages={uploaded}
+              onListingCreated={(row) => setDraftId(row.id)}
+              onImages={setUploaded}
+            />
           </div>
         )}
 
@@ -575,9 +524,16 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                     </span>
                   </button>
                 ))}
-                <button className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-[#E8E6DF] bg-white">
+                <button
+                  type="button"
+                  aria-pressed={shipping}
+                  onClick={() => setShipping((current) => !current)}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                    shipping ? "border-[#2D6A4F] bg-[#F0FBF3]" : "border-[#E8E6DF] bg-white"
+                  }`}
+                >
                   <span className="text-2xl">📬</span>
-                  <span className="text-xs font-semibold text-[#5C6E8A]">
+                  <span className={`text-xs font-semibold ${shipping ? "text-[#2D6A4F]" : "text-[#5C6E8A]"}`}>
                     Shipping
                   </span>
                 </button>
@@ -707,11 +663,13 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
             <div className="bg-white rounded-3xl border border-[#E8E6DF] shadow-md overflow-hidden">
               {/* Image */}
               <div className="h-64 bg-[#F5F4EF] overflow-hidden">
-                <img
-                  src={`https://images.unsplash.com/${photos[coverImage]}?w=800&h=500&fit=crop&auto=format`}
-                  alt={title}
-                  className="w-full h-full object-cover"
-                />
+                {uploaded[0]?.url ? (
+                  <img src={uploaded[0].url} alt={title} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-sm text-[#5C6E8A]">
+                    No photo yet
+                  </div>
+                )}
               </div>
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3 mb-2">
@@ -725,21 +683,18 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                 <div className="flex items-center gap-2 mb-3">
                   <Badge variant="navy">{condition}</Badge>
                   {pickup && <Badge variant="green">Pickup</Badge>}
+                  {shipping && <Badge variant="blue">Shipping</Badge>}
                 </div>
                 <p className="text-sm text-[#5C6E8A] mb-4 line-clamp-3">
                   {description}
                 </p>
                 <div className="flex items-center gap-2 pt-4 border-t border-[#F5F4EF]">
                   <div className="w-8 h-8 rounded-full bg-[#D8F3DC] flex items-center justify-center text-sm font-bold text-[#2D6A4F]">
-                    G
+                    Y
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-[#1B2A4A]">
-                      Gad M. (You)
-                    </p>
-                    <p className="text-xs text-[#5C6E8A]">
-                      Inman Park · Just now
-                    </p>
+                    <p className="text-xs font-semibold text-[#1B2A4A]">You</p>
+                    <p className="text-xs text-[#5C6E8A]">Just now</p>
                   </div>
                 </div>
               </div>

@@ -41,8 +41,6 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
   const [activeImage, setActiveImage] = useState(0)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
-  const [offerOpen, setOfferOpen] = useState(false)
-  const [offerAmount, setOfferAmount] = useState('')
   const [messageOpen, setMessageOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [messageSent, setMessageSent] = useState(false)
@@ -333,9 +331,13 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                     )}
                   </button>
                 ))}
-                <button className="w-20 h-20 rounded-xl border-2 border-dashed border-[#E8E6DF] flex flex-col items-center justify-center text-[#5C6E8A] hover:border-[#2D6A4F]/30 transition-colors">
+                <button
+                  type="button"
+                  disabled
+                  className="w-20 h-20 rounded-xl border-2 border-dashed border-[#E8E6DF] flex flex-col items-center justify-center text-[#5C6E8A] cursor-not-allowed"
+                >
                   <Icon name="camera" size={16} />
-                  <span className="text-[9px] mt-1">Video</span>
+                  <span className="text-[9px] mt-1 text-center leading-tight">Video · Coming soon</span>
                 </button>
               </div>
             </div>
@@ -504,28 +506,12 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                     <Icon name="message" size={16} />
                     Message seller
                   </Button>
-                  <Button variant="secondary" size="lg" fullWidth onClick={() => setOfferOpen(!offerOpen)}>
+                  <Button variant="secondary" size="lg" fullWidth disabled>
                     <Icon name="dollar" size={16} />
-                    Make an offer
+                    Make an offer · Coming soon
                   </Button>
-                  {offerOpen && (
-                    <div className="p-4 bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl animate-fade-in">
-                      <p className="text-xs font-semibold text-[#1B2A4A] mb-2">Your offer</p>
-                      <div className="relative mb-3">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5C6E8A] text-sm">$</span>
-                        <input
-                          type="number"
-                          placeholder="e.g. 575"
-                          value={offerAmount}
-                          onChange={e => setOfferAmount(e.target.value)}
-                          className="w-full h-10 pl-7 pr-3 bg-white border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#E8694A]"
-                        />
-                      </div>
-                      <Button variant="secondary" size="sm" fullWidth onClick={() => setActionNote("Offers on a listing aren't available yet. Message the seller instead.")}>Send offer</Button>
-                    </div>
-                  )}
                   {actionNote && <p className="text-xs text-[#A63D27]" role="alert">{actionNote}</p>}
-                  <Button variant="outline" size="md" fullWidth onClick={() => setActionNote("Reserving an item isn't available yet.")}>Reserve item</Button>
+                  <Button variant="outline" size="md" fullWidth disabled>Reserve item · Coming soon</Button>
                 </div>
 
                 <div className="mt-5 pt-5 border-t border-[#F5F4EF] space-y-2">
@@ -600,15 +586,15 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
 
       {/* Mobile sticky actions */}
       <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-40 bg-white border-t border-[#E8E6DF] px-4 py-3 flex gap-3 md:hidden">
-        <button onClick={() => void toggleSaved()} className={`w-12 h-12 rounded-full border flex items-center justify-center flex-shrink-0 ${saved ? 'bg-[#FDE8E0] border-[#E8694A]' : 'bg-white border-[#E8E6DF]'}`}>
+        <button type="button" aria-label="Save listing" onClick={() => void toggleSaved()} className={`w-12 h-12 rounded-full border flex items-center justify-center flex-shrink-0 ${saved ? 'bg-[#FDE8E0] border-[#E8694A]' : 'bg-white border-[#E8E6DF]'}`}>
           <Icon name="heart" size={18} className={saved ? 'fill-[#E8694A] stroke-[#E8694A]' : 'stroke-[#5C6E8A]'} />
         </button>
         <Button variant="primary" size="md" fullWidth onClick={() => setMessageOpen(true)}>
           <Icon name="message" size={15} />
           Message seller
         </Button>
-        <Button variant="secondary" size="md" fullWidth onClick={() => setOfferOpen(!offerOpen)}>
-          Make offer
+        <Button variant="secondary" size="md" fullWidth disabled>
+          Make offer · Coming soon
         </Button>
       </div>
 
@@ -618,7 +604,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
           <div className="bg-white rounded-3xl w-full max-w-md p-6 animate-fade-in-up">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display text-lg font-semibold text-[#1B2A4A]">Message {listing.seller.name.split(' ')[0]}</h3>
-              <button onClick={() => setMessageOpen(false)} className="w-8 h-8 rounded-full bg-[#F5F4EF] flex items-center justify-center hover:bg-[#E8E6DF] transition-colors">
+              <button type="button" aria-label="Close message" onClick={() => setMessageOpen(false)} className="w-8 h-8 rounded-full bg-[#F5F4EF] flex items-center justify-center hover:bg-[#E8E6DF] transition-colors">
                 <Icon name="x" size={14} />
               </button>
             </div>

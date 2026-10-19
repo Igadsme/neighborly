@@ -38,7 +38,6 @@ export default function Explore({ onNavigate }: ExploreProps) {
   const [minPrice, setMinPrice] = useState('')
   const [maxPrice, setMaxPrice] = useState(DEFAULT_MAX_PRICE)
   const [distance, setDistance] = useState(DEFAULT_DISTANCE)
-  const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [freeOnly, setFreeOnly] = useState(false)
   const [deliveryOnly, setDeliveryOnly] = useState(false)
   const [view, setView] = useState<'grid' | 'list' | 'map'>('grid')
@@ -137,7 +136,6 @@ export default function Explore({ onNavigate }: ExploreProps) {
         minPrice,
         maxPrice,
         distance,
-        verifiedOnly,
         freeOnly,
         deliveryOnly,
       })
@@ -158,7 +156,6 @@ export default function Explore({ onNavigate }: ExploreProps) {
     if (filter === condition) setCondition(DEFAULT_CONDITION)
     if (filter.startsWith('Under $')) setMaxPrice(DEFAULT_MAX_PRICE)
     if (filter.endsWith('mi radius')) setDistance(DEFAULT_DISTANCE)
-    if (filter === 'Verified sellers') setVerifiedOnly(false)
     if (filter === 'Free only') setFreeOnly(false)
     if (filter === 'Delivery available') setDeliveryOnly(false)
     setSearchNonce(n => n + 1)
@@ -169,7 +166,6 @@ export default function Explore({ onNavigate }: ExploreProps) {
   if (condition !== 'Any') activeFilters.push(condition)
   if (maxPrice) activeFilters.push(`Under $${maxPrice}`)
   if (distance < 25) activeFilters.push(`${distance} mi radius`)
-  if (verifiedOnly) activeFilters.push('Verified sellers')
   if (freeOnly) activeFilters.push('Free only')
   if (deliveryOnly) activeFilters.push('Delivery available')
 
@@ -178,7 +174,6 @@ export default function Explore({ onNavigate }: ExploreProps) {
   // the API does not model stay on the client.
   const filteredListings = results.filter(l => {
     if (deliveryOnly && !l.deliveryAvailable) return false
-    if (verifiedOnly && !l.seller.verified) return false
     return true
   })
 
@@ -363,8 +358,20 @@ export default function Explore({ onNavigate }: ExploreProps) {
 
                 {/* Toggle filters */}
                 <div className="space-y-3 border-t border-[#F5F4EF] pt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span id="filter-verified-label" className="text-sm text-[#1B2A4A]">
+                      Verified sellers only · Coming soon
+                    </span>
+                    <button
+                      type="button"
+                      disabled
+                      aria-labelledby="filter-verified-label"
+                      className="text-xs font-semibold text-[#5C6E8A] cursor-not-allowed"
+                    >
+                      Coming soon
+                    </button>
+                  </div>
                   {[
-                    { key: 'verified', label: 'Verified sellers only', state: verifiedOnly, set: setVerifiedOnly },
                     { key: 'free', label: 'Free items only', state: freeOnly, set: setFreeOnly },
                     { key: 'delivery', label: 'Delivery available', state: deliveryOnly, set: setDeliveryOnly },
                   ].map(({ key, label, state, set }) => (
@@ -379,13 +386,20 @@ export default function Explore({ onNavigate }: ExploreProps) {
                   ))}
                 </div>
 
-                {/* Seller rating */}
+                {/* Seller rating. The API has no minimum-rating filter, so the
+                    chips stay in the layout and say they do not filter yet. */}
                 <div className="mt-5 border-t border-[#F5F4EF] pt-4">
                   <p className="block text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide mb-3">Minimum seller rating</p>
                   <div className="flex gap-2">
                     {[4, 4.5, 4.8].map(r => (
-                      <button key={r} className="flex-1 py-1.5 text-xs font-medium rounded-lg border border-[#E8E6DF] text-[#5C6E8A] hover:border-[#2D6A4F] transition-colors">
-                        {r}+ ★
+                      <button
+                        key={r}
+                        type="button"
+                        disabled
+                        className="flex-1 py-1.5 text-xs font-medium rounded-lg border border-[#E8E6DF] text-[#5C6E8A] cursor-not-allowed"
+                      >
+                        <span className="block">{r}+ ★</span>
+                        <span className="block text-[10px]">Coming soon</span>
                       </button>
                     ))}
                   </div>
@@ -536,7 +550,7 @@ export default function Explore({ onNavigate }: ExploreProps) {
                 <h2 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">No results found</h2>
                 <p className="text-[#5C6E8A] max-w-sm mx-auto mb-6">Try adjusting your filters or searching in a wider radius. We can alert you when something matching your search is posted.</p>
                 <div className="flex items-center justify-center gap-3">
-                  <Button variant="primary" size="sm" onClick={() => { setFreeOnly(false); setVerifiedOnly(false); setMaxPrice(''); setMinPrice(''); setCategory('All'); setOffset(0) }}>Clear filters</Button>
+                  <Button variant="primary" size="sm" onClick={() => { setFreeOnly(false); setDeliveryOnly(false); setMaxPrice(''); setMinPrice(''); setCategory('All'); setOffset(0) }}>Clear filters</Button>
                   <Button variant="outline" size="sm" onClick={() => void saveAlert()}>Save this search</Button>
                 </div>
               </div>

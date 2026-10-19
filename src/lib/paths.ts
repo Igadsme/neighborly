@@ -78,6 +78,7 @@ const STATIC_PAGES: Record<string, string> = {
   "/missions/new": "mission-create",
   "/missions/contributions": "mission-contributions",
   "/moderation": "community-moderation",
+  "/reports": "report-queue",
   "/staff": "staff-queue",
   "/borrow": "borrow",
   "/borrow/new": "borrow-create",
@@ -227,6 +228,8 @@ export function pathFor(page: string, id?: string): string | null {
       return "/missions/contributions"
     case "community-moderation":
       return "/moderation"
+    case "report-queue":
+      return "/reports"
     case "passport":
       return id ? `/passport/${enc(id)}` : null
     case "passport-me":

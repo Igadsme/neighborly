@@ -59,7 +59,34 @@ describe("Create listing", () => {
     expect(publish?.body).toContain(categoryId)
     expect(publish?.body).toContain('"priceCents":48000')
     expect(publish?.body).toContain('"condition":"Good"')
+    expect(publish?.body).toContain('"shippingAvailable":false')
     expect(calls.some((call) => call.url.includes("/requests"))).toBe(false)
+  })
+
+  it("sends shipping when the Shipping option is selected", async () => {
+    const calls: Array<{ url: string; method?: string; body?: string }> = []
+    route((url, init) => {
+      calls.push({ url, method: init?.method, body: typeof init?.body === "string" ? init.body : undefined })
+      if (url.includes("/categories")) {
+        return json([{ id: categoryId, name: "Furniture", slug: "furniture", listingCount: 2 }])
+      }
+      return json({ id: "listing-1", title: "My Herman Miller Standing Desk" })
+    })
+    render(<CreateListing onNavigate={() => undefined} />)
+    fireEvent.click(screen.getByRole("button", { name: /Item for Sale/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    fireEvent.click(screen.getByRole("button", { name: /Shipping/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    expect(screen.getByText("Neighborly AI reviewed your listing and has suggestions.")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue to publish →" }))
+    const publishButton = await screen.findByRole("button", { name: /Publish now/ })
+    await waitFor(() => expect((publishButton as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(publishButton)
+    expect(await screen.findByText("Listing published!")).toBeTruthy()
+    const publish = calls.find((call) => call.method === "POST" && call.url.endsWith("/listings"))
+    expect(publish?.body).toContain('"shippingAvailable":true')
   })
 
   it("saves a draft and blocks a short title", async () => {

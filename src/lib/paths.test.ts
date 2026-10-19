@@ -25,6 +25,7 @@ describe("addressable paths", () => {
       ["mission-manage", "mission-1", "/missions/mission-1/manage"],
       ["profile", "user-1", "/profile/user-1"],
       ["verify-email", undefined, "/verify-email"],
+      ["report-queue", undefined, "/reports"],
       ["reset-password", undefined, "/reset-password"],
     ]
     for (const [page, id, path] of cases) {

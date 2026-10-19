@@ -7,6 +7,7 @@ import type {
   ApiLostFound,
   ApiServiceListing,
 } from "../api/types"
+import { optionalNumber } from "./ratings"
 import { personName, relativeTime } from "./view"
 
 export interface HousingCard {
@@ -32,8 +33,8 @@ export interface HousingCard {
     avatar: string
     name: string
     verified: boolean
-    rating: number
-    reviews: number
+    rating: number | null
+    reviews: number | null
   }
   ownerId: string
 }
@@ -64,8 +65,8 @@ export interface ServiceCard {
   providerName: string
   /** Email or identity verification from the payload. Never inferred. */
   providerVerified: boolean
-  rating: number
-  reviews: number
+  rating: number | null
+  reviews: number | null
   startingPrice: number
   location: string
   backgroundCheck: boolean
@@ -134,7 +135,13 @@ export function dollarsFromCents(cents: number) {
   return cents / 100
 }
 
-export function housingCard(row: ApiHousing): HousingCard {
+export function housingCard(
+  row: ApiHousing & {
+    rating?: number | null
+    reviewCount?: number | null
+    owner: ApiHousing["owner"] & { rating?: number | null; reviewCount?: number | null }
+  },
+): HousingCard {
   return {
     id: row.id,
     title: row.title,
@@ -159,8 +166,8 @@ export function housingCard(row: ApiHousing): HousingCard {
       avatar: "",
       name: personName(row.owner),
       verified: false,
-      rating: 0,
-      reviews: 0,
+      rating: optionalNumber(row.rating ?? row.owner.rating),
+      reviews: optionalNumber(row.reviewCount ?? row.owner.reviewCount),
     },
   }
 }
@@ -193,8 +200,8 @@ export function serviceCard(row: ApiServiceListing): ServiceCard {
     avatar: "",
     providerName: personName(row.owner, row.businessName),
     providerVerified: serviceProviderVerified(row),
-    rating: row.rating ?? 0,
-    reviews: row.reviewCount,
+    rating: optionalNumber(row.rating),
+    reviews: optionalNumber(row.reviewCount),
     startingPrice: dollarsFromCents(row.startingPriceCents),
     location: row.location,
     backgroundCheck: row.backgroundCheck,

@@ -63,18 +63,61 @@ describe("Landing hero count", () => {
   })
 })
 
+describe("Landing trust copy", () => {
+  it("does not claim sellers or sample stories are verified", () => {
+    route(() => new Promise<Response>(() => {}))
+    render(<Landing onNavigate={() => undefined} onSignIn={() => undefined} />)
+    expect(screen.queryByText("Verified sellers")).toBeNull()
+    expect(screen.queryByText(/verified profiles/i)).toBeNull()
+    expect(document.querySelector("[data-verified-badge]")).toBeNull()
+    expect(screen.getByText("Neighbors nearby")).toBeTruthy()
+  })
+})
+
 describe("HomeFeed neighbour group", () => {
-  it("labels the neighbour group for what it is, not as free listings", async () => {
-    route(() => json([]))
+  it("loads opted-in neighbors without a verified badge or stars", async () => {
+    route((url) => {
+      if (url.includes("/passport/leaderboard")) {
+        return json([
+          {
+            userId: "11111111-1111-4111-8111-111111111111",
+            displayName: "Ada L",
+            avatarUrl: null,
+            completedBorrowings: 1,
+            borrowingsAsLender: 0,
+            completedExchanges: 3,
+          },
+        ])
+      }
+      return json([])
+    })
 
     render(<HomeFeed onNavigate={() => undefined} />)
 
-    await waitFor(() => {
-      const group = document.querySelector('[aria-label="Preview neighbor examples"]')
-      expect(group).toBeTruthy()
-    })
-    // The label had been copy-pasted from the free-listings carousel, so a
-    // screen reader announced three unrelated people as free listings.
+    expect(await screen.findByRole("group", { name: "Neighbors to follow" })).toBeTruthy()
+    expect(screen.getByText("Ada L")).toBeTruthy()
+    expect(screen.getByText("3 completed exchanges")).toBeTruthy()
+    expect(screen.queryByText("Sofia Martinez")).toBeNull()
+    expect(document.querySelector("[data-verified-badge]")).toBeNull()
+    expect(screen.queryByRole("img", { name: /rated/i })).toBeNull()
     expect(document.querySelector('[aria-label="Free listings"]')).toBeNull()
+    const follow = screen.getByRole("button", { name: "Follow · Coming soon" })
+    expect((follow as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it("shows an empty state when nobody opted in", async () => {
+    route((url) => (url.includes("/passport/leaderboard") ? json([]) : json([])))
+    render(<HomeFeed onNavigate={() => undefined} />)
+    expect(await screen.findByText("No neighbors to show yet.")).toBeTruthy()
+  })
+
+  it("shows an error when the leaderboard cannot be loaded", async () => {
+    route((url) =>
+      url.includes("/passport/leaderboard")
+        ? json({ message: "Leaderboard unavailable" }, 500)
+        : json([]),
+    )
+    render(<HomeFeed onNavigate={() => undefined} />)
+    expect(await screen.findByText("Leaderboard unavailable")).toBeTruthy()
   })
 })

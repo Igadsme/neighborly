@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Avatar, StarRating, Badge, Button, Icon, InlineAlert, LoadState } from '../components/ui'
+import { hasDisplayableRating } from '../lib/ratings'
 import { api, readStatus } from '../api/client'
 import { mediaSrc } from '../lib/view'
 import { serviceCard, type ServiceCard } from '../lib/verticals'
@@ -257,15 +258,6 @@ export default function Services({ onNavigate }: ServicesProps) {
                         <Badge variant="green">🔍 BG Check</Badge>
                       </div>
                     )}
-                    <div className="absolute top-3 right-3">
-                      <button
-                        onClick={() => setActionNote("Saving services isn't available yet.")}
-                        className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm"
-                        aria-label="Save service"
-                      >
-                        <Icon name="heart" size={14} className="stroke-[#5C6E8A]" />
-                      </button>
-                    </div>
                   </div>
 
                   {/* Content */}
@@ -282,8 +274,12 @@ export default function Services({ onNavigate }: ServicesProps) {
                     <h3 className="font-display text-lg font-semibold text-[#1B2A4A] mb-1">{svc.title}</h3>
 
                     <div className="flex items-center gap-2 mb-3">
-                      <StarRating rating={svc.rating} count={svc.reviews} size="sm" />
-                      <span className="text-[#5C6E8A]">·</span>
+                      {hasDisplayableRating(svc.rating, svc.reviews) && (
+                        <>
+                          <StarRating rating={svc.rating} count={svc.reviews ?? undefined} size="sm" />
+                          <span className="text-[#5C6E8A]">·</span>
+                        </>
+                      )}
                       <span className="text-xs text-[#5C6E8A]">{svc.availability}</span>
                     </div>
 
