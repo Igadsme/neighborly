@@ -13,7 +13,6 @@ import {
   mediaSrc,
   offerBadge,
   offerRowsForUser,
-  personName,
   relativeTime,
   type OfferRow,
 } from '../lib/view'
@@ -125,32 +124,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         status: tx.status,
       }
     })
-
-  const meetups = transactions.flatMap((tx) =>
-    (tx.appointments ?? []).map((appointment) => {
-      const linked = tx.offerId ? offerIndex.get(tx.offerId) : undefined
-      const other = tx.participants.find((p) => p.userId !== userId)
-      const person = linked && other
-        ? other.userId === linked.offer.offerer.id
-          ? linked.offer.offerer
-          : linked.request.requester
-        : null
-      const when = new Date(appointment.startsAt)
-      return {
-        id: appointment.id,
-        with: person ? personName(person) : 'Neighbor',
-        date: Number.isNaN(when.getTime())
-          ? 'Scheduled'
-          : when.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }),
-        time: Number.isNaN(when.getTime())
-          ? ''
-          : when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
-        location: appointment.locationNote || 'Meetup',
-        listing: linked?.request.title ?? 'Exchange',
-        conversationId: tx.conversationId,
-      }
-    }),
-  )
 
   const activity: ActivityItem[] = activityItems({
     offers: offerRows,
@@ -360,27 +333,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                   </Card>
                 ))
               )}
-            </div>
-
-            <SectionHeader title="Upcoming meetups" />
-            <div className="grid md:grid-cols-2 gap-4 mb-8">
-              {meetups.map((meetup) => (
-                <Card key={meetup.id} className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#DDEEFF] flex items-center justify-center flex-shrink-0">
-                    <Icon name="calendar" size={18} className="text-[#4A7FB5]" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-sm text-[#1B2A4A]">{meetup.with}</p>
-                    <p className="text-xs text-[#5C6E8A] mt-0.5">{meetup.date}{meetup.time ? ` at ${meetup.time}` : ''}</p>
-                    <div className="flex items-center gap-1 text-xs text-[#5C6E8A] mt-1">
-                      <Icon name="mapPin" size={10} className="text-[#B94C2A]" />
-                      {meetup.location}
-                    </div>
-                    <p className="text-xs text-[#5C6E8A] mt-0.5">Re: {meetup.listing}</p>
-                  </div>
-                  <button onClick={() => onNavigate('messages', meetup.conversationId ?? undefined)} className="text-xs font-semibold text-[#4A7FB5] flex-shrink-0">Message</button>
-                </Card>
-              ))}
             </div>
 
             <SectionHeader title="Reviews to complete" subtitle="Leave reviews for recent transactions" />

@@ -49,13 +49,13 @@ Not sent: photos, tags, shipping, coordinates, listing-type card, and the AI pan
 These controls and copy do not have an endpoint. They stay on screen and are not treated as persisted:
 
 - Home location line "Inman Park · Atlanta, GA", category chips (visual only), "Neighbors to follow" people, and the map teaser pins.
-- Community "2,847 neighbors" is not a user count. Service category pill counts `(24)`, `(12)`, and the rest are the original labels.
-- Dashboard trust banner ("Verified Neighbor", 98%, 4.9, 52 transactions). View, save, message, and offer counters on a listing card are "—". "Earned" is "—" because payments are not connected. Pause, Promote, and Mark sold have no route.
+- Community neighbor count loads `GET /community/summary` (`neighbors`, active accounts). It is not the painted "2,847". Service category pill counts `(24)`, `(12)`, and the rest are the original labels.
+- Dashboard trust banner ("Verified Neighbor", 98%, 4.9, 52 transactions). View, save, message, and offer counters on a listing card are "—". "Earned" is "—" because payments are not connected. Pause calls `POST /listings/:id/pause`. Mark sold calls `POST /listings/:id/sold`. Promote has no route.
 - Housing heart, Tour, and the commute teaser. Message jumps to the messages page without creating a thread.
 - Jobs city field stays "Atlanta, GA" and is not a query param. Share has no handler. Responsibility bullets fall back to the original four lines only when a job has an empty `responsibilities` array.
 - Services heart and "Become a provider".
 - Community "+ Post lost/found" and "+ Give something" have no composer yet. Reply and Share on a post do not open a thread. Lost-and-found "Contact" does not start a conversation.
-- Explore's bell ("Save alert"), the Saved Items price-alert bell, and Onboarding notification toggles are not the nav message badge. They stay local. Saved-search delivery and a notification list are still target.
+- Explore's bell ("Save alert") calls `POST /listings/saved-searches`. The Saved Items price-alert bell and Onboarding notification toggles are not the nav message badge. Price-alert copy stays local. Saved-search delivery has a worker; a price-history series does not.
 
 ## TARGET
 
@@ -66,7 +66,7 @@ These controls and copy do not have an endpoint. They stay on screen and are not
 | `landing` | `Landing.tsx` | Marketing, search field, sign-in dialog | Inline feature copy and `listings` slice | Auth is implemented | Search box is not hooked to `GET /listings`. Header Browse, Services, Housing, Jobs, and "Post a Listing" open the sign-in dialog. Get started and "Create an account" still open onboarding. There is no preview bar that enters the app without a session. |
 | `onboarding` | `Onboarding.tsx` | Method, profile, neighborhood, interests, notifications | Step copy | Implemented | Google and Apple tiles are not providers. |
 | `home` | `HomeFeed.tsx` | Category chips, listing rails, services, community strip | Suggested people only | Listings, services, events, and posts are implemented | Follow has no endpoint. Cards go to `listing` with the real id. |
-| `explore` | `Explore.tsx` | Query, filters, grid/list, suggestions | Suggestions are inline. Results come from `GET /listings`, then extra filters run in the browser | Target filters beyond `query` | "Save alert" toggles `alertSaved` locally. Map control navigates to `map`. |
+| `explore` | `Explore.tsx` | Query, filters, grid/list, suggestions | Suggestions are inline. Results come from `GET /listings`, then extra filters run in the browser | Target filters beyond `query` | "Save alert" calls `api.listings.saveSearch`. Map control navigates to `map`. |
 | `categories` | `Categories.tsx` | Category grid, trending searches, neighborhood counts, and a featured strip | Housing, Jobs, Services, and Vehicles counts come from the API. Other tile counts, trending searches, and neighborhood counts stay painted. The featured strip is live. | `GET /categories` (`listingCount`) and `GET /listings` (`status=PUBLISHED`, `limit=6`) | Loading, empty, and error lines sit under the page header and under Featured in Atlanta. Some tiles navigate to `housing`, `services`, `jobs`, `community`. This row is not a release. Docker Compose, migrate, seed, and signed-in browser e2e were not run. |
 | `map` | `MapDiscovery.tsx` | Map-style discovery | None for pins or the list. Safe spots and the mile line stay painted | `GET /listings?limit=100` | No Mapbox call. Pins use painted neighborhood centroids, not coordinates. See `docs/API_SPEC.md`. |
 | `listing` | `ListingDetail.tsx` | Live listing for a UUID id. Non-UUID ids still match `listings` | Fixtures only when the id is not a UUID | `GET /listings/:id`, `GET /listings` for similar cards (`categoryId` when present, otherwise recent published), `POST /listings/:id/favorite`, `GET /listings/favorites` to paint the saved heart, `POST /conversations` on Message send for a UUID seller | Seller card uses the public seller on the listing. "View full profile" passes that user id to `profile`. Message send for that live listing posts `participantId`, `listingId`, and the trimmed body, then keeps the painted “Message sent!” redirect. 401 shows “Sign in to continue.” Other failures stay in the modal. A non-UUID id still uses the local sent state and does not call the API. Negotiate, reserve, and share stay local. A UUID listing’s “Report this listing” calls `POST /safety/reports` (`targetType` `LISTING`, reason `OTHER`). A non-UUID id still shows “Reporting isn't available yet.” No owner archive control is painted here. There is no `GET /notifications`. |
@@ -78,14 +78,14 @@ These controls and copy do not have an endpoint. They stay on screen and are not
 | `housing` | `Housing.tsx` | Rental browsing | None | Implemented | See the implemented table. |
 | `services` | `Services.tsx` | Provider cards and quote modal | Category counts only | Implemented | Quote modal posts to the API. Address stays on the requester response. |
 | `jobs` | `Jobs.tsx` | List/detail, apply, save | Atlanta field and the responsibility fallback | Implemented | Apply and save persist. |
-| `community` | `Community.tsx` | Posts, events, lost & found, giveaways | "2,847 neighbors" and giveaway tips | Implemented | Reactions, RSVP, claim, and new posts persist. |
+| `community` | `Community.tsx` | Posts, events, lost & found, giveaways | Giveaway tips stay painted. The neighbor count is `GET /community/summary`. | Implemented | Reactions, RSVP, claim, and new posts persist. |
 
 `Navigation` (`src/components/Navigation.tsx`) highlights the current page id, pins location to a local Atlanta list, and shows `unreadMessages` from `App`. That number is the live unread-thread count from `GET /conversations`, or 0 when the caller is signed out, the list is caught up, or the list returns 401. The badge chrome is unchanged. Sign-out calls the prop. Global search is not a request. The Messages inbox row still marks a thread unread from the other participant's `lastReadAt`; the nav badge and the Dashboard "N unread" line both use the caller's `lastReadAt`.
 
 ### Domain map (target bindings, existing screens only)
 
 - `landing` + `onboarding` → `User`, `Profile`, `UserPreference`, `NotificationPreference`. Verification and device-session tables are target and have no screen of their own.
-- `explore`, `home`, `categories`, `listing` → `Listing` and `Category`. Favorites → `Favorite`. Explore's save-alert control → `SavedSearch` (endpoint exists; Explore does not call it).
+- `explore`, `home`, `categories`, `listing` → `Listing` and `Category`. Favorites → `Favorite`. Explore's save-alert control → `SavedSearch` via `POST /listings/saved-searches`.
 - `create` → `Listing` (`POST /listings` and `POST /listings/drafts`). Need requests stay on `POST /requests` for other callers. The wizard does not post a need.
 - Offer cards on `dashboard` and `messages` → `RequestOffer`, `CounterOffer`, `OfferItem`.
 - `messages` bubbles → `Conversation`, `Message`.
@@ -99,7 +99,7 @@ These controls and copy do not have an endpoint. They stay on screen and are not
 - Map radius subtitle ("Within 5 miles of Inman Park") and safe-spot pins. Pin selection, the list, category chips, search text, and "Search area" use the published listing payload. Closest sort is distance on the painted map.
 - Listing detail negotiate, reserve, and share. A UUID listing report calls `POST /safety/reports`. Related cards for a UUID listing navigate with the live id. Message send on a UUID listing calls `POST /conversations`. Fixture listings still use the local modal.
 - Messages filters do not include a real `transactions` predicate (`filter === 'transactions'` falls through to all).
-- Dashboard Pause, Promote, and Mark sold.
+- Dashboard Promote. Pause and Mark sold call the listing routes.
 - Profile follow. Report and block on another profile call `/safety`.
 - Community reply, share, lost-and-found contact, and the two create buttons that have no form.
 - Categories trending searches and the neighborhood counts (`Math.random`). The featured strip reads `GET /listings`.

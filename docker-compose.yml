@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: neighborly
       POSTGRES_PASSWORD: neighborly
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - neighborly-postgres:/var/lib/postgresql/data
     healthcheck:
@@ -20,9 +20,15 @@ services:
     # Rate-limit counters are not source-of-truth data. AOF keeps them across a local restart.
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - neighborly-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   # Staging profile. Does not replace the dev Postgres and Redis services above.
   # Start with: scripts/staging-up.sh
@@ -58,36 +64,82 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+  # Staging object store. Same image and S3 API shape as the storage CI job
+  # and scripts/run-storage-tests.sh: rustfs/rustfs:1.0.1, port 9000, path-style
+  # calls, and GET /minio/health/live. Do not set a command. The image
+  # entrypoint reads RUSTFS_ACCESS_KEY / RUSTFS_SECRET_KEY; a MinIO
+  # `server /data` argument never listens.
+  # The Compose service name stays `minio` so S3_ENDPOINT=http://minio:9000
+  # in env.staging.example keeps resolving. The access keys and bucket name
+  # stay the staging fixtures, not the disposable CI test keys.
+  # Data is on rustfs-staging-data, a new volume. neighborly-staging-minio
+  # is the retired MinIO volume: still declared below, not mounted, and must
+  # not be deleted (`down -v` or `docker volume rm`). RustFS cannot read a
+  # MinIO on-disk layout. The new volume is still root-owned, and the image
+  # user is 10001, so this process runs as root.
+  # The healthcheck calls curl inside the container. Tag 1.0.1 ships it.
+  # linux/amd64 manifest
+  # sha256:7465b31993156ca5cc0eb4b3c59a01ff69651961be62bcfeb6ce569f22034a56
+  # history runs `apk add --no-cache ca-certificates coreutils curl tzdata`,
+  # and layer
+  # sha256:6a4ac81fe189f8ad06b56d60236c80f721f3e213206474082887f032710b9945
+  # contains /usr/bin/curl (and libcurl). That layer has no wget. See
+  # docs/STORAGE.md.
   minio:
     profiles: ["staging"]
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-    command: ["server", "/data", "--console-address", ":9001"]
+    image: rustfs/rustfs:1.0.1
+    user: "0:0"
     environment:
-      MINIO_ROOT_USER: neighborly-staging
-      MINIO_ROOT_PASSWORD: neighborly-staging-local-only
+      RUSTFS_ACCESS_KEY: neighborly-staging
+      RUSTFS_SECRET_KEY: neighborly-staging-local-only
     ports:
       - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
     volumes:
-      - neighborly-staging-minio:/data
+      - rustfs-staging-data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
       interval: 5s
       timeout: 5s
       retries: 20
       start_period: 10s
   minio-init:
     profiles: ["staging"]
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: neighborly-api:staging
+    build:
+      context: .
+      dockerfile: deploy/staging/api.Dockerfile
     depends_on:
       minio:
         condition: service_healthy
     environment:
-      MINIO_ROOT_USER: neighborly-staging
-      MINIO_ROOT_PASSWORD: neighborly-staging-local-only
-    entrypoint: ["/bin/sh", "-c"]
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_BUCKET_NAME: neighborly-media
+      S3_ACCESS_KEY_ID: neighborly-staging
+      S3_SECRET_ACCESS_KEY: neighborly-staging-local-only
+    entrypoint: ["node"]
     command:
-      - mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" && mc mb --ignore-existing local/neighborly-media
+      - "-e"
+      - |
+        const { S3Client, CreateBucketCommand } = require("@aws-sdk/client-s3")
+        const client = new S3Client({
+          region: "us-east-1",
+          endpoint: process.env.S3_ENDPOINT_URL,
+          forcePathStyle: true,
+          credentials: {
+            accessKeyId: process.env.S3_ACCESS_KEY_ID,
+            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY
+          }
+        })
+        client.send(new CreateBucketCommand({ Bucket: process.env.S3_BUCKET_NAME }))
+          .then(() => process.stdout.write("bucket ready\n"))
+          .catch(error => {
+            if (error.name === "BucketAlreadyOwnedByYou" || error.name === "BucketAlreadyExists") {
+              process.stdout.write("bucket ready\n")
+            } else {
+              process.stderr.write(String(error) + "\n")
+              process.exit(1)
+            }
+          })
     restart: "no"
   staging-migrate:
     profiles: ["staging"]
@@ -180,5 +232,8 @@ volumes:
   neighborly-redis:
   neighborly-staging-postgres:
   neighborly-staging-redis:
+  # Retired MinIO on-disk data from before the rustfs pin. Unused. Do not
+  # delete this volume. RustFS mounts rustfs-staging-data instead.
   neighborly-staging-minio:
+  rustfs-staging-data:
   neighborly-staging-caddy:

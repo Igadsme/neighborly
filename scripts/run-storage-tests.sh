@@ -6,7 +6,7 @@
 # localhost:59000, applies all Prisma migrations, runs the storage suite
 # against both, and removes both containers on exit.
 #
-# It never touches the development Compose stack, the staging MinIO, or any
+# It never touches the development Compose stack, the staging rustfs volume, or any
 # production host. Object storage is proven through the S3 API, so the
 # storage code is identical whether the backend runs against this container
 # or against a production bucket.
@@ -21,11 +21,11 @@ DB_URL="postgresql://postgres:postgres@localhost:${PG_PORT}/neighborly_m4"
 S3_ACCESS_KEY="neighborly-m4-local"
 S3_SECRET_KEY="neighborly-m4-local-only"
 
-# Override S3_IMAGE to point at any real S3-compatible server. The CI job pins
-# bitnamilegacy/minio, because `minio/minio` was withdrawn from Docker Hub and
-# MinIO's own quay.io registry is not anonymously pullable; locally a mirror
-# with a usable RustFS image is reachable instead. The adapter only uses
-# PutObject, GetObject, DeleteObject and ListObjectsV2, so any of these work.
+# Override S3_IMAGE only to point at another real S3-compatible server.
+# CI and the staging Compose profile pin rustfs/rustfs:1.0.1. `minio/minio`
+# was withdrawn from Docker Hub and quay.io/minio is not anonymously
+# pullable, so this script does not default to either. The adapter only uses
+# PutObject, GetObject, DeleteObject and ListObjectsV2.
 S3_IMAGE="${S3_IMAGE:-rustfs/rustfs:1.0.1}"
 
 cleanup() {

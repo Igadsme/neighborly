@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Badge, Avatar, StarRating, Button, Icon, LoadState, InlineAlert } from '../components/ui'
+import { hasDisplayableRating } from '../lib/ratings'
 import { api, readStatus } from '../api/client'
 import { mediaSrc } from '../lib/view'
 import { housingCard, type HousingCard } from '../lib/verticals'
@@ -17,7 +18,6 @@ export default function Housing({ onNavigate }: HousingProps) {
   const [maxPrice, setMaxPrice] = useState('')
   const [pets, setPets] = useState(false)
   const [furnished, setFurnished] = useState(false)
-  const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [utilitiesIncluded, setUtilitiesIncluded] = useState(false)
   const [sort, setSort] = useState('newest')
   const [selected, setSelected] = useState<string | null>(null)
@@ -41,7 +41,6 @@ export default function Housing({ onNavigate }: HousingProps) {
         maxPriceCents: maxPrice && Number.isFinite(max) ? Math.round(max * 100) : undefined,
         pets: pets || undefined,
         furnished: furnished || undefined,
-        verified: verifiedOnly || undefined,
         utilitiesIncluded: utilitiesIncluded || undefined,
         sort: sort as 'newest' | 'price_asc' | 'price_desc' | 'beds',
         limit: 100,
@@ -58,7 +57,7 @@ export default function Housing({ onNavigate }: HousingProps) {
     return () => {
       active = false
     }
-  }, [listingType, type, minBeds, maxPrice, pets, furnished, verifiedOnly, utilitiesIncluded, sort, searchNonce])
+  }, [listingType, type, minBeds, maxPrice, pets, furnished, utilitiesIncluded, sort, searchNonce])
 
   const messageOwner = async (property: HousingCard) => {
     if (!property.ownerId) {
@@ -122,6 +121,7 @@ export default function Housing({ onNavigate }: HousingProps) {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {/* Type */}
             <select
+              aria-label="Home type"
               value={type}
               onChange={e => setType(e.target.value)}
               className="h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none"
@@ -131,6 +131,7 @@ export default function Housing({ onNavigate }: HousingProps) {
 
             {/* Beds */}
             <select
+              aria-label="Minimum bedrooms"
               value={minBeds}
               onChange={e => setMinBeds(parseInt(e.target.value))}
               className="h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none"
@@ -168,9 +169,9 @@ export default function Housing({ onNavigate }: HousingProps) {
               <input type="checkbox" checked={furnished} onChange={e => setFurnished(e.target.checked)} className="accent-[#2D6A4F]" />
               Furnished
             </label>
-            <label className="flex items-center gap-2 text-sm text-[#5C6E8A] cursor-pointer">
-              <input type="checkbox" checked={verifiedOnly} onChange={e => setVerifiedOnly(e.target.checked)} className="accent-[#2D6A4F]" />
-              Verified landlord
+            <label className="flex items-center gap-2 text-sm text-[#5C6E8A]">
+              <input type="checkbox" disabled className="accent-[#2D6A4F]" />
+              Verified landlord · Coming soon
             </label>
             <label className="flex items-center gap-2 text-sm text-[#5C6E8A] cursor-pointer">
               <input type="checkbox" checked={utilitiesIncluded} onChange={e => setUtilitiesIncluded(e.target.checked)} className="accent-[#2D6A4F]" />
@@ -198,7 +199,7 @@ export default function Housing({ onNavigate }: HousingProps) {
               </>
             )}
           </p>
-          <select value={sort} onChange={e => setSort(e.target.value)} className="h-9 px-3 bg-white border border-[#E8E6DF] rounded-xl text-xs font-medium text-[#1B2A4A] focus:outline-none">
+          <select aria-label="Sort homes" value={sort} onChange={e => setSort(e.target.value)} className="h-9 px-3 bg-white border border-[#E8E6DF] rounded-xl text-xs font-medium text-[#1B2A4A] focus:outline-none">
             <option value="newest">Newest first</option>
             <option value="price_asc">Price: Low to High</option>
             <option value="price_desc">Price: High to Low</option>
@@ -237,13 +238,6 @@ export default function Housing({ onNavigate }: HousingProps) {
                       {property.verified && <Badge variant="green">✓ Verified</Badge>}
                     </div>
                     {/* Save */}
-                    <button
-                      onClick={(event) => { event.stopPropagation(); setActionNote("Saving homes isn't available yet.") }}
-                      className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-sm"
-                      aria-label="Save home"
-                    >
-                      <Icon name="heart" size={14} className="stroke-[#5C6E8A]" />
-                    </button>
                     {/* Available */}
                     <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm text-xs font-semibold text-[#2D6A4F] px-2.5 py-1 rounded-full">
                       Available {property.available}
@@ -303,14 +297,14 @@ export default function Housing({ onNavigate }: HousingProps) {
                         <Avatar src={property.seller.avatar} name={property.seller.name} size="xs" verified={property.seller.verified} />
                         <div>
                           <p className="text-xs font-medium text-[#1B2A4A]">{property.seller.name}</p>
-                          {property.seller.reviews > 0 && (
-                            <StarRating rating={property.seller.rating} count={property.seller.reviews} size="xs" />
+                          {hasDisplayableRating(property.seller.rating, property.seller.reviews) && (
+                            <StarRating rating={property.seller.rating} count={property.seller.reviews ?? undefined} size="xs" />
                           )}
                         </div>
                       </div>
                       <div className="flex gap-1.5">
                         <button disabled={messagingId === property.id} onClick={e => { e.stopPropagation(); void messageOwner(property) }} className="text-xs font-semibold text-[#2D6A4F] bg-[#F0FBF3] px-3 py-1.5 rounded-lg hover:bg-[#D8F3DC] transition-colors disabled:opacity-40">{messagingId === property.id ? 'Sending...' : 'Message'}</button>
-                        <button onClick={e => { e.stopPropagation(); setActionNote("Tour requests aren't available yet.") }} className="text-xs font-semibold text-[#4A7FB5] bg-[#DDEEFF] px-3 py-1.5 rounded-lg hover:bg-[#90BEE5]/30 transition-colors">Tour</button>
+                        <button type="button" disabled className="text-xs font-semibold text-[#5C6E8A] bg-[#F5F4EF] px-3 py-1.5 rounded-lg cursor-not-allowed">Tour · Coming soon</button>
                       </div>
                     </div>
                   </div>
@@ -333,10 +327,10 @@ export default function Housing({ onNavigate }: HousingProps) {
           <div className="flex items-center gap-3">
             <span className="text-3xl">🚇</span>
             <div className="flex-1">
-              <p className="font-semibold text-[#1B2A4A]">Commute time filter</p>
-              <p className="text-sm text-[#5C6E8A]">Filter homes by commute time to your workplace. Set your destination to see which neighborhoods work best.</p>
+              <p className="font-semibold text-[#1B2A4A]">Commute time filter · Coming soon</p>
+              <p className="text-sm text-[#5C6E8A]">Filtering homes by commute time is not available yet.</p>
             </div>
-            <Button variant="soft" size="sm" onClick={() => setActionNote("Commute filtering isn't available yet.")}>Set up commute</Button>
+            <Button variant="soft" size="sm" disabled>Coming soon</Button>
           </div>
         </div>
       </div>

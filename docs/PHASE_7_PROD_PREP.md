@@ -14,6 +14,8 @@ Nothing in this phase registered a domain, changed DNS, bought or provisioned pa
 
 Documents and templates only. Application code, Figma screens, and the Compose staging profile are unchanged.
 
+Later `main` mounted listing image upload and pointed staging object storage at rustfs. The "no upload route" line in this phase record is the Phase 7 snapshot, not the current tree. Current boot rules are `env.production.example` and `docs/PRODUCTION.md`.
+
 | Artifact | Role |
 | --- | --- |
 | `docs/PHASE_7_PROD_PREP.md` | This record |

@@ -1,7 +1,9 @@
 # Agent ownership
 
 Date: 2026-10-19
-Status: skeleton. This map assigns files so later work does not collide. It does not assign people, grant merge rights, or start implementation.
+Status: file map. BL-001 through BL-010 are merged. This map still assigns files so later work does not collide. It does not assign people or grant merge rights.
+
+The Orbit lane renamed the root package to `neighborly-web` because that lane was explicitly given BL-023. Nova still owns `package.json` for later frontend work.
 
 Owners named here are roles from the takeover backlog:
 

@@ -227,6 +227,12 @@ jobs:
   # in a deployed container, and gating on it would block releases for a
   # finding that cannot be exploited. The full audit including devDependencies
   # runs in the same step as a non-blocking report so the drift stays visible.
+  #
+  # Accepted risk reviewed 2026-10-19.
+  # braces@3.0.3 (GHSA-vfj7-8cjw-p6xm / CVE-2026-93687) is still the latest
+  # npm release and the advisory names no patched version. It is dev-only,
+  # via Jest's micromatch. Do not ignore it. When a patched release exists,
+  # move the lockfile to it so the full audit exits 0.
   security-audit:
     name: Dependency security audit
     runs-on: ubuntu-latest
@@ -305,3 +311,37 @@ jobs:
             --to-schema-datamodel prisma/schema.prisma \
             --shadow-database-url "postgresql://postgres:postgres@127.0.0.1:55440/neighborly_drift" \
             --exit-code
+
+  # Pull-request guards for the Compose contract. These do not boot the API.
+  compose-guards:
+    name: Compose and docs guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject placeholder secret assignments
+        run: python3 scripts/check-placeholder-assignments.py
+      - name: Check loopback ports and the staging image pin
+        run: python3 scripts/check-compose-config.py
+
+  # Proves the staging RustFS healthcheck by starting only the object store
+  # and the bucket initializer. minio-init waits on service_healthy, so a
+  # missing curl (or any other failed probe) makes this job fail. Do not
+  # delete volumes from this job.
+  staging-object-store:
+    name: Staging object store init
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require minio-init to exit 0
+        run: |
+          set -euo pipefail
+          cp env.staging.example .env.staging
+          docker compose --profile staging up --abort-on-container-exit --exit-code-from minio-init minio minio-init
+      - name: Logs if bucket init failed
+        if: failure()
+        run: docker compose --profile staging logs --no-color minio minio-init || true
+      - name: Stop object-store containers
+        if: always()
+        run: docker compose --profile staging stop minio minio-init || true

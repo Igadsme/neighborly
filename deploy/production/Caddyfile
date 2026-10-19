@@ -1,0 +1,28 @@
+# Production edge template. NOT DEPLOYED.
+# .github/workflows/deploy-production.yml does not read this file.
+# That workflow still refuses. Do not dispatch it from this template.
+# Replace the site address only after the product owner names a host.
+# Do not reuse the staging internal CA or staging.neighborly.localhost.
+#
+# The static server is the web image, which uses deploy/staging/nginx.conf:
+# /assets and other real files are served as files (missing file is 404),
+# and unknown extensionless paths fall back to index.html.
+# This file only keeps API, realtime, and asset paths off that fallback.
+
+https://replace-with-public-origin.example {
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle /socket.io/* {
+		reverse_proxy api:3000
+	}
+
+	handle /assets/* {
+		reverse_proxy web:80
+	}
+
+	handle {
+		reverse_proxy web:80
+	}
+}

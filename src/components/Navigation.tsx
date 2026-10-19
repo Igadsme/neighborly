@@ -39,6 +39,7 @@ type Page =
   | "mission-manage"
   | "mission-contributions"
   | "community-moderation"
+  | "report-queue"
   | "passport"
   | "passport-me"
   | "passport-settings"
@@ -115,6 +116,7 @@ export default function Navigation({
   onNavigateRoute,
 }: NavProps) {
   const [viewer, setViewer] = useState<Viewer | null>(null)
+  const [staff, setStaff] = useState(false)
 
   const loadViewer = useCallback(() => {
     api.passport
@@ -133,6 +135,29 @@ export default function Navigation({
   useEffect(() => {
     loadViewer()
   }, [loadViewer])
+
+  useEffect(() => {
+    let active = true
+    api.moderation
+      .reports()
+      .then((rows) => {
+        if (active) setStaff(Array.isArray(rows))
+      })
+      .catch(() => {
+        if (active) setStaff(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const accountItems = staff
+    ? [
+        ...ACCOUNT_ITEMS.slice(0, -1),
+        { label: "Report queue", page: "report-queue" as Page },
+        ACCOUNT_ITEMS[ACCOUNT_ITEMS.length - 1],
+      ]
+    : ACCOUNT_ITEMS
 
   // A notification can change the member's own passport (a new badge, an
   // updated name), so the header identity refreshes when a notification
@@ -319,7 +344,7 @@ export default function Navigation({
                       </p>
                       {place && <p className="text-xs text-[#5C6E8A] truncate">{place}</p>}
                     </div>
-                    {ACCOUNT_ITEMS.map(({ label, page }) => (
+                    {accountItems.map(({ label, page }) => (
                       <button
                         key={`${label}-${page}`}
                         type="button"
@@ -443,7 +468,7 @@ export default function Navigation({
                   </p>
                   {place && <p className="text-xs text-[#5C6E8A] truncate">{place}</p>}
                 </div>
-                {ACCOUNT_ITEMS.map(({ label, page }) => (
+                {accountItems.map(({ label, page }) => (
                   <button
                     key={`${label}-${page}`}
                     type="button"

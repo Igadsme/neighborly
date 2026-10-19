@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ListingCard, SectionHeader, Badge, Avatar, StarRating, Icon, Button, LoadState } from '../components/ui'
 import { type Listing } from '../data'
 import { api, readStatus } from '../api/client'
+import { hasDisplayableRating } from '../lib/ratings'
 import { listingFromApi, mediaSrc } from '../lib/view'
 import { communityEventCard, communityPostCard, serviceCard, type CommunityEventCard, type CommunityPostCard, type ServiceCard } from '../lib/verticals'
 
@@ -11,22 +12,23 @@ interface HomeFeedProps {
   onNavigate: (p: Page, id?: string) => void
 }
 
-const quickCategories = [
-  { emoji: '🛋️', label: 'Furniture', active: false },
-  { emoji: '📱', label: 'Electronics', active: false },
-  { emoji: '🚗', label: 'Vehicles', active: false },
-  { emoji: '🏠', label: 'Housing', active: false },
-  { emoji: '🎁', label: 'Free', active: false },
-  { emoji: '🔧', label: 'Services', active: false },
-  { emoji: '💼', label: 'Jobs', active: false },
-  { emoji: '🌳', label: 'Community', active: false },
+const quickCategories: Array<{ emoji: string; label: string; page?: Page }> = [
+  { emoji: '🛋️', label: 'Furniture' },
+  { emoji: '📱', label: 'Electronics' },
+  { emoji: '🚗', label: 'Vehicles' },
+  { emoji: '🎁', label: 'Free' },
+  { emoji: '🏠', label: 'Housing', page: 'housing' },
+  { emoji: '🔧', label: 'Services', page: 'services' },
+  { emoji: '💼', label: 'Jobs', page: 'jobs' },
+  { emoji: '🌳', label: 'Community', page: 'community' },
 ]
 
-const suggestedPeople = [
-  { name: 'Sofia Martinez', neighborhood: 'Little Five Points', avatar: 'photo-1534528741775-53994a69daeb', rating: 4.9, transactions: 33 },
-  { name: 'Nadia Okonkwo', neighborhood: 'Westside', avatar: 'photo-1544005313-94ddf0286df2', rating: 4.9, transactions: 26 },
-  { name: 'Tyler Brooks', neighborhood: 'East Atlanta', avatar: 'photo-1570295999919-56ceb5ecca61', rating: 4.5, transactions: 10 },
-]
+interface NeighborCard {
+  userId: string
+  displayName: string
+  avatarUrl?: string | null
+  completedExchanges: number
+}
 
 function ListingThumb({ listing, free }: { listing: Listing; free?: boolean }) {
   const src = mediaSrc(listing.images[0], 'w=160&h=160&fit=crop&auto=format')
@@ -42,6 +44,7 @@ function ListingThumb({ listing, free }: { listing: Listing; free?: boolean }) {
 
 export default function HomeFeed({ onNavigate }: HomeFeedProps) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [categoryIds, setCategoryIds] = useState<Record<string, string> | null>(null)
   const [listings, setListings] = useState<Listing[]>([])
   const [newToday, setNewToday] = useState<Listing[]>([])
   const [listingsLoading, setListingsLoading] = useState(true)
@@ -53,13 +56,59 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
   const [posts, setPosts] = useState<CommunityPostCard[]>([])
   const [verticalsLoading, setVerticalsLoading] = useState(true)
   const [verticalsError, setVerticalsError] = useState('')
+  const [neighbors, setNeighbors] = useState<NeighborCard[] | null>(null)
+  const [neighborsError, setNeighborsError] = useState('')
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
   useEffect(() => {
     let active = true
+    api.categories
+      .list()
+      .then((items) => {
+        if (!active) return
+        const ids: Record<string, string> = {}
+        for (const item of items) ids[item.name.toLowerCase()] = item.id
+        setCategoryIds(ids)
+      })
+      .catch(() => {
+        if (active) setCategoryIds({})
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const selectedCategory =
+    activeCategory && activeCategory !== 'Free' ? activeCategory.toLowerCase() : null
+  const categoryGate = !selectedCategory
+    ? "all"
+    : categoryIds === null
+      ? "loading"
+      : categoryIds[selectedCategory] ?? "missing"
+
+  useEffect(() => {
+    let active = true
+    if (categoryGate === "loading") {
+      setListingsLoading(true)
+      return () => {
+        active = false
+      }
+    }
+    if (categoryGate === "missing") {
+      setListings([])
+      setNewToday([])
+      setListingsError('That category is not available.')
+      setListingsLoading(false)
+      return () => {
+        active = false
+      }
+    }
+    const categoryId = categoryGate === "all" ? undefined : categoryGate
+    setListingsLoading(true)
+    setListingsError('')
     api.listings
-      .list({ limit: 24 })
+      .list({ limit: 24, ...(categoryId ? { categoryId } : {}) })
       .then((page) => {
         if (!active) return
         const rows = page.items
@@ -82,7 +131,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
     return () => {
       active = false
     }
-  }, [])
+  }, [categoryGate])
 
   useEffect(() => {
     let active = true
@@ -114,7 +163,28 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
     }
   }, [])
 
-  const freeListings = listings.filter((listing) => listing.isFree).slice(0, 3)
+  useEffect(() => {
+    let active = true
+    api.passport
+      .leaderboard()
+      .then((rows) => {
+        if (!active) return
+        setNeighbors(rows)
+        setNeighborsError('')
+      })
+      .catch((cause: unknown) => {
+        if (!active) return
+        setNeighbors([])
+        setNeighborsError(readStatus(cause, 'Neighbors could not be loaded.'))
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const scopedListings =
+    activeCategory === 'Free' ? listings.filter((listing) => listing.isFree) : listings
+  const freeListings = listings.filter((listing) => listing.isFree)
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-24 md:pb-0">
@@ -182,7 +252,14 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
             {quickCategories.map(cat => (
               <button
                 key={cat.label}
-                onClick={() => setActiveCategory(activeCategory === cat.label ? null : cat.label)}
+                type="button"
+                onClick={() => {
+                  if (cat.page) {
+                    onNavigate(cat.page)
+                    return
+                  }
+                  setActiveCategory(activeCategory === cat.label ? null : cat.label)
+                }}
                 className={`flex items-center gap-1.5 flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium border transition-all ${
                   activeCategory === cat.label
                     ? 'bg-[#2D6A4F] text-white border-[#2D6A4F]'
@@ -200,28 +277,32 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
         </div>
 
         {/* Alert: Free items nearby */}
-        <div className="flex items-center gap-3 p-4 bg-[#D8F3DC] border border-[#74C69D] rounded-2xl mb-8 cursor-pointer hover:bg-[#B7E4C7] transition-colors">
+        <button
+          type="button"
+          onClick={() => setActiveCategory(activeCategory === 'Free' ? null : 'Free')}
+          className="flex w-full items-center gap-3 p-4 bg-[#D8F3DC] border border-[#74C69D] rounded-2xl mb-8 cursor-pointer hover:bg-[#B7E4C7] transition-colors text-left"
+        >
           <span className="text-2xl">🎁</span>
           <div className="flex-1">
             <p className="font-semibold text-[#1B4332] text-sm">
               {listingsLoading
-                ? 'Checking free items near you'
+                ? 'Checking free items'
                 : freeListings.length
-                  ? `${freeListings.length} free item${freeListings.length === 1 ? '' : 's'} near you`
-                  : 'No free items posted nearby yet'}
+                  ? `${freeListings.length} free item${freeListings.length === 1 ? '' : 's'}`
+                  : 'No free items posted yet'}
             </p>
             <p className="text-xs text-[#2D6A4F]">
-              {freeListings.length ? 'Just posted in your neighborhood' : 'Free listings will show up here when neighbors post them'}
+              {freeListings.length ? 'Give, get, reduce waste' : 'Free listings will show up here when neighbors post them'}
             </p>
           </div>
           <Icon name="chevronRight" size={16} className="text-[#2D6A4F] flex-shrink-0" />
-        </div>
+        </button>
 
         {/* Nearby listings */}
         <section className="mb-10">
           <SectionHeader
             title="Nearby listings"
-            subtitle="Fresh picks within 2 miles"
+            subtitle={activeCategory ? `Filtered to ${activeCategory}` : "Latest published listings"}
             action={() => onNavigate('explore')}
             actionLabel="See all"
           />
@@ -233,13 +314,13 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
             <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D]">
               {listingsError}
             </div>
-          ) : listings.length === 0 ? (
+          ) : scopedListings.length === 0 ? (
             <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
               No listings nearby yet.
             </div>
           ) : (
             <div className="listing-grid">
-              {listings.slice(0, 8).map(listing => (
+              {scopedListings.slice(0, 8).map(listing => (
                 <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing', listing.id)} />
               ))}
             </div>
@@ -250,14 +331,14 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
         <div className="grid md:grid-cols-2 gap-6 mb-10">
           {/* Recommended for you */}
           <div>
-            <SectionHeader title="Recommended for you" subtitle="Based on your interests" action={() => onNavigate('explore')} actionLabel="More" />
+            <SectionHeader title="Recommended for you" subtitle="More published listings" action={() => onNavigate('explore')} actionLabel="More" />
             {listingsLoading ? (
               <LoadState loading loadingLabel="Loading listings…" />
-            ) : listings.slice(2, 5).length === 0 ? (
+            ) : scopedListings.slice(0, 3).length === 0 ? (
               <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No recommendations yet.</div>
             ) : (
             <div className="space-y-3">
-              {listings.slice(2, 5).map(listing => (
+              {scopedListings.slice(0, 3).map(listing => (
                 <div key={listing.id} onClick={() => onNavigate('listing', listing.id)} className="flex gap-3 bg-white rounded-2xl border border-[#E8E6DF] p-3 cursor-pointer hover:border-[#2D6A4F]/30 transition-all card-hover">
                   <ListingThumb listing={listing} />
                   <div className="flex-1 min-w-0">
@@ -276,13 +357,13 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
             )}
           </div>
 
-          {/* Free near you */}
+          {/* Free items */}
           <div>
-            <SectionHeader title="Free near you" subtitle="Give, get, reduce waste" action={() => onNavigate('explore')} actionLabel="More" />
+            <SectionHeader title="Free items" subtitle="Give, get, reduce waste" action={() => onNavigate('explore')} actionLabel="More" />
             {listingsLoading ? (
               <LoadState loading loadingLabel="Loading listings…" />
             ) : freeListings.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No free listings nearby yet.</div>
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No free listings yet.</div>
             ) : (
             <div className="space-y-3">
               {freeListings.map((listing) => (
@@ -321,10 +402,14 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
                 <div className="p-3">
                   <p className="font-semibold text-sm text-[#1B2A4A]">{svc.title}</p>
                   <p className="text-xs text-[#5C6E8A] mt-0.5">from ${svc.startingPrice.toLocaleString()}</p>
+                  {(hasDisplayableRating(svc.rating, svc.reviews) || svc.backgroundCheck) && (
                   <div className="flex items-center justify-between mt-2">
-                    <StarRating rating={svc.rating} count={svc.reviews} size="xs" />
+                    {hasDisplayableRating(svc.rating, svc.reviews) && (
+                      <StarRating rating={svc.rating} count={svc.reviews ?? undefined} size="xs" />
+                    )}
                     {svc.backgroundCheck && <Badge variant="green" size="sm">BG Check</Badge>}
                   </div>
+                  )}
                 </div>
               </div>
               )
@@ -412,28 +497,44 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
           )}
         </section>
 
-        {/* People to follow */}
+        {/* People who opted into the public leaderboard */}
         <section className="mb-10">
-          <SectionHeader title="Neighbors to follow" subtitle="Preview · Examples. Not live ratings." />
+          <SectionHeader title="Neighbors to follow" subtitle="Members who opted into the public leaderboard" />
+          {neighbors === null && !neighborsError ? (
+            <LoadState loading loadingLabel="Loading neighbors…" />
+          ) : neighborsError ? (
+            <LoadState error={neighborsError} loadingLabel="Loading neighbors…" />
+          ) : !neighbors || neighbors.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
+              No neighbors to show yet.
+            </div>
+          ) : (
           <div
             className="flex gap-4 scroll-x-focusable scrollbar-hide pb-2"
             tabIndex={0}
             role="group"
-            aria-label="Preview neighbor examples"
+            aria-label="Neighbors to follow"
           >
-            {suggestedPeople.map(person => (
-              <div key={person.name} className="flex-shrink-0 w-48 bg-white rounded-2xl border border-[#E8E6DF] p-4 text-center">
-                <Avatar src={person.avatar} name={person.name} size="lg" verified className="mx-auto mb-3" />
-                <p className="font-semibold text-sm text-[#1B2A4A]">{person.name}</p>
-                <p className="text-xs text-[#5C6E8A] mt-0.5">{person.neighborhood}</p>
-                <div className="flex justify-center mt-2 mb-3" title="Preview example, not a live rating">
-                  <StarRating rating={person.rating} count={person.transactions} size="xs" />
-                </div>
-                <Button variant="soft" size="xs" fullWidth disabled>Follow</Button>
-                <p className="text-[10px] text-[#5C6E8A] mt-2">Following isn&apos;t available yet.</p>
+            {neighbors.map(person => (
+              <div key={person.userId} className="flex-shrink-0 w-48 bg-white rounded-2xl border border-[#E8E6DF] p-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => onNavigate('profile', person.userId)}
+                  className="w-full"
+                >
+                  <Avatar src={person.avatarUrl || ''} name={person.displayName} size="lg" className="mx-auto mb-3" />
+                  <p className="font-semibold text-sm text-[#1B2A4A]">{person.displayName}</p>
+                  <p className="text-xs text-[#5C6E8A] mt-0.5">
+                    {person.completedExchanges} completed exchange{person.completedExchanges === 1 ? '' : 's'}
+                  </p>
+                </button>
+                <Button variant="soft" size="xs" fullWidth disabled className="mt-3">
+                  Follow · Coming soon
+                </Button>
               </div>
             ))}
           </div>
+          )}
         </section>
 
         {/* New Today */}
@@ -441,11 +542,11 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
           <SectionHeader title="New today" subtitle="Just posted in the last 24 hours" action={() => onNavigate('explore')} actionLabel="See all" />
           {listingsLoading ? (
             <LoadState loading loadingLabel="Loading listings…" />
-          ) : newToday.length === 0 ? (
+          ) : newToday.filter((listing) => scopedListings.some((row) => row.id === listing.id)).length === 0 ? (
             <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">Nothing new in the last 24 hours.</div>
           ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {newToday.map(listing => (
+            {newToday.filter((listing) => scopedListings.some((row) => row.id === listing.id)).map(listing => (
               <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing', listing.id)} compact />
             ))}
           </div>
@@ -466,14 +567,10 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
             <div>
               <p className="text-[#74C69D] text-sm font-semibold mb-1">Explore the map</p>
               <h2 className="font-display text-2xl md:text-3xl font-semibold text-white mb-2">See everything nearby</h2>
-              <p className="text-white/70 text-sm mb-4 max-w-xs">Browse listings, safe meetup spots, and neighborhood boundaries on an interactive map.</p>
+              <p className="text-white/70 text-sm mb-4 max-w-xs">Open the painted neighborhood map. Pins follow neighborhood names, not live coordinates.</p>
               <Button variant="soft" size="sm">Open Map →</Button>
             </div>
           </div>
-          {/* Animated pins */}
-          <div className="absolute top-8 right-24 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-sm animate-bounce">📍</div>
-          <div className="absolute top-16 right-40 w-7 h-7 bg-[#2D6A4F] rounded-full shadow-lg flex items-center justify-center text-white text-xs font-bold">$650</div>
-          <div className="absolute bottom-12 right-20 w-7 h-7 bg-[#B94C2A] rounded-full shadow-lg flex items-center justify-center text-white text-xs font-bold">Free</div>
         </div>
       </div>
     </div>
