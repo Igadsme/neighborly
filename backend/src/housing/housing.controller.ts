@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
@@ -16,7 +16,7 @@ export class HousingController {
   }
 
   @Get(':id')
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUUIDPipe) id: string) {
     return this.housing.get(id)
   }
 
@@ -30,14 +30,14 @@ export class HousingController {
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  update(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdateHousingDto) {
+  update(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateHousingDto) {
     return this.housing.update(request.user.id, id, input)
   }
 
   @Delete(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  archive(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  archive(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.housing.archive(request.user.id, id)
   }
 }

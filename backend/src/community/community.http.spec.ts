@@ -3,6 +3,10 @@ import { CommunityService } from './community.service'
 import { bootApi } from '../common/testing/http-app'
 import { projectSelect, SelectSpec } from '../common/testing/project-prisma'
 
+const postId = 'ffffffff-ffff-4fff-8fff-fffffffffff1'
+const eventId = '12121212-1212-4121-8121-121212121212'
+const giveawayId = '13131313-1313-4131-8131-131313131313'
+
 const author = {
   id: 'author-1',
   email: 'secret-author@example.com',
@@ -239,7 +243,7 @@ describe('Community HTTP', () => {
   })
 
   it('POST /api/v1/community/posts/:id/reactions without a token is 401', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/community/posts/post-1/reactions`, {
+    const response = await fetch(`${baseUrl}/api/v1/community/posts/${postId}/reactions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ emoji: '👍' })
@@ -250,10 +254,10 @@ describe('Community HTTP', () => {
 
   it('POST /api/v1/community/posts/:id/reactions toggles one emoji per person', async () => {
     const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' }
-    const first = await fetch(`${baseUrl}/api/v1/community/posts/post-1/reactions`, { method: 'POST', headers, body: JSON.stringify({ emoji: '👍' }) })
+    const first = await fetch(`${baseUrl}/api/v1/community/posts/${postId}/reactions`, { method: 'POST', headers, body: JSON.stringify({ emoji: '👍' }) })
     expect(first.status).toBe(201)
     expect((await first.json() as { reactions: { like: number } }).reactions.like).toBe(2)
-    const second = await fetch(`${baseUrl}/api/v1/community/posts/post-1/reactions`, { method: 'POST', headers, body: JSON.stringify({ emoji: '👍' }) })
+    const second = await fetch(`${baseUrl}/api/v1/community/posts/${postId}/reactions`, { method: 'POST', headers, body: JSON.stringify({ emoji: '👍' }) })
     expect(second.status).toBe(201)
     expect((await second.json() as { reactions: { like: number } }).reactions.like).toBe(1)
   })
@@ -267,14 +271,14 @@ describe('Community HTTP', () => {
   })
 
   it('POST /api/v1/community/events/:id/rsvp without a token is 401', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/community/events/event-1/rsvp`, { method: 'POST' })
+    const response = await fetch(`${baseUrl}/api/v1/community/events/${eventId}/rsvp`, { method: 'POST' })
     expect(response.status).toBe(401)
     expect(prisma.communityEventRsvp.create).not.toHaveBeenCalled()
   })
 
   it('POST /api/v1/community/events/:id/rsvp toggles attendance', async () => {
     const headers = { authorization: `Bearer ${token}` }
-    const going = await fetch(`${baseUrl}/api/v1/community/events/event-1/rsvp`, { method: 'POST', headers })
+    const going = await fetch(`${baseUrl}/api/v1/community/events/${eventId}/rsvp`, { method: 'POST', headers })
     expect(going.status).toBe(201)
     expect(await going.json()).toEqual({ attending: true, attendingCount: 35 })
   })
@@ -297,14 +301,14 @@ describe('Community HTTP', () => {
   })
 
   it('POST /api/v1/community/giveaways/:id/claim without a token is 401', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/community/giveaways/giveaway-1/claim`, { method: 'POST' })
+    const response = await fetch(`${baseUrl}/api/v1/community/giveaways/${giveawayId}/claim`, { method: 'POST' })
     expect(response.status).toBe(401)
     expect(prisma.giveaway.updateMany).not.toHaveBeenCalled()
   })
 
   it('POST /api/v1/community/giveaways/:id/claim claims once', async () => {
     const headers = { authorization: `Bearer ${token}` }
-    const response = await fetch(`${baseUrl}/api/v1/community/giveaways/giveaway-1/claim`, { method: 'POST', headers })
+    const response = await fetch(`${baseUrl}/api/v1/community/giveaways/${giveawayId}/claim`, { method: 'POST', headers })
     expect(response.status).toBe(201)
     const body = (await response.json()) as { claimed: boolean; giveaway: { claimed: boolean } }
     expect(body.claimed).toBe(true)
@@ -314,7 +318,14 @@ describe('Community HTTP', () => {
     claimResult = { count: 0 }
     giveaway.claimed = true
     giveaway.claimedById = 'someone-else'
-    const conflict = await fetch(`${baseUrl}/api/v1/community/giveaways/giveaway-1/claim`, { method: 'POST', headers })
+    const conflict = await fetch(`${baseUrl}/api/v1/community/giveaways/${giveawayId}/claim`, { method: 'POST', headers })
     expect(conflict.status).toBe(409)
+  })
+
+  it('GET /api/v1/community/posts/:id rejects a non-UUID with 400 before Prisma', async () => {
+    prisma.communityPost.findFirst.mockClear()
+    const response = await fetch(`${baseUrl}/api/v1/community/posts/not-a-uuid`)
+    expect(response.status).toBe(400)
+    expect(prisma.communityPost.findFirst).not.toHaveBeenCalled()
   })
 })

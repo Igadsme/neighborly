@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
@@ -23,14 +23,14 @@ export class ServicesController {
   }
 
   @Get(':id')
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUUIDPipe) id: string) {
     return this.services.get(id)
   }
 
   @Get(':id/quotes')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  quotes(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  quotes(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.services.listQuotesForProvider(request.user.id, id)
   }
 
@@ -44,28 +44,28 @@ export class ServicesController {
   @Post('quotes/:id/accept')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  accept(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  accept(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.services.acceptQuote(request.user.id, id)
   }
 
   @Post(':id/quotes')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  quote(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: CreateQuoteDto) {
+  quote(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: CreateQuoteDto) {
     return this.services.createQuote(request.user.id, id, input)
   }
 
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  update(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdateServiceDto) {
+  update(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateServiceDto) {
     return this.services.update(request.user.id, id, input)
   }
 
   @Delete(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  archive(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  archive(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.services.archive(request.user.id, id)
   }
 }

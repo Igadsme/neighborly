@@ -1,4 +1,4 @@
-import { Controller, Get, NotFoundException, Param, Res } from '@nestjs/common'
+import { Controller, Get, NotFoundException, Param, ParseUUIDPipe, Res } from '@nestjs/common'
 import type { Response } from 'express'
 import { StorageService } from './storage.service'
 
@@ -18,14 +18,13 @@ export class StorageController {
   @Get(':kind/:listingId/:file')
   async read(
     @Param('kind') kind: string,
-    @Param('listingId') listingId: string,
+    @Param('listingId', ParseUUIDPipe) listingId: string,
     @Param('file') file: string,
     @Res() response: Response
   ) {
     if (kind !== 'listings') throw new NotFoundException('Not found')
-    // The key is rebuilt from validated parts rather than taken from the URL,
-    // so `..` or an encoded slash cannot walk out of the prefix.
-    if (!/^[0-9a-f-]{36}$/i.test(listingId)) throw new NotFoundException('Not found')
+    // listingId is already a UUID from ParseUUIDPipe. The file name is still
+    // checked here so `..` or an encoded slash cannot walk out of the prefix.
     if (!/^[0-9A-Za-z-]+\.(jpg|png|webp|gif)$/.test(file)) throw new NotFoundException('Not found')
 
     const objectKey = `listings/${listingId}/${file}`

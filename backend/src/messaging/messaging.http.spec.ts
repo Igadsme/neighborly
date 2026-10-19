@@ -135,6 +135,14 @@ describe('Conversations HTTP', () => {
     expect(realtime.publishMessage).toHaveBeenCalledTimes(1)
   })
 
+  it('returns 400 when the conversation id is not a UUID', async () => {
+    const response = await fetch(`${baseUrl}/api/v1/conversations/not-a-uuid/messages`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    expect(response.status).toBe(400)
+    expect(prisma.conversationParticipant.findUnique).not.toHaveBeenCalled()
+  })
+
   it('returns 403 when the other user is not the listing seller', async () => {
     prisma.listing.findUnique.mockResolvedValue({ id: listingId, sellerId: callerId, status: 'PUBLISHED', deletedAt: null })
     const response = await post({ participantId: sellerId, listingId, body: 'Hello' }, `Bearer ${token}`)

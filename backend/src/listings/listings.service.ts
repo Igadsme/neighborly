@@ -125,7 +125,10 @@ export class ListingsService {
 
   async get(id: string, viewer?: { latitude?: number; longitude?: number }) {
     const listing = await this.prisma.listing.findFirst({
-      where: { id, deletedAt: null, status: { not: 'DRAFT' } },
+      // Paused rows are ARCHIVED with deletedAt left null so the owner can
+      // publish them again. They are not a public detail read. Sold rows stay
+      // readable; drafts never are.
+      where: { id, deletedAt: null, status: { in: ['PUBLISHED', 'SOLD'] } },
       select: { ...listingWithImages.select, latitude: true, longitude: true }
     })
     if (!listing) throw new NotFoundException('Listing not found')

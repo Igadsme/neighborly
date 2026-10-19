@@ -57,12 +57,15 @@ const job = {
   applications: [{ id: 'app-existing', applicant, message: 'secret application note' }]
 }
 
+const jobId = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1'
+
 function expectPublicJob(body: unknown) {
-  const row = body as { type?: string; logo?: string; applications?: unknown; latitude?: unknown; owner?: { profile?: { lastName?: string } } }
+  const row = body as { type?: string; logo?: string; applications?: unknown; latitude?: unknown; owner?: { profile?: { lastName?: string } }; verified?: boolean }
   expect(row.type).toBe('Full-time')
   expect(row.logo).toBe('photo-1611162617474-5b21e879e113')
   expect(row.applications).toBeUndefined()
   expect(row.latitude).toBeUndefined()
+  expect(row.verified).toBeUndefined()
   expect(row.owner?.profile?.lastName).toBeUndefined()
   const serialized = JSON.stringify(body)
   for (const secret of ['secret-employer@example.com', 'employer-hash', 'secret-applicant@example.com', 'applicant-hash', 'Brooks', 'Hopper', '33.800001', '-84.380001', '33.740001', '40.712800', 'passwordHash', 'secret application note']) {
@@ -156,7 +159,7 @@ describe('Jobs HTTP', () => {
   })
 
   it('GET /api/v1/jobs/:id hides employer and applicant private fields', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/jobs/job-1`)
+    const response = await fetch(`${baseUrl}/api/v1/jobs/${jobId}`)
     expect(response.status).toBe(200)
     expectPublicJob(await response.json())
   })
@@ -168,7 +171,7 @@ describe('Jobs HTTP', () => {
   })
 
   it('POST /api/v1/jobs/:id/apply without a token is 401', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/jobs/job-1/apply`, {
+    const response = await fetch(`${baseUrl}/api/v1/jobs/${jobId}/apply`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{}'
@@ -178,7 +181,7 @@ describe('Jobs HTTP', () => {
   })
 
   it('POST /api/v1/jobs/:id/apply stores an application without returning applicant secrets', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/jobs/job-1/apply`, {
+    const response = await fetch(`${baseUrl}/api/v1/jobs/${jobId}/apply`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
       body: JSON.stringify({ message: 'I can start Monday' })
@@ -196,7 +199,7 @@ describe('Jobs HTTP', () => {
 
   it('POST /api/v1/jobs/:id/apply rejects the employer', async () => {
     jobOwnerId = 'user-1'
-    const response = await fetch(`${baseUrl}/api/v1/jobs/job-1/apply`, {
+    const response = await fetch(`${baseUrl}/api/v1/jobs/${jobId}/apply`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
       body: '{}'
@@ -206,7 +209,7 @@ describe('Jobs HTTP', () => {
   })
 
   it('POST /api/v1/jobs/:id/save without a token is 401', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/jobs/job-1/save`, { method: 'POST' })
+    const response = await fetch(`${baseUrl}/api/v1/jobs/${jobId}/save`, { method: 'POST' })
     expect(response.status).toBe(401)
     expect(prisma.jobSave.create).not.toHaveBeenCalled()
   })
@@ -218,11 +221,18 @@ describe('Jobs HTTP', () => {
 
   it('POST /api/v1/jobs/:id/save toggles a bookmark', async () => {
     const headers = { authorization: `Bearer ${token}` }
-    const first = await fetch(`${baseUrl}/api/v1/jobs/job-1/save`, { method: 'POST', headers })
+    const first = await fetch(`${baseUrl}/api/v1/jobs/${jobId}/save`, { method: 'POST', headers })
     expect(first.status).toBe(201)
     expect(await first.json()).toEqual({ saved: true })
-    const second = await fetch(`${baseUrl}/api/v1/jobs/job-1/save`, { method: 'POST', headers })
+    const second = await fetch(`${baseUrl}/api/v1/jobs/${jobId}/save`, { method: 'POST', headers })
     expect(second.status).toBe(201)
     expect(await second.json()).toEqual({ saved: false })
+  })
+
+  it('GET /api/v1/jobs/:id rejects a non-UUID with 400 before Prisma', async () => {
+    prisma.jobListing.findFirst.mockClear()
+    const response = await fetch(`${baseUrl}/api/v1/jobs/not-a-uuid`)
+    expect(response.status).toBe(400)
+    expect(prisma.jobListing.findFirst).not.toHaveBeenCalled()
   })
 })

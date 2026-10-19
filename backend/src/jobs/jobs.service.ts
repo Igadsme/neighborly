@@ -20,7 +20,6 @@ const publicJobSelect = {
   remote: true,
   deadline: true,
   tags: true,
-  verified: true,
   status: true,
   createdAt: true,
   updatedAt: true,
@@ -37,7 +36,9 @@ const applicationSelect = {
 
 function presentJob<T extends { employmentType: string; logoKey: string | null }>(row: T) {
   const { employmentType, logoKey, ...rest } = row
-  return { ...rest, type: employmentType, logo: logoKey }
+  const publicRow = rest as T & { verified?: boolean }
+  delete publicRow.verified
+  return { ...publicRow, type: employmentType, logo: logoKey }
 }
 
 @Injectable()
