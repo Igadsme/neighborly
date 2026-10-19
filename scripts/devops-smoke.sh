@@ -21,7 +21,17 @@ for attempt in {1..30}; do
 done
 
 backup="${TMPDIR:-/tmp}/neighborly-${project}.dump"
-"${compose[@]}" exec -T postgres pg_dump -U neighborly -d neighborly --format=custom > "$backup"
+for attempt in {1..10}; do
+  rm -f "$backup"
+  if "${compose[@]}" exec -T postgres pg_dump -U neighborly -d neighborly --format=custom > "$backup"; then
+    break
+  fi
+  if [[ "$attempt" -eq 10 ]]; then
+    echo 'isolated PostgreSQL backup did not complete' >&2
+    exit 1
+  fi
+  sleep 2
+done
 "${compose[@]}" exec -T postgres createdb -U neighborly neighborly_restore
 cat "$backup" | "${compose[@]}" exec -T postgres pg_restore -U neighborly -d neighborly_restore --exit-on-error --no-owner
 "${compose[@]}" exec -T postgres psql -U neighborly -d neighborly_restore -Atc 'SELECT 1' | grep -qx 1
