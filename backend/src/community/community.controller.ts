@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
+import { enforceRateLimit } from '../common/rate-limit'
 import { CommunityService } from './community.service'
 import {
   CreateCommentDto,
@@ -36,45 +37,50 @@ export class CommunityController {
   @Post('posts')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  createPost(@Req() request: AuthenticatedRequest, @Body() input: CreatePostDto) {
+  async createPost(@Req() request: AuthenticatedRequest, @Body() input: CreatePostDto) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.createPost(request.user.id, input)
   }
 
   @Get('posts/:id')
-  getPost(@Param('id') id: string) {
+  getPost(@Param('id', ParseUUIDPipe) id: string) {
     return this.community.getPost(id)
   }
 
   @Patch('posts/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  updatePost(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdatePostDto) {
+  async updatePost(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdatePostDto) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.updatePost(request.user.id, id, input)
   }
 
   @Delete('posts/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  archivePost(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async archivePost(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.archivePost(request.user.id, id)
   }
 
   @Post('posts/:id/reactions')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  react(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: ReactionDto) {
+  async react(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: ReactionDto) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.react(request.user.id, id, input)
   }
 
   @Get('posts/:id/comments')
-  comments(@Param('id') id: string) {
+  comments(@Param('id', ParseUUIDPipe) id: string) {
     return this.community.listComments(id)
   }
 
   @Post('posts/:id/comments')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  comment(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: CreateCommentDto) {
+  async comment(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: CreateCommentDto) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.createComment(request.user.id, id, input)
   }
 
@@ -86,33 +92,37 @@ export class CommunityController {
   @Post('events')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  createEvent(@Req() request: AuthenticatedRequest, @Body() input: CreateEventDto) {
+  async createEvent(@Req() request: AuthenticatedRequest, @Body() input: CreateEventDto) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.createEvent(request.user.id, input)
   }
 
   @Get('events/:id')
-  getEvent(@Param('id') id: string) {
+  getEvent(@Param('id', ParseUUIDPipe) id: string) {
     return this.community.getEvent(id)
   }
 
   @Patch('events/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  updateEvent(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdateEventDto) {
+  async updateEvent(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateEventDto) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.updateEvent(request.user.id, id, input)
   }
 
   @Delete('events/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  archiveEvent(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async archiveEvent(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.archiveEvent(request.user.id, id)
   }
 
   @Post('events/:id/rsvp')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  rsvp(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async rsvp(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.toggleRsvp(request.user.id, id)
   }
 
@@ -124,26 +134,29 @@ export class CommunityController {
   @Post('lost-found')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  createLostFound(@Req() request: AuthenticatedRequest, @Body() input: CreateLostFoundDto) {
+  async createLostFound(@Req() request: AuthenticatedRequest, @Body() input: CreateLostFoundDto) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.createLostFound(request.user.id, input)
   }
 
   @Get('lost-found/:id')
-  getLostFound(@Param('id') id: string) {
+  getLostFound(@Param('id', ParseUUIDPipe) id: string) {
     return this.community.getLostFound(id)
   }
 
   @Patch('lost-found/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  updateLostFound(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdateLostFoundDto) {
+  async updateLostFound(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateLostFoundDto) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.updateLostFound(request.user.id, id, input)
   }
 
   @Delete('lost-found/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  archiveLostFound(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async archiveLostFound(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.archiveLostFound(request.user.id, id)
   }
 
@@ -155,33 +168,37 @@ export class CommunityController {
   @Post('giveaways')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  createGiveaway(@Req() request: AuthenticatedRequest, @Body() input: CreateGiveawayDto) {
+  async createGiveaway(@Req() request: AuthenticatedRequest, @Body() input: CreateGiveawayDto) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.createGiveaway(request.user.id, input)
   }
 
   @Get('giveaways/:id')
-  getGiveaway(@Param('id') id: string) {
+  getGiveaway(@Param('id', ParseUUIDPipe) id: string) {
     return this.community.getGiveaway(id)
   }
 
   @Patch('giveaways/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  updateGiveaway(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdateGiveawayDto) {
+  async updateGiveaway(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateGiveawayDto) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.updateGiveaway(request.user.id, id, input)
   }
 
   @Delete('giveaways/:id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  archiveGiveaway(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async archiveGiveaway(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.archiveGiveaway(request.user.id, id)
   }
 
   @Post('giveaways/:id/claim')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  claim(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async claim(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    await enforceRateLimit('community', request.user.id)
     return this.community.claimGiveaway(request.user.id, id)
   }
 }

@@ -29,7 +29,8 @@ export class UsersController {
   }
 
   @Patch('me/onboarding')
-  completeOnboarding(@Req() req: AuthenticatedRequest, @Body() input: CompleteOnboardingDto) {
+  async completeOnboarding(@Req() req: AuthenticatedRequest, @Body() input: CompleteOnboardingDto) {
+    await enforceRateLimit('profile', req.user.id)
     return this.users.completeOnboarding(req.user.id, input)
   }
 
@@ -39,23 +40,26 @@ export class UsersController {
   }
 
   @Patch('me/profile')
-  updateProfile(@Req() req: AuthenticatedRequest, @Body() input: UpdateProfileDto) {
+  async updateProfile(@Req() req: AuthenticatedRequest, @Body() input: UpdateProfileDto) {
+    await enforceRateLimit('profile', req.user.id)
     return this.account.updateProfile(req.user.id, input)
   }
 
   @Patch('me/privacy')
-  updatePrivacy(@Req() req: AuthenticatedRequest, @Body() input: UpdatePrivacyDto) {
+  async updatePrivacy(@Req() req: AuthenticatedRequest, @Body() input: UpdatePrivacyDto) {
+    await enforceRateLimit('profile', req.user.id)
     return this.account.updatePrivacy(req.user.id, input)
   }
 
   @Post('me/email')
   async changeEmail(@Req() req: AuthenticatedRequest, @Body() input: ChangeEmailDto) {
-    await enforceRateLimit('authResend', req.user.id)
+    await enforceRateLimit('accountEmail', req.user.id)
     return this.account.requestEmailChange(req.user.id, input, input.currentPassword)
   }
 
   @Delete('me/email/pending')
-  cancelEmailChange(@Req() req: AuthenticatedRequest) {
+  async cancelEmailChange(@Req() req: AuthenticatedRequest) {
+    await enforceRateLimit('accountEmail', req.user.id)
     return this.account.cancelEmailChange(req.user.id)
   }
 

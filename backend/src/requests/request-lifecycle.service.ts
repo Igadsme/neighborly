@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma, RequestStatus } from '@prisma/client'
 import { audit } from '../common/logger'
+import { activeAccountWhere } from '../common/active-account'
 import { publicUserSelect } from '../common/public-user.select'
 import { sanitizeOptional, sanitizeText } from '../common/text'
 import { DOMAIN_EVENTS } from '../events/domain-events'
@@ -109,7 +110,12 @@ export class RequestLifecycleService {
   /** Public read. Drafts are never visible here, to anyone. */
   async get(id: string, viewerId?: string) {
     const row = await this.prisma.needRequest.findFirst({
-      where: { id, deletedAt: null, status: { notIn: [RequestStatus.DRAFT, RequestStatus.CANCELLED] } },
+      where: {
+        id,
+        deletedAt: null,
+        status: { notIn: [RequestStatus.DRAFT, RequestStatus.CANCELLED] },
+        requester: activeAccountWhere
+      },
       select: { ...publicRequestSelect, ...ownerOnlyFields }
     })
     if (!row) throw new NotFoundException('Request not found')
@@ -335,6 +341,7 @@ export class RequestLifecycleService {
       where: {
         status: 'PUBLISHED',
         deletedAt: null,
+        seller: activeAccountWhere,
         // The requester is never shown their own items as a match.
         sellerId: { not: userId },
         categoryId: { in: prefilter.categoryIds ?? [request.categoryId] },
@@ -463,6 +470,7 @@ export class RequestLifecycleService {
       // still intersected with the publishable set.
       status: query.status && query.status !== RequestStatus.DRAFT ? query.status : RequestStatus.PUBLISHED,
       deletedAt: null,
+      requester: activeAccountWhere,
       ...(query.categoryId ? { categoryId: query.categoryId } : {}),
       ...(query.mode ? { mode: query.mode as Prisma.EnumExchangeModeFilter } : {}),
       ...(query.urgency ? { urgency: query.urgency } : {}),

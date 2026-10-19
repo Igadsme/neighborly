@@ -3,7 +3,11 @@ import { currentRequestId, writeLog } from './logger'
 import { trustProxyEnabled } from './http-security'
 
 type Bucket = { count: number; resetAt: number }
-type RateLimitRedis = { incr: (key: string) => Promise<number>; pexpire: (key: string, ms: number) => Promise<number> }
+type RateLimitRedis = {
+  incr: (key: string) => Promise<number>
+  pexpire: (key: string, ms: number) => Promise<number>
+  pttl?: (key: string) => Promise<number>
+}
 
 const memory = new Map<string, Bucket>()
 let redisClient: RateLimitRedis | null | undefined
@@ -26,7 +30,16 @@ export const rateLimitPolicies = {
   requests: { env: 'RATE_LIMIT_REQUESTS', limit: 20, windowMs: 60 * 60 * 1000 },
   reviews: { env: 'RATE_LIMIT_REVIEWS', limit: 30, windowMs: 60 * 60 * 1000 },
   missions: { env: 'RATE_LIMIT_MISSIONS', limit: 20, windowMs: 60 * 60 * 1000 },
-  reports: { env: 'RATE_LIMIT_REPORTS', limit: 10, windowMs: 60 * 60 * 1000 }
+  reports: { env: 'RATE_LIMIT_REPORTS', limit: 10, windowMs: 60 * 60 * 1000 },
+  housing: { env: 'RATE_LIMIT_HOUSING', limit: 20, windowMs: 60 * 60 * 1000 },
+  jobs: { env: 'RATE_LIMIT_JOBS', limit: 20, windowMs: 60 * 60 * 1000 },
+  services: { env: 'RATE_LIMIT_SERVICES', limit: 20, windowMs: 60 * 60 * 1000 },
+  // Reactions, comments, and RSVPs share this bucket with new posts, so the
+  // window is a minute rather than an hour.
+  community: { env: 'RATE_LIMIT_COMMUNITY', limit: 60, windowMs: 60 * 1000 },
+  transactions: { env: 'RATE_LIMIT_TRANSACTIONS', limit: 30, windowMs: 60 * 60 * 1000 },
+  profile: { env: 'RATE_LIMIT_PROFILE', limit: 20, windowMs: 60 * 60 * 1000 },
+  accountEmail: { env: 'RATE_LIMIT_ACCOUNT_EMAIL', limit: 5, windowMs: 15 * 60 * 1000 }
 } as const
 
 export type RateLimitScope = keyof typeof rateLimitPolicies
@@ -67,8 +80,17 @@ export async function enforceRateLimit(scope: RateLimitScope, id: string) {
   if (!rateLimitsEnabled()) return
   const policy = rateLimitPolicies[scope]
   const max = configuredLimit(policy.env, policy.limit)
-  const count = await hit(`${scope}:${id}`, policy.windowMs)
-  if (count > max) throw new HttpException('Too many requests', HttpStatus.TOO_MANY_REQUESTS)
+  const hitResult = await hit(`${scope}:${id}`, policy.windowMs)
+  if (hitResult.count > max) throw tooManyRequests(hitResult.retryAfterSeconds)
+}
+
+/** Seconds still left in the window. RFC 9110 Retry-After accepts a delta. */
+function tooManyRequests(retryAfterSeconds: number) {
+  const retryAfter = Math.max(1, Math.ceil(retryAfterSeconds))
+  return new HttpException(
+    { statusCode: HttpStatus.TOO_MANY_REQUESTS, message: 'Too many requests', retryAfter },
+    HttpStatus.TOO_MANY_REQUESTS
+  )
 }
 
 async function hit(key: string, windowMs: number) {
@@ -77,7 +99,12 @@ async function hit(key: string, windowMs: number) {
     try {
       const count = await client.incr(key)
       if (count === 1) await client.pexpire(key, windowMs)
-      return count
+      let ttlMs = windowMs
+      if (typeof client.pttl === 'function') {
+        const ttl = await client.pttl(key)
+        if (typeof ttl === 'number' && ttl > 0) ttlMs = ttl
+      }
+      return { count, retryAfterSeconds: ttlMs / 1000 }
     } catch {
       // A Redis outage falls back to the in-process window so limits stay on.
       noteRedisFallback()
@@ -87,10 +114,10 @@ async function hit(key: string, windowMs: number) {
   const current = memory.get(key)
   if (!current || current.resetAt <= now) {
     memory.set(key, { count: 1, resetAt: now + windowMs })
-    return 1
+    return { count: 1, retryAfterSeconds: windowMs / 1000 }
   }
   current.count += 1
-  return current.count
+  return { count: current.count, retryAfterSeconds: (current.resetAt - now) / 1000 }
 }
 
 function noteRedisFallback() {

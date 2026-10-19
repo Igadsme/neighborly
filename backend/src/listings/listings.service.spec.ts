@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException } from '@nestjs/common'
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { PrismaService } from '../prisma/prisma.service'
 import { ListingsService } from './listings.service'
@@ -59,13 +59,64 @@ describe('ListingsService public reads', () => {
     const detail = await moduleRef.get(ListingsService).get('listing-1')
 
     const query = findFirst.mock.calls[0][0]
-    expect(query.where).toEqual({ id: 'listing-1', deletedAt: null, status: { not: 'DRAFT' } })
+    expect(query.where).toEqual({
+      id: 'listing-1',
+      deletedAt: null,
+      status: { in: ['PUBLISHED', 'SOLD'] },
+      seller: { status: 'ACTIVE', deletedAt: null }
+    })
     expectPublicSeller(query.select.seller)
     expect(query.select.images).toEqual({ orderBy: { sortOrder: 'asc' } })
     expect(JSON.stringify(query)).not.toContain('passwordHash')
     // Read for distance math, then stripped: the response never carries them.
     expect(detail).not.toHaveProperty('latitude')
     expect(detail).not.toHaveProperty('longitude')
+  })
+
+  it('returns 404 for a paused listing that the old public filter would return', async () => {
+    const paused = {
+      id: 'listing-1',
+      status: 'ARCHIVED',
+      deletedAt: null,
+      latitude: null,
+      longitude: null,
+      images: []
+    }
+    const findFirst = jest.fn(async (args: { where: { status?: { not?: string; in?: string[] } } }) => {
+      const status = args.where.status
+      // Today's get() asks for every non-draft, which includes a pause.
+      if (status?.not === 'DRAFT' || status?.in?.includes('ARCHIVED')) return paused
+      return null
+    })
+    const moduleRef = await Test.createTestingModule({
+      providers: [ListingsService, stubStorage().provider, { provide: PrismaService, useValue: { listing: { findFirst } } }]
+    }).compile()
+
+    await expect(moduleRef.get(ListingsService).get('listing-1')).rejects.toBeInstanceOf(NotFoundException)
+  })
+
+  it('still returns a paused listing from the owner manage read', async () => {
+    const paused = {
+      id: 'listing-1',
+      sellerId: 'user-1',
+      status: 'ARCHIVED',
+      deletedAt: null,
+      latitude: null,
+      longitude: null,
+      images: []
+    }
+    const findFirst = jest.fn().mockResolvedValue(paused)
+    const moduleRef = await Test.createTestingModule({
+      providers: [ListingsService, stubStorage().provider, { provide: PrismaService, useValue: { listing: { findFirst } } }]
+    }).compile()
+
+    const detail = await moduleRef.get(ListingsService).getForOwner('user-1', 'listing-1')
+    expect(detail).toMatchObject({ id: 'listing-1', status: 'ARCHIVED', deletedAt: null })
+    expect(findFirst.mock.calls[0][0].where).toEqual({
+      id: 'listing-1',
+      sellerId: 'user-1',
+      status: { not: 'DELETED' }
+    })
   })
 
   it('selects a public seller card for favorites', async () => {
@@ -129,6 +180,18 @@ describe('ListingsService owner actions', () => {
     const { service, update } = await serviceWith(listing)
     await service.pause('user-1', 'listing-1')
     // Pausing is reversible, so it must not stamp deletedAt.
+    expect(update).toHaveBeenCalledWith({ where: { id: 'listing-1' }, data: { status: 'ARCHIVED', deletedAt: null } })
+  })
+
+  it('archives by stamping deletedAt, which pause does not', async () => {
+    const { service, update } = await serviceWith(listing)
+    await service.archive('user-1', 'listing-1')
+    const data = update.mock.calls[0][0].data as { status: string; deletedAt: Date | null }
+    expect(data.status).toBe('ARCHIVED')
+    expect(data.deletedAt).toBeInstanceOf(Date)
+
+    update.mockClear()
+    await service.pause('user-1', 'listing-1')
     expect(update).toHaveBeenCalledWith({ where: { id: 'listing-1' }, data: { status: 'ARCHIVED', deletedAt: null } })
   })
 

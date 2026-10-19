@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma, QuoteStatus } from '@prisma/client'
 import { assertNotBlocked } from '../common/blocks'
+import { activeAccountWhere } from '../common/active-account'
 import { publicUserSelect } from '../common/public-user.select'
 import { cleanList, cleanText, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
@@ -17,9 +18,6 @@ const publicServiceSelect = {
   availability: true,
   tags: true,
   imageKey: true,
-  backgroundCheck: true,
-  rating: true,
-  reviewCount: true,
   status: true,
   createdAt: true,
   updatedAt: true,
@@ -41,15 +39,17 @@ const quoteForProviderSelect = {
 
 type ProviderQuote = Prisma.ServiceQuoteGetPayload<{ select: typeof quoteForProviderSelect }>
 
-function toRating(value: Prisma.Decimal | number | string | null) {
-  if (value === null || value === undefined) return null
-  const number = Number(value)
-  return Number.isFinite(number) ? number : null
-}
-
-function presentService<T extends { imageKey: string | null; rating: Prisma.Decimal | number | string | null }>(row: T) {
-  const { imageKey, rating, ...rest } = row
-  return { ...rest, image: imageKey, rating: toRating(rating) }
+function presentService<T extends { imageKey: string | null }>(row: T) {
+  const { imageKey, ...rest } = row
+  const publicRow = rest as T & {
+    backgroundCheck?: boolean
+    rating?: Prisma.Decimal | number | string | null
+    reviewCount?: number
+  }
+  delete publicRow.backgroundCheck
+  delete publicRow.rating
+  delete publicRow.reviewCount
+  return { ...publicRow, image: imageKey }
 }
 
 function presentQuoteForProvider(quote: ProviderQuote) {
@@ -78,6 +78,7 @@ export class ServicesService {
       where: {
         status: 'PUBLISHED',
         deletedAt: null,
+        owner: activeAccountWhere,
         ...(query.category ? { category: query.category } : {}),
         ...(search
           ? {
@@ -99,7 +100,7 @@ export class ServicesService {
 
   async get(id: string) {
     const row = await this.prisma.serviceListing.findFirst({
-      where: { id, status: 'PUBLISHED', deletedAt: null },
+      where: { id, status: 'PUBLISHED', deletedAt: null, owner: activeAccountWhere },
       select: publicServiceSelect
     })
     if (!row) throw new NotFoundException('Service not found')
@@ -157,7 +158,7 @@ export class ServicesService {
 
   async createQuote(userId: string, serviceId: string, input: CreateQuoteDto) {
     const service = await this.prisma.serviceListing.findFirst({
-      where: { id: serviceId, status: 'PUBLISHED', deletedAt: null },
+      where: { id: serviceId, status: 'PUBLISHED', deletedAt: null, owner: activeAccountWhere },
       select: { ownerId: true }
     })
     if (!service) throw new NotFoundException('Service not found')

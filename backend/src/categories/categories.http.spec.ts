@@ -51,7 +51,11 @@ describe('Categories HTTP', () => {
       id: true,
       name: true,
       slug: true,
-      _count: { select: { listings: { where: { status: 'PUBLISHED', deletedAt: null } } } }
+      _count: {
+        select: {
+          listings: { where: { status: 'PUBLISHED', deletedAt: null, seller: { status: 'ACTIVE', deletedAt: null } } }
+        }
+      }
     })
   })
 })

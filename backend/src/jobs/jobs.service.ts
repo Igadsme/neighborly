@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { assertNotBlocked } from '../common/blocks'
+import { activeAccountWhere } from '../common/active-account'
 import { publicUserSelect } from '../common/public-user.select'
 import { cleanList, cleanText, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
@@ -20,7 +21,6 @@ const publicJobSelect = {
   remote: true,
   deadline: true,
   tags: true,
-  verified: true,
   status: true,
   createdAt: true,
   updatedAt: true,
@@ -37,7 +37,9 @@ const applicationSelect = {
 
 function presentJob<T extends { employmentType: string; logoKey: string | null }>(row: T) {
   const { employmentType, logoKey, ...rest } = row
-  return { ...rest, type: employmentType, logo: logoKey }
+  const publicRow = rest as T & { verified?: boolean }
+  delete publicRow.verified
+  return { ...publicRow, type: employmentType, logo: logoKey }
 }
 
 @Injectable()
@@ -50,6 +52,7 @@ export class JobsService {
       where: {
         status: 'PUBLISHED',
         deletedAt: null,
+        owner: activeAccountWhere,
         ...(query.type ? { employmentType: query.type } : {}),
         ...(query.level ? { level: { contains: query.level, mode: 'insensitive' } } : {}),
         ...(query.remote ? { remote: query.remote } : {}),
@@ -73,7 +76,7 @@ export class JobsService {
 
   async get(id: string) {
     const row = await this.prisma.jobListing.findFirst({
-      where: { id, status: 'PUBLISHED', deletedAt: null },
+      where: { id, status: 'PUBLISHED', deletedAt: null, owner: activeAccountWhere },
       select: publicJobSelect
     })
     if (!row) throw new NotFoundException('Job not found')
@@ -137,7 +140,7 @@ export class JobsService {
 
   async apply(userId: string, jobId: string, input: ApplyJobDto) {
     const job = await this.prisma.jobListing.findFirst({
-      where: { id: jobId, status: 'PUBLISHED', deletedAt: null },
+      where: { id: jobId, status: 'PUBLISHED', deletedAt: null, owner: activeAccountWhere },
       select: { ownerId: true }
     })
     if (!job) throw new NotFoundException('Job not found')

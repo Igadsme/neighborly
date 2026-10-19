@@ -233,12 +233,18 @@ The signed-in nav badge does not call a notification route. It counts rows from 
 
 ### Transactions
 
-Guarded. Caller must be a `TransactionParticipant`.
+Guarded. Caller must be a `TransactionParticipant`, except staff resolving a dispute (below).
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| `GET` | `/transactions` | Includes participants, milestones (asc), appointments. Does not include reviews. |
-| `PATCH` | `/transactions/:id/status` | Body `{ "status": "<TransactionStatus>" }`. Illegal edges are 400 `Invalid transaction transition: FROM -> TO`. A legal edge updates the row and inserts `TransactionMilestone`. |
+| `GET` | `/transactions` | Includes participants, milestones (asc), appointments. Does not include reviews. Each participant may include `completionConfirmedAt` (null until that person confirms completion). |
+| `PATCH` | `/transactions/:id/status` | Body is unchanged: `{ "status": "<TransactionStatus>" }`. Illegal edges are 400 `Invalid transaction transition: FROM -> TO`. A legal edge other than the two below updates the row and inserts `TransactionMilestone`. |
+
+**Completion is two-sided (BL-003).** `IN_PROGRESS` → `COMPLETED` does not finish on one call. The first participant's `PATCH` with `{ "status": "COMPLETED" }` returns **200** with `status` still `IN_PROGRESS`, `awaitingConfirmation: true`, and `completionConfirmedBy` (user ids who have confirmed). The other participant sends the same body. When every participant has confirmed, the response `status` is `COMPLETED` and one milestone is written. A single participant cannot complete the exchange. `POST /reviews` still requires `status === COMPLETED`, so a one-sided confirm cannot create a review (400 `You can review once the exchange is complete`).
+
+**Disputes are staff-only.** A participant cannot move `DISPUTED` to `COMPLETED`, `REFUNDED`, or `CANCELLED` (403 `Only staff can take that action`). Staff — any `StaffRoleAssignment`, the same gate as borrow dispute review — may send that `PATCH` even when they are not a participant. The body stays `{ "status": "REFUNDED" }` (or `COMPLETED` or `CANCELLED`).
+
+Frontend follow-up: do not treat HTTP 200 from `api.transactions.transition(id, "COMPLETED")` as finished. Branch on `status === "COMPLETED"` versus `awaitingConfirmation === true`. Do not offer dispute resolution to participants. Review prompts already key off `COMPLETED` from `GET /transactions`; keep that.
 
 Allowed edges (`backend/src/transactions/transaction-state.ts`):
 
@@ -493,7 +499,7 @@ These routes are the remainder of the v1 contract. They are not implemented. Pat
 3. Another user `POST /requests/:id/offers`.
 4. Either party `POST /requests/offers/:id/counter` while the offer is `PENDING` or `COUNTERED`.
 5. The requester `POST /requests/:id/offers/:offerId/accept` (or `reject`). Accept opens one conversation and one `ACCEPTED` transaction.
-6. A participant `PATCH /transactions/:id/status` along the legal edges until `COMPLETED`.
-7. A participant `POST /reviews` for that completed transaction.
+6. A participant `PATCH /transactions/:id/status` along the legal edges until `IN_PROGRESS`. Both participants then `PATCH` `{ "status": "COMPLETED" }`. The exchange is `COMPLETED` only after the second confirm. Staff, not either participant, resolve a `DISPUTED` row.
+7. A participant `POST /reviews` for that completed transaction. A one-sided completion confirm is not enough.
 
 Scheduling an appointment is still target. The screens for this sequence already exist (`docs/UX_REQUEST_FLOW_STATES.md`).

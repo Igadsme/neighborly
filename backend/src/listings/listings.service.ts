@@ -6,6 +6,7 @@ import {
   NotFoundException
 } from '@nestjs/common'
 import { ListingStatus, Prisma } from '@prisma/client'
+import { activeAccountWhere } from '../common/active-account'
 import { publicUserSelect } from '../common/public-user.select'
 import { sanitizeOptional, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
@@ -125,7 +126,11 @@ export class ListingsService {
 
   async get(id: string, viewer?: { latitude?: number; longitude?: number }) {
     const listing = await this.prisma.listing.findFirst({
-      where: { id, deletedAt: null, status: { not: 'DRAFT' } },
+      // Paused rows are ARCHIVED with deletedAt left null so the owner can
+      // publish them again. They are not a public detail read. Sold rows stay
+      // readable; drafts never are. A suspended seller's rows stay in the
+      // database and reappear when the account is ACTIVE again.
+      where: { id, deletedAt: null, status: { in: ['PUBLISHED', 'SOLD'] }, seller: activeAccountWhere },
       select: { ...listingWithImages.select, latitude: true, longitude: true }
     })
     if (!listing) throw new NotFoundException('Listing not found')
@@ -392,7 +397,7 @@ export class ListingsService {
   async neighborhoodCounts() {
     const rows = await this.prisma.listing.groupBy({
       by: ['neighborhood'],
-      where: { status: 'PUBLISHED', deletedAt: null },
+      where: { status: 'PUBLISHED', deletedAt: null, seller: activeAccountWhere },
       _count: { _all: true }
     })
     return rows
@@ -407,8 +412,11 @@ export class ListingsService {
     const search = query.query?.trim()
     const where: Prisma.ListingWhereInput = {
       // A draft is never public regardless of the requested status.
+      // A suspended seller's rows stay published in the database and
+      // reappear when the account is ACTIVE again.
       status: query.status ?? 'PUBLISHED',
       deletedAt: null,
+      seller: activeAccountWhere,
       ...(query.sellerId ? { sellerId: query.sellerId } : {}),
       ...(query.categoryId ? { categoryId: query.categoryId } : {}),
       ...(query.city ? { city: { equals: query.city, mode: 'insensitive' } } : {}),

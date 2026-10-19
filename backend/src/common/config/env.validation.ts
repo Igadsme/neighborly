@@ -53,7 +53,7 @@ export const envValidationSchema = Joi.object({
   JWT_REFRESH_TTL: Joi.string().default('7d'),
   // Absolute https origin of the web app, used to build verification and
   // reset links. Must be set in production or links point nowhere useful.
-  PUBLIC_WEB_ORIGIN: Joi.string().uri({ scheme: ['http', 'https'] }).default('http://localhost:5173'),
+  PUBLIC_WEB_ORIGIN: Joi.string().uri({ scheme: ['http', 'https'] }).default('http://localhost:8443'),
   // `outbox` persists messages for a delivery provider to drain and is the
   // only value allowed in production. `console` is local development only.
   EMAIL_SENDER: Joi.string().valid('outbox', 'console').default('outbox'),
@@ -110,6 +110,13 @@ export const envValidationSchema = Joi.object({
   // quietly never be scheduled.
   BORROW_OVERDUE_POLL_MS: optionalPositiveInt,
   RATE_LIMIT_REPORTS: rateLimit,
+  RATE_LIMIT_HOUSING: rateLimit,
+  RATE_LIMIT_JOBS: rateLimit,
+  RATE_LIMIT_SERVICES: rateLimit,
+  RATE_LIMIT_COMMUNITY: rateLimit,
+  RATE_LIMIT_TRANSACTIONS: rateLimit,
+  RATE_LIMIT_PROFILE: rateLimit,
+  RATE_LIMIT_ACCOUNT_EMAIL: rateLimit,
   SLOW_QUERY_LOG: Joi.string().valid('0', '1').optional().allow(''),
   SLOW_QUERY_MS: Joi.number().integer().min(1).optional()
 }).custom((value, helpers) => {
