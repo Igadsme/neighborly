@@ -84,7 +84,7 @@ jobs:
       # Covers offer acceptance, request privacy, transactions, category
       # bootstrap, and the Milestone 3 account lifecycle: registration,
       # verification, recovery, refresh rotation, suspension, deletion.
-      - run: pnpm test -- --coverage
+      - run: pnpm exec jest --config jest.integration.config.cjs --runInBand
         env:
           NEIGHBORLY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55432/neighborly_m2
 
@@ -410,6 +410,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm install --frozen-lockfile
         working-directory: backend
+      - run: pnpm exec prisma generate
+        working-directory: backend
       - run: docker compose up -d --wait postgres redis minio
       - run: pnpm exec prisma migrate deploy && pnpm exec prisma db seed
         working-directory: backend
@@ -498,7 +500,7 @@ jobs:
         working-directory: backend
       - run: pnpm exec prisma migrate deploy && pnpm exec prisma validate && pnpm exec prisma generate
         working-directory: backend
-      - run: pnpm test -- --coverage
+      - run: pnpm test --coverage
         working-directory: backend
       - run: pnpm build
         working-directory: backend
