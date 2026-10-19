@@ -24,7 +24,7 @@ async function main() {
   assert(missingAuth.response.status === 401, 'protected endpoint accepted a missing token')
   const forged = await call('/users/me', { token: 'not-a-jwt' })
   assert(forged.response.status === 401, 'protected endpoint accepted a forged token')
-  const moderatorEscalation = await call('/safety/reports', { token })
+  const moderatorEscalation = await call('/moderation/reports', { token })
   assert(moderatorEscalation.response.status === 403, 'regular user reached moderator endpoint')
 
   const rateLimitRequests = await Promise.all(Array.from({ length: 12 }, () => call('/auth/login', { method: 'POST', body: { email: `missing-${id}@neighborly.test`, password } })))
