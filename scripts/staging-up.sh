@@ -7,14 +7,23 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
+# Keep private staging resources separate from the legacy/default Compose
+# project and from development services. Override when a second fixture is
+# intentionally needed; never reuse a development volume by accident.
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-neighborly-staging-private}"
+
 if ! docker info >/dev/null 2>&1; then
   echo "Docker is not running" >&2
   exit 1
 fi
 
-# This volume writes AppleDouble files. BuildKit fails when it cannot read their xattrs.
+# Keep AppleDouble metadata untouched. COPYFILE_DISABLE prevents new metadata
+# from being copied into build contexts without deleting existing user files.
+# The T7 exFAT volume still exposes xattrs to BuildKit; use the legacy context
+# sender so existing metadata is preserved while the context is transferred.
 export COPYFILE_DISABLE=1
-find "$ROOT" \( -path '*/node_modules/*' -o -path '*/.git/*' \) -prune -o -name '._*' -exec rm -f {} +
+export DOCKER_BUILDKIT=0
+export COMPOSE_DOCKER_CLI_BUILD=0
 
 if [ ! -f .env.staging ]; then
   cp env.staging.example .env.staging
@@ -48,7 +57,9 @@ if docker image inspect neighborly-web:staging >/dev/null 2>&1; then
   docker tag neighborly-web:staging neighborly-web:staging-previous
 fi
 
-docker compose --env-file .env.staging --profile staging up -d --build
+docker compose --env-file .env.staging --profile staging build api web caddy
+docker compose --env-file .env.staging --profile staging up -d \
+  staging-postgres staging-redis minio minio-init staging-migrate api web caddy
 
 # One-shot containers exit 0. `up --wait` treats that as a failure, so poll instead.
 echo "Waiting for staging HTTPS"

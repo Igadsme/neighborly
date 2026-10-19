@@ -78,6 +78,7 @@ services:
   # MinIO on-disk layout. The new volume is still root-owned, and the image
   # user is 10001, so this process runs as root.
   # The healthcheck calls curl inside the container. Tag 1.0.1 ships it.
+  # The host port is intentionally isolated from the development object store.
   # linux/amd64 manifest
   # sha256:7465b31993156ca5cc0eb4b3c59a01ff69651961be62bcfeb6ce569f22034a56
   # history runs `apk add --no-cache ca-certificates coreutils curl tzdata`,
@@ -93,7 +94,7 @@ services:
       RUSTFS_ACCESS_KEY: neighborly-staging
       RUSTFS_SECRET_KEY: neighborly-staging-local-only
     ports:
-      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:19001:9000"
     volumes:
       - rustfs-staging-data:/data
     healthcheck:

@@ -15,7 +15,28 @@ esac
 
 cd /app
 # Call the binaries directly. NODE_ENV=production would hide devDependencies from `pnpm exec`.
-node ./node_modules/prisma/build/index.js migrate deploy
+migrate_attempt=1
+while :; do
+  if migrate_output=$(node ./node_modules/prisma/build/index.js migrate deploy 2>&1); then
+    printf '%s\n' "$migrate_output"
+    break
+  fi
+
+  printf '%s\n' "$migrate_output" >&2
+  case "$migrate_output" in
+    *P1001*|*"Can't reach database server"*|*ECONNREFUSED*)
+      if [ "$migrate_attempt" -ge 30 ]; then
+        echo "staging db-setup: database did not become reachable" >&2
+        exit 1
+      fi
+      migrate_attempt=$((migrate_attempt + 1))
+      sleep 2
+      ;;
+    *)
+      exit 1
+      ;;
+  esac
+done
 # Reference data every environment needs: listings and requests cannot be
 # created without categories. Idempotent upsert, no demo records.
 node ./node_modules/tsx/dist/cli.mjs prisma/bootstrap.ts
