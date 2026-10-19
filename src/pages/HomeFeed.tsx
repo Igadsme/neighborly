@@ -44,6 +44,7 @@ function ListingThumb({ listing, free }: { listing: Listing; free?: boolean }) {
 
 export default function HomeFeed({ onNavigate }: HomeFeedProps) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [categoryIds, setCategoryIds] = useState<Record<string, string> | null>(null)
   const [listings, setListings] = useState<Listing[]>([])
   const [newToday, setNewToday] = useState<Listing[]>([])
   const [listingsLoading, setListingsLoading] = useState(true)
@@ -62,8 +63,52 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
 
   useEffect(() => {
     let active = true
+    api.categories
+      .list()
+      .then((items) => {
+        if (!active) return
+        const ids: Record<string, string> = {}
+        for (const item of items) ids[item.name.toLowerCase()] = item.id
+        setCategoryIds(ids)
+      })
+      .catch(() => {
+        if (active) setCategoryIds({})
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const selectedCategory =
+    activeCategory && activeCategory !== 'Free' ? activeCategory.toLowerCase() : null
+  const categoryGate = !selectedCategory
+    ? "all"
+    : categoryIds === null
+      ? "loading"
+      : categoryIds[selectedCategory] ?? "missing"
+
+  useEffect(() => {
+    let active = true
+    if (categoryGate === "loading") {
+      setListingsLoading(true)
+      return () => {
+        active = false
+      }
+    }
+    if (categoryGate === "missing") {
+      setListings([])
+      setNewToday([])
+      setListingsError('That category is not available.')
+      setListingsLoading(false)
+      return () => {
+        active = false
+      }
+    }
+    const categoryId = categoryGate === "all" ? undefined : categoryGate
+    setListingsLoading(true)
+    setListingsError('')
     api.listings
-      .list({ limit: 24 })
+      .list({ limit: 24, ...(categoryId ? { categoryId } : {}) })
       .then((page) => {
         if (!active) return
         const rows = page.items
@@ -86,7 +131,7 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
     return () => {
       active = false
     }
-  }, [])
+  }, [categoryGate])
 
   useEffect(() => {
     let active = true
@@ -137,15 +182,9 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
     }
   }, [])
 
-  const scopedListings = listings.filter((listing) => {
-    if (!activeCategory || activeCategory === 'Free') {
-      return activeCategory === 'Free' ? listing.isFree : true
-    }
-    return listing.category.toLowerCase() === activeCategory.toLowerCase()
-  })
-  const freeListings = (activeCategory && activeCategory !== 'Free' ? scopedListings : listings)
-    .filter((listing) => listing.isFree)
-    .slice(0, 3)
+  const scopedListings =
+    activeCategory === 'Free' ? listings.filter((listing) => listing.isFree) : listings
+  const freeListings = listings.filter((listing) => listing.isFree)
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-24 md:pb-0">
@@ -247,13 +286,13 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
           <div className="flex-1">
             <p className="font-semibold text-[#1B4332] text-sm">
               {listingsLoading
-                ? 'Checking free items near you'
+                ? 'Checking free items'
                 : freeListings.length
-                  ? `${freeListings.length} free item${freeListings.length === 1 ? '' : 's'} near you`
-                  : 'No free items posted nearby yet'}
+                  ? `${freeListings.length} free item${freeListings.length === 1 ? '' : 's'}`
+                  : 'No free items posted yet'}
             </p>
             <p className="text-xs text-[#2D6A4F]">
-              {freeListings.length ? 'Just posted in your neighborhood' : 'Free listings will show up here when neighbors post them'}
+              {freeListings.length ? 'Give, get, reduce waste' : 'Free listings will show up here when neighbors post them'}
             </p>
           </div>
           <Icon name="chevronRight" size={16} className="text-[#2D6A4F] flex-shrink-0" />
@@ -318,13 +357,13 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
             )}
           </div>
 
-          {/* Free near you */}
+          {/* Free items */}
           <div>
-            <SectionHeader title="Free near you" subtitle="Give, get, reduce waste" action={() => onNavigate('explore')} actionLabel="More" />
+            <SectionHeader title="Free items" subtitle="Give, get, reduce waste" action={() => onNavigate('explore')} actionLabel="More" />
             {listingsLoading ? (
               <LoadState loading loadingLabel="Loading listings…" />
             ) : freeListings.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No free listings nearby yet.</div>
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No free listings yet.</div>
             ) : (
             <div className="space-y-3">
               {freeListings.map((listing) => (

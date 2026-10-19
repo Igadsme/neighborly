@@ -51,9 +51,8 @@ describe("URL routing", () => {
     window.localStorage.setItem("neighborly.access_token", "test-token")
     window.history.replaceState({}, "", "/listings/l1")
     render(<App />)
-    expect(
-      (await screen.findAllByText("West Elm Mid-Century Modern Sofa — Excellent Condition")).length,
-    ).toBeGreaterThan(0)
+    expect(await screen.findByText("Listing not found")).toBeTruthy()
+    expect(screen.queryByText("West Elm Mid-Century Modern Sofa — Excellent Condition")).toBeNull()
     expect(window.location.pathname).toBe("/listings/l1")
   })
 
@@ -89,21 +88,47 @@ describe("URL routing", () => {
     window.localStorage.setItem("neighborly.access_token", "test-token")
     window.history.replaceState({}, "", "/listings/l1")
     render(<App />)
-    expect(
-      (await screen.findAllByText("West Elm Mid-Century Modern Sofa — Excellent Condition")).length,
-    ).toBeGreaterThan(0)
+    expect(await screen.findByText("Listing not found")).toBeTruthy()
 
     window.history.pushState({ neighborly: "/not-a-neighborly-page" }, "", "/not-a-neighborly-page")
     window.dispatchEvent(new PopStateEvent("popstate"))
     expect(await screen.findByRole("heading", { name: "Page not found" })).toBeTruthy()
-    expect(screen.queryByText("West Elm Mid-Century Modern Sofa — Excellent Condition")).toBeNull()
+    expect(screen.queryByText("Listing not found")).toBeNull()
 
     window.history.back()
     await waitFor(() => {
       expect(window.location.pathname).toBe("/listings/l1")
     })
-    expect(
-      (await screen.findAllByText("West Elm Mid-Century Modern Sofa — Excellent Condition")).length,
-    ).toBeGreaterThan(0)
+    expect(await screen.findByText("Listing not found")).toBeTruthy()
+    expect(screen.queryByText("West Elm Mid-Century Modern Sofa — Excellent Condition")).toBeNull()
+  })
+
+  it("shows moderator access is required for a non-staff member on /reports", async () => {
+    window.localStorage.setItem("neighborly.access_token", "test-token")
+    window.history.replaceState({}, "", "/reports")
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes("/moderation/reports")) {
+        return json({ message: "Moderator access is required" }, 403)
+      }
+      if (url.includes("/users/me")) return json({ id: "user-1", email: "ada@example.com" })
+      if (url.includes("/categories")) return json([])
+      if (url.includes("/conversations")) return json([])
+      if (url.includes("/notifications")) {
+        return json({ items: [], total: 0, unread: 0, limit: 8, offset: 0 })
+      }
+      if (url.includes("/passport")) {
+        return json({ displayName: "Ada", avatarUrl: null, neighborhood: null, city: null })
+      }
+      if (url.includes("/listings")) return json({ items: [], total: 0, limit: 24, offset: 0 })
+      return json([])
+    })
+    render(<App />)
+    expect(await screen.findByText("Moderator access is required")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Hide" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Restore" })).toBeNull()
+    expect(screen.queryByText("No open reports.")).toBeNull()
+    expect(screen.queryByRole("button", { name: "Open" })).toBeNull()
   })
 })

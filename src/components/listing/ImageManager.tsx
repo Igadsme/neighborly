@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react"
-import { api, ApiError, readError, readStatus } from "../../api/client"
+import { api, readError, readStatus } from "../../api/client"
 import type { ApiListing, StoredImage } from "../../api/types"
 import { Alert, primaryButton, secondaryButton } from "../account-ui"
 
 const MAX_IMAGES = 8
 const MAX_BYTES = 5 * 1024 * 1024
-const ACCEPTED = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+/** Must stay aligned with `DEFAULT_TYPES` in backend/src/common/uploads.ts. */
+export const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
 
 export interface ImageManagerProps {
   listingId: string | null
@@ -64,8 +65,8 @@ export default function ImageManager({
     setError("")
     setNotice("")
     if (!file) return
-    if (!ACCEPTED.includes(file.type)) {
-      setError("Only JPEG, PNG, WebP, or GIF images are accepted.")
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      setError("Only JPEG, PNG, and WebP images are accepted.")
       return
     }
     if (file.size > MAX_BYTES) {
@@ -108,11 +109,7 @@ export default function ImageManager({
       remember((refreshed.images as StoredImage[]) ?? [])
       setNotice("Image uploaded.")
     } catch (cause) {
-      setError(
-        cause instanceof ApiError && cause.status === 415
-          ? "That file is not an image the API accepts."
-          : readStatus(cause, "Upload failed. Try again."),
-      )
+      setError(readStatus(cause, "Upload failed. Try again."))
     } finally {
       setUploading(false)
       setProgress(0)
@@ -262,14 +259,14 @@ export default function ImageManager({
           {uploading ? "Uploading…" : "Add a photo"}
         </span>
         <span className="block text-xs text-[#5A6B85]">
-          Drag and drop or browse. JPEG, PNG, WebP, or GIF up to 5 MB.
+          Drag and drop or browse. JPEG, PNG, or WebP up to 5 MB.
         </span>
       </label>
       <input
         ref={inputRef}
         id="listing-image-input"
         type="file"
-        accept={ACCEPTED.join(",")}
+        accept={ACCEPTED_IMAGE_TYPES.join(",")}
         className="sr-only"
         disabled={uploading || storageReady === false || images.length >= MAX_IMAGES}
         onChange={event => {

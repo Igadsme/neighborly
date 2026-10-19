@@ -1,8 +1,9 @@
+import { readFileSync } from "node:fs"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import MyListings from "./MyListings"
 import CreateListingFlow from "./CreateListingFlow"
-import ImageManager from "../../components/listing/ImageManager"
+import ImageManager, { ACCEPTED_IMAGE_TYPES } from "../../components/listing/ImageManager"
 
 const listingId = "11111111-1111-4111-8111-111111111111"
 
@@ -382,5 +383,61 @@ describe("ImageManager", () => {
     render(<ImageManager listingId={listingId} />)
 
     expect(await screen.findByText(/image storage is not configured/i)).toBeTruthy()
+  })
+
+  it("accepts the same image types the API allow-list declares", () => {
+    const source = readFileSync("backend/src/common/uploads.ts", "utf8")
+    const declared = source.match(/const DEFAULT_TYPES = '([^']+)'/)?.[1]?.split(",")
+    expect(declared).toEqual([...ACCEPTED_IMAGE_TYPES])
+    expect(ACCEPTED_IMAGE_TYPES).not.toContain("image/gif")
+
+    route(/\/listings\/storage-status/, () => ({ configured: true }))
+    render(<ImageManager listingId={listingId} />)
+    const input = document.getElementById("listing-image-input") as HTMLInputElement
+    expect(input.accept.split(",")).toEqual([...ACCEPTED_IMAGE_TYPES])
+    expect(document.body.textContent).not.toMatch(/GIF/)
+  })
+
+  it.each([
+    [415, "Only JPEG, PNG, and WebP images are accepted"],
+    [413, "Image exceeds the upload size limit"],
+  ])("shows the server %s message and leaves the gallery unchanged", async (httpStatus, message) => {
+    class FakeXhr {
+      upload = { onprogress: null as ((event: { lengthComputable: number; loaded: number; total: number }) => void) | null }
+      status = httpStatus
+      responseText = JSON.stringify({ message })
+      withCredentials = false
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+      onabort: (() => void) | null = null
+      open() {}
+      setRequestHeader() {}
+      send() {
+        setTimeout(() => this.onload?.(), 0)
+      }
+    }
+    vi.stubGlobal("XMLHttpRequest", FakeXhr)
+    route(/\/listings\/storage-status/, () => ({ configured: true }))
+    const kept = {
+      id: "img-keep",
+      objectKey: `listings/${listingId}/keep.png`,
+      sortOrder: 0,
+      url: "/api/v1/media/keep",
+    }
+    render(<ImageManager listingId={listingId} initialImages={[kept]} />)
+    expect(await screen.findByAltText("Listing photo 1")).toBeTruthy()
+    const input = document.getElementById("listing-image-input") as HTMLInputElement
+    await waitFor(() => expect(input.disabled).toBe(false))
+
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff])], "photo.jpg", { type: "image/jpeg" })
+    fireEvent.change(input, {
+      target: { files: [file] },
+    })
+
+    expect(await screen.findByText(message)).toBeTruthy()
+    expect(screen.getByAltText("Listing photo 1").getAttribute("src")).toBe(kept.url)
+    expect(screen.getAllByRole("img", { name: /Listing photo/ })).toHaveLength(1)
+    expect(screen.queryByText("Image uploaded.")).toBeNull()
+    expect(calls.some((call) => call.url.includes("/manage"))).toBe(false)
   })
 })

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Avatar, StarRating, Badge, Button, Icon, ListingCard } from '../components/ui'
-import { listings, type Listing } from '../data'
+import type { Listing } from '../data'
 import { api, ApiError, readError, readStatus } from '../api/client'
 import type { ApiListing } from '../api/types'
 import { copyShareUrl, pathFor } from '../lib/paths'
+import { hasDisplayableRating } from '../lib/ratings'
 import { isUuid, listingFromApi, mediaSrc } from '../lib/view'
 
 type Page = 'listing' | 'messages' | 'profile' | 'explore'
@@ -33,11 +34,10 @@ async function loadRelated(currentId: string, categoryId?: string) {
 }
 
 export default function ListingDetail({ listingId, onNavigate }: ListingDetailProps) {
-  const fixture = listingId ? listings.find((item) => item.id === listingId) : undefined
   const fromApi = isUuid(listingId)
   const [apiListing, setApiListing] = useState<Listing | null>(null)
   const [loading, setLoading] = useState(fromApi)
-  const [loadError, setLoadError] = useState('')
+  const [loadError, setLoadError] = useState(!listingId || fromApi ? '' : 'Listing not found')
   const [activeImage, setActiveImage] = useState(0)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -51,14 +51,6 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
   const [relatedRows, setRelatedRows] = useState<Listing[]>([])
   const [relatedLoading, setRelatedLoading] = useState(fromApi)
   const [relatedError, setRelatedError] = useState('')
-
-  useEffect(() => {
-    if (fromApi) return
-    if (fixture) setSaved(fixture.saved)
-    setRelatedLoading(false)
-    setRelatedError('')
-    setRelatedRows([])
-  }, [fixture, fromApi])
 
   useEffect(() => {
     if (!fromApi || !listingId) return
@@ -126,12 +118,8 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
     }
   }, [fromApi, apiListing])
 
-  const listing = fromApi ? apiListing : fixture ?? null
-  const relatedListings = fromApi
-    ? relatedRows
-    : listing
-      ? listings.filter((item) => item.id !== listing.id).slice(0, 4)
-      : []
+  const listing = apiListing
+  const relatedListings = relatedRows
 
   useEffect(() => {
     if (!messageSent) return
@@ -144,10 +132,6 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
 
   const toggleSaved = async () => {
     if (!listing) return
-    if (!fromApi) {
-      setSaved((value) => !value)
-      return
-    }
     setSaveError('')
     try {
       const result = await api.listings.toggleFavorite(listing.id)
@@ -158,10 +142,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
   }
 
   const reportListing = async () => {
-    if (!fromApi || !listingId) {
-      setActionNote("Reporting isn't available yet.")
-      return
-    }
+    if (!listingId) return
     setActionNote('')
     try {
       await api.safety.report({ targetType: 'LISTING', targetId: listingId, reason: 'OTHER' })
@@ -174,10 +155,6 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
   const handleSendMessage = async () => {
     const body = message.trim()
     if (!body || !listing || messageSending) return
-    if (!fromApi) {
-      setMessageSent(true)
-      return
-    }
     if (!isUuid(listing.seller.id)) {
       setMessageError("This seller can't be messaged yet.")
       return
@@ -219,28 +196,15 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
   }
 
   const cover = (image: string | undefined, params: string) => mediaSrc(image, params)
-  const detailRows = fromApi
-    ? [
-        { label: 'Condition', value: listing.condition || '—' },
-        { label: 'Category', value: listing.category || '—' },
-        { label: 'Neighborhood', value: listing.neighborhood || '—' },
-        { label: 'City', value: listing.city || '—' },
-        { label: 'Pickup', value: listing.pickupAvailable ? 'Available' : 'Not available' },
-        { label: 'Delivery', value: listing.deliveryAvailable ? 'Available' : 'Not available' },
-        { label: 'Shipping', value: listing.shippingAvailable ? 'Available' : 'Not available' },
-      ]
-    : [
-        { label: 'Condition', value: listing.condition },
-        { label: 'Category', value: listing.category },
-        { label: 'Subcategory', value: listing.subcategory || 'Sofas & Couches' },
-        { label: 'Brand', value: 'West Elm' },
-        { label: 'Dimensions', value: '81" W × 33" D × 30" H' },
-        { label: 'Color', value: 'Charcoal Gray' },
-        { label: 'Material', value: 'Performance velvet' },
-        { label: 'Pet-free home', value: 'Yes' },
-        { label: 'Smoke-free', value: 'Yes' },
-        { label: 'Original price', value: '$1,299' },
-      ]
+  const detailRows = [
+    { label: 'Condition', value: listing.condition || '—' },
+    { label: 'Category', value: listing.category || '—' },
+    { label: 'Neighborhood', value: listing.neighborhood || '—' },
+    { label: 'City', value: listing.city || '—' },
+    { label: 'Pickup', value: listing.pickupAvailable ? 'Available' : 'Not available' },
+    { label: 'Delivery', value: listing.deliveryAvailable ? 'Available' : 'Not available' },
+    { label: 'Shipping', value: listing.shippingAvailable ? 'Available' : 'Not available' },
+  ]
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-32 md:pb-16">
@@ -361,8 +325,8 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
               <div className="flex flex-wrap items-center gap-4 text-sm text-[#5C6E8A]">
                 <span className="flex items-center gap-1"><Icon name="mapPin" size={13} className="text-[#B94C2A]" />{[listing.neighborhood, listing.city].filter(Boolean).join(', ')} · {listing.distance}</span>
                 <span className="flex items-center gap-1"><Icon name="calendar" size={13} />Posted {listing.postedAt}</span>
-                <span className="flex items-center gap-1"><Icon name="eye" size={13} />{fromApi ? '—' : listing.views} views</span>
-                <span className="flex items-center gap-1"><Icon name="heart" size={13} />{fromApi ? '—' : listing.saves} saves</span>
+                <span className="flex items-center gap-1"><Icon name="eye" size={13} />— views</span>
+                <span className="flex items-center gap-1"><Icon name="heart" size={13} />— saves</span>
               </div>
             </div>
 
@@ -372,11 +336,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                 <span className="text-lg">✨</span>
                 <span className="text-xs font-semibold text-[#2D6A4F] uppercase tracking-wide">Neighborly AI Summary</span>
               </div>
-              <p className="text-sm text-[#1B2A4A] leading-relaxed">
-                {fromApi
-                  ? listing.description
-                  : <>This West Elm mid-century modern sofa is in like-new condition — no stains, wear, or damage noted. The seller has 47 five-star reviews and 52 completed transactions. At $650 for a sofa that retailed at $1,299, this is priced <strong>~50% below retail</strong>, which is fair market value for this condition. Estimated value range: $550–$750.</>}
-              </p>
+              <p className="text-sm text-[#1B2A4A] leading-relaxed">{listing.description}</p>
             </div>
 
             {/* Description */}
@@ -426,7 +386,6 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                 <Icon name="shield" size={16} className="text-[#B94C2A]" />
                 <h2 className="font-semibold text-[#1B2A4A]">Neighborly Safety Check</h2>
               </div>
-              <p className="text-sm text-[#5C6E8A] mb-4">This listing passed our automated safety review. Here are nearby safe meetup spots:</p>
               <div className="grid grid-cols-2 gap-2">
                 {safeSpots.map(spot => (
                   <div key={spot} className="flex items-center gap-2 text-xs text-[#1B2A4A] bg-white rounded-lg p-2">
@@ -442,31 +401,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
             <div className="mb-6">
               <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-4">Seller reviews</h2>
               <div className="space-y-4">
-                {fromApi && (
-                  <p className="text-sm text-[#5C6E8A]">Seller reviews appear after completed exchanges.</p>
-                )}
-                {!fromApi && [
-                  { name: 'Priya P.', avatar: 'photo-1494790108755-2616b612b77c', rating: 5, date: '2 weeks ago', text: 'Marcus was super responsive, item was exactly as described. Smooth pickup!' },
-                  { name: 'James R.', avatar: 'photo-1507003211169-0a1dd7228f2d', rating: 5, date: '1 month ago', text: 'Great seller, fair price, very easy transaction. Would definitely buy from him again.' },
-                  { name: 'Sofia M.', avatar: 'photo-1534528741775-53994a69daeb', rating: 4, date: '6 weeks ago', text: 'Sold me a great desk. Took a bit to schedule pickup but once we did it was totally smooth.' },
-                ].map(review => (
-                  <div key={review.name} className="bg-white rounded-2xl border border-[#E8E6DF] p-4">
-                    <div className="flex items-start gap-3">
-                      <Avatar src={review.avatar} name={review.name} size="sm" />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-sm text-[#1B2A4A]">{review.name}</p>
-                          <span className="text-[#5C6E8A] text-xs">·</span>
-                          <span className="text-xs text-[#5C6E8A]">{review.date}</span>
-                        </div>
-                        <div className="flex mb-1">
-                          {[...Array(review.rating)].map((_, i) => <span key={i} className="text-[#F59E0B] text-xs">★</span>)}
-                        </div>
-                        <p className="text-sm text-[#5C6E8A]">{review.text}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                <p className="text-sm text-[#5C6E8A]">Seller reviews appear after completed exchanges.</p>
               </div>
             </div>
 
@@ -538,7 +473,7 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                     <p className="font-semibold text-[#1B2A4A]">{listing.seller.name}</p>
                     <p className="text-xs text-[#5C6E8A]">{listing.seller.neighborhood}{listing.seller.memberSince ? ` · Member since ${listing.seller.memberSince}` : ''}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      {listing.seller.rating > 0 && (
+                      {hasDisplayableRating(listing.seller.rating, listing.seller.reviews) && (
                         <StarRating rating={listing.seller.rating} count={listing.seller.reviews} size="xs" />
                       )}
                     </div>
@@ -547,15 +482,15 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
 
                 <div className="grid grid-cols-3 gap-2 mb-4">
                   <div className="bg-[#F5F4EF] rounded-xl p-2 text-center">
-                    <p className="font-bold text-[#1B2A4A] text-sm">{fromApi ? '—' : listing.seller.transactions}</p>
+                    <p className="font-bold text-[#1B2A4A] text-sm">—</p>
                     <p className="text-[9px] text-[#5C6E8A]">Sales</p>
                   </div>
                   <div className="bg-[#F5F4EF] rounded-xl p-2 text-center">
-                    <p className="font-bold text-[#1B2A4A] text-sm">{fromApi || !listing.seller.responseTime ? '—' : listing.seller.responseTime}</p>
+                    <p className="font-bold text-[#1B2A4A] text-sm">—</p>
                     <p className="text-[9px] text-[#5C6E8A]">Response</p>
                   </div>
                   <div className="bg-[#F5F4EF] rounded-xl p-2 text-center">
-                    <p className="font-bold text-[#2D6A4F] text-sm">{fromApi ? '—' : '4.9★'}</p>
+                    <p className="font-bold text-[#2D6A4F] text-sm">—</p>
                     <p className="text-[9px] text-[#5C6E8A]">Rating</p>
                   </div>
                 </div>
@@ -563,7 +498,6 @@ export default function ListingDetail({ listingId, onNavigate }: ListingDetailPr
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {listing.seller.verified && <Badge variant="green" size="sm">✓ Email verified</Badge>}
                   {listing.seller.idVerified && <Badge variant="green" size="sm">🪪 ID verified</Badge>}
-                  {!fromApi && <Badge variant="blue" size="sm">⚡ Fast replies</Badge>}
                 </div>
 
                 <button onClick={() => onNavigate('profile', isUuid(listing.seller.id) ? listing.seller.id : undefined)} className="w-full py-2 text-sm font-medium text-[#2D6A4F] border border-[#2D6A4F]/30 rounded-xl hover:bg-[#F0FBF3] transition-colors">

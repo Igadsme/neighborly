@@ -98,9 +98,28 @@ describe("inert controls", () => {
     await waitFor(() => expect(screen.queryByText("Verified sellers")).toBeNull())
   })
 
-  it("keeps the listing video tile in place and marked coming soon", () => {
-    render(<ListingDetail listingId="l1" onNavigate={() => undefined} />)
-    const video = screen.getByRole("button", { name: /video/i })
+  it("keeps the listing video tile in place and marked coming soon", async () => {
+    const id = "44444444-4444-4444-8444-444444444444"
+    route((url) => {
+      if (url.includes(`/listings/${id}`)) {
+        return json({
+          id,
+          title: "Oak chair",
+          description: "Solid oak dining chair from a neighbor.",
+          priceCents: 4500,
+          condition: "Good",
+          neighborhood: "Inman Park",
+          city: "Atlanta",
+          createdAt: "2026-09-01T00:00:00.000Z",
+          seller: { id: "22222222-2222-4222-8222-222222222222", profile: { displayName: "Ada L" } },
+          images: [],
+        })
+      }
+      if (url.includes("/listings")) return json({ items: [], total: 0, limit: 8, offset: 0 })
+      return json([])
+    })
+    render(<ListingDetail listingId={id} onNavigate={() => undefined} />)
+    const video = await screen.findByRole("button", { name: /video/i })
     expect((video as HTMLButtonElement).disabled).toBe(true)
     expect(video.textContent).toMatch(/coming soon/i)
     const offer = screen.getAllByRole("button", { name: /make an offer/i })[0]
