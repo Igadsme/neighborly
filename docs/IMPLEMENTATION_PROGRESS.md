@@ -49,9 +49,9 @@ Status values: `not started`, `in progress`, `blocked`, `done`. `done` requires 
 | BL-023 | Package name and Figma shell | not started | |
 | BL-024 | Tracked smoke PNGs | blocked | Owner must agree to remove them |
 | BL-025 | Inactive controls | not started | |
-| BL-026 | PostGIS or honest radius | in progress | Migration 0015, `ST_DWithin`, and integration specs are in this branch. PostGIS proof is the CI integration job. Not done until that job passes. |
+| BL-026 | PostGIS or honest radius | done | CI integration job on `68390c5` passed (`ST_DWithin`, GiST indexes, fresh and pre-0015 upgrade). Run `39202620698`. The first run failed because the suite reset truncated `spatial_ref_sys`; that reset now keeps extension tables. |
 | BL-027 | Backup rehearsal | not started | Acceptance needs Docker. Not a pass today |
-| BL-028 | Vertical integration specs | in progress | Housing, jobs, services, and community integration specs are in this branch and run in the CI integration job. Not done until that job passes. Mock HTTP specs stay. |
+| BL-028 | Vertical integration specs | done | Housing, jobs, services, and community integration specs ran in CI integration job `39202620698` on `68390c5`, which passed. Mock HTTP specs stay. |
 | BL-029 | Journey and security probes | not started | Did not run. Not a pass |
 | BL-030 | Axe harness | not started | Did not run. Not a pass |
 | BL-031 | braces dev advisory | not started | No patched release. Production audit is already clean |
