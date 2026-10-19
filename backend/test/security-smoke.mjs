@@ -1,5 +1,5 @@
 const baseUrl = process.env.API_URL ?? 'http://localhost:3000/api/v1'
-const password = 'Neighborly security test password 2026!'
+const password = 'NeighborlySecurity2026!'
 
 const assert = (condition, message) => { if (!condition) throw new Error(message) }
 async function call(path, options = {}) {
@@ -14,7 +14,10 @@ async function call(path, options = {}) {
 async function main() {
   const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`
   const registration = await call('/auth/register', { method: 'POST', body: { email: `security-${id}@neighborly.test`, password, firstName: 'Security', lastName: 'Test', neighborhood: 'QA', city: 'New York', state: 'NY' } })
-  assert(registration.response.ok && registration.payload.accessToken, 'registration did not issue an access token')
+  assert(
+    registration.response.ok && registration.payload?.accessToken,
+    `registration did not issue an access token (status ${registration.response.status}: ${JSON.stringify(registration.payload)})`
+  )
   const token = registration.payload.accessToken
 
   const missingAuth = await call('/users/me')
