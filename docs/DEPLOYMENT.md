@@ -26,9 +26,9 @@ Also required when `NODE_ENV=production`:
 | `TRUST_PROXY` | `1` or `0`. Use `1` only when the proxy overwrites `X-Forwarded-For`. |
 | `JWT_SECRET` | Must not be a placeholder (`change-me`, `replace-with`, …) and must not be low-diversity. |
 
-Optional variables and their defaults are listed in `env.example`. A partial S3 set (some of endpoint, bucket, access key, secret key) fails boot. `SENTRY_DSN`, when set, must be `https`. Payments, maps, refresh tokens, and object storage are not called by this release.
+Optional variables and their defaults are listed in `env.example`. A partial S3 set (some of endpoint, bucket, access key, secret key) fails boot. `SENTRY_DSN`, when set, must be `https`. Payments and maps are not called by this release. Refresh tokens are httpOnly cookies. Listing image upload calls object storage when the S3 set is complete.
 
-Production does not serve Swagger. The process does not set cookies. Access tokens travel in `Authorization: Bearer` only.
+Production does not serve Swagger. Access tokens travel in `Authorization: Bearer`. The refresh token is an httpOnly cookie.
 
 The block below is the older target inventory for services that are not wired yet. It is not the boot contract. Do not copy placeholder secrets into a production environment.
 
@@ -92,55 +92,18 @@ ENABLE_MAPS=true
 
 ## 3. Containerized runtime
 
-Use Docker Compose with the following services:
+The committed Compose file is the contract. It is not the sketch below.
 
-- `app` – NestJS API server
-- `postgres` – PostgreSQL with PostGIS extension
-- `redis` – cache, queue, rate-limit store, session cache
-- `minio` – S3-compatible object storage
-- `pgadmin` or `supabase` optional admin tool for local development
+Dev `docker compose up -d` starts only:
 
-A simple deployment topology:
+- `postgres` – PostGIS 16, published on `127.0.0.1:5432`
+- `redis` – AOF on, published on `127.0.0.1:6379`
 
-```yaml
-services:
-  app:
-    build: .
-    ports:
-      - '3000:3000'
-    env_file:
-      - .env
-    depends_on:
-      - postgres
-      - redis
-      - minio
+There is no API container in that default project. The API runs on the host with `pnpm start:dev`.
 
-  postgres:
-    image: postgis/postgis:16-3.4
-    environment:
-      POSTGRES_DB: neighborly
-      POSTGRES_USER: neighborly
-      POSTGRES_PASSWORD: neighborly
-    ports:
-      - '5432:5432'
+The `staging` profile adds its own Postgres (`127.0.0.1:5433`), Redis (`127.0.0.1:6380`), rustfs object store (`rustfs/rustfs:1.0.1` on `127.0.0.1:9000`, Compose service name `minio`), the API, the web image, and Caddy. See `docker-compose.yml` and `docs/PHASE_5_STAGING.md`. Do not publish the dev database ports on `0.0.0.0`.
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - '6379:6379'
-
-  minio:
-    image: minio/minio
-    command: server /data --console-address ':9001'
-    environment:
-      MINIO_ROOT_USER: neighborly
-      MINIO_ROOT_PASSWORD: neighborly-secret
-    ports:
-      - '9000:9000'
-      - '9001:9001'
-```
-
-The Compose file in the repo is the local dev database (`postgres`, `redis`) plus a `staging` profile. Dev `docker compose up -d` is unchanged. Staging is documented in section 8 and in `docs/PHASE_5_STAGING.md`.
+History API paths need a fallback to `index.html`. Staging Caddy (`deploy/staging/Caddyfile`) sends `/api` and `/socket.io` to the API and `/assets` plus every other path to nginx. nginx (`deploy/staging/nginx.conf`) serves real files and falls back to `index.html` only for unknown extensionless paths. `deploy/production/Caddyfile` is the same split for a future host. The production workflow does not read it and still refuses. `vite preview` uses the same rule.
 
 ## 4. CI/CD expectations
 
@@ -157,7 +120,7 @@ This checklist is not satisfied by Phase 4, Phase 5, Phase 6, or the Phase 7 pre
 
 - Postgres backups scheduled and tested. Local Compose procedure: `scripts/backup-postgres.sh` and `scripts/restore-postgres.sh` (see below).
 - Redis persistence and failover configured. Compose Redis runs with AOF so local counters survive a restart. Redis is not the source of truth. A lost Redis only resets rate-limit counters.
-- Object storage lifecycle rules set for uploaded images and documents. No upload route is mounted yet.
+- Object storage lifecycle rules set for uploaded images and documents. Listing image upload is mounted. A production bucket is not configured in this repo.
 - Sentry DSN configured and error alerts enabled. `captureException` logs today and is the forwarding hook. The SDK is not bundled.
 - Stripe webhook ingress validated and secret-rotated. Payments are not wired.
 - Email provider integrated with transactional templates. Email is not wired.
@@ -212,7 +175,7 @@ This approach keeps the first release stable while leaving room for scaling and 
 
 Phase 5 runs staging on this machine. The record, the health results, and the product-owner blockers are in `docs/PHASE_5_STAGING.md`. Release readiness is not claimed.
 
-`scripts/staging-up.sh` starts the `staging` profile: API, frontend, PostGIS, Redis, MinIO, and Caddy. The template is `env.staging.example`. Copy it to `.env.staging`. That file is gitignored. The script fills an empty `JWT_SECRET` and does not print it. Do not commit a staging or production secret.
+`scripts/staging-up.sh` starts the `staging` profile: API, frontend, PostGIS, Redis, rustfs, and Caddy. The template is `env.staging.example`. Copy it to `.env.staging`. That file is gitignored. The script fills an empty `JWT_SECRET` and does not print it. Do not commit a staging or production secret.
 
 | Surface | URL |
 | --- | --- |

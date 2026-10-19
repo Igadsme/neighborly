@@ -6,7 +6,7 @@ Product Owner Imani Gad must replace this file with text a lawyer has reviewed b
 
 ## What counsel needs to cover
 
-Neighborly is a request-first local marketplace. People create accounts, post listings and requests, make offers, message, move a transaction through statuses, and review each other. Housing, jobs, services, and community posts are in the same product. v1 does not take payment inside the app, does not upload images, and does not call an AI model.
+Neighborly is a request-first local marketplace. People create accounts, post listings and requests, make offers, message, move a transaction through statuses, and review each other. Housing, jobs, services, and community posts are in the same product. v1 does not take payment inside the app and does not call an AI model. Listing images can be uploaded. This placeholder is not a claim about what a lawyer-reviewed agreement will say.
 
 A real terms document has to decide, at least:
 

@@ -12,10 +12,10 @@ This list is for counsel. It is not a disclosure to users.
 - Marketplace rows the user creates: listings, requests, offers, messages, transactions, reviews
 - Housing, jobs, services, and community rows, including applications and quotes
 - Safety rows: reports, blocks, moderation actions
-- Access token: HS256 bearer token. No refresh token and no cookie is set. The browser keeps the access token in its own storage
+- Access token: HS256 bearer token kept in the browser's `localStorage`. Refresh token: httpOnly cookie. A CSRF cookie is also set.
 - Server logs: JSON lines. `http.request` omits the query string. `auth.login.failure` includes the submitted email. Treat logs as sensitive
 
-The API does not call a payment processor, an email provider, Mapbox, or an AI model. No upload route is mounted, so no image bytes are stored. Public listing and profile reads do not return `passwordHash`, an email field, or listing coordinates (Phase 6).
+The API does not call a payment processor, an email provider, Mapbox, or an AI model. Listing image bytes are stored when object storage is configured. Public listing and profile reads do not return `passwordHash`, an email field, or listing coordinates (Phase 6).
 
 ## What counsel needs to decide
 

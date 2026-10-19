@@ -3,7 +3,7 @@
 Date: 2026-10-19
 Baseline: `dc761e51864e03a57c056b4bb2068c6362ced40b` on `main`
 Source: `docs/ENGINEERING_TAKEOVER_AUDIT.md`
-State: no item below has been implemented. This file is the queue, not a progress log. Progress lives in `docs/IMPLEMENTATION_PROGRESS.md`.
+State: BL-001 through BL-010 are merged on `main` (`12540f8`, PRs #29, #30, and #31). This file stays the queue. It is not a progress log. Progress lives in `docs/IMPLEMENTATION_PROGRESS.md`. Rows below keep their original acceptance text.
 
 ## How to read a row
 

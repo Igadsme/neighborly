@@ -226,6 +226,11 @@ jobs:
   # in a deployed container, and gating on it would block releases for a
   # finding that cannot be exploited. The full audit including devDependencies
   # runs in the same step as a non-blocking report so the drift stays visible.
+  #
+  # braces@3.0.3 (GHSA-vfj7-8cjw-p6xm / CVE-2026-93687) is still the latest
+  # npm release and the advisory names no patched version. It is dev-only,
+  # via Jest's micromatch. Do not ignore it. When a patched release exists,
+  # move the lockfile to it so the full audit exits 0.
   security-audit:
     name: Dependency security audit
     runs-on: ubuntu-latest

@@ -57,23 +57,13 @@ limits.
 `scripts/run-storage-tests.sh` starts a disposable PostgreSQL and a disposable
 S3-compatible object store, applies all migrations, runs both storage suites,
 and removes both containers on exit. It never touches the development Compose
-stack, the staging MinIO, or any production host.
+stack, the staging rustfs volume, or any production host.
 
 ```bash
 ./scripts/run-storage-tests.sh
 ```
 
-**Note on the object store image.** This environment cannot pull
-`quay.io/minio/minio` or `minio/minio` from its registry mirror. The script
-therefore defaults to `rustfs/rustfs`, which implements the MinIO API and
-passed every test. Where MinIO is reachable, use it unchanged:
-
-```bash
-S3_IMAGE=quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z ./scripts/run-storage-tests.sh
-```
-
-No application code differs between the two: the storage layer speaks the S3
-API.
+**Object store image.** `scripts/run-storage-tests.sh`, the storage CI job, and the staging Compose profile all use `rustfs/rustfs:1.0.1`. `minio/minio` was withdrawn from Docker Hub, and `quay.io/minio` is not anonymously pullable. Do not point staging back at that pin. The storage layer speaks the S3 API (path-style, `us-east-1`).
 
 ## Configuration
 

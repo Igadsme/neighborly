@@ -32,8 +32,8 @@ A local Compose outage on an operator laptop is Sev-3 unless that stack is the o
 | --- | --- | --- |
 | Postgres | Users, listings, messages, transactions, reports | Restore a dump. There is no point-in-time recovery on Compose |
 | Redis | Rate-limit counters | Counters reset. Do not treat Redis as a backup of the database |
-| MinIO on staging | Empty media bucket. No upload route writes it | Recreate the bucket. Do not restore it as user data |
-| Browser `localStorage` token | Access token only | The user signs in again. No server session table exists |
+| rustfs on staging (Compose service `minio`) | Listing image objects when S3 is configured. The volume name is `neighborly-staging-minio`. Do not delete it with `down -v` | Recreate the bucket only when the objects are disposable. Do not treat that volume as a Postgres backup |
+| Browser `localStorage` token | Access token. Refresh sessions are rows in Postgres and an httpOnly cookie | The user signs in again. Revoking refresh sessions is the server-side logout |
 
 `auth.login.failure` logs include the email address. Do not paste raw logs into a public channel.
 

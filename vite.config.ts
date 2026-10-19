@@ -2,6 +2,7 @@ import { defineConfig, loadEnv, type HtmlTagDescriptor, type Plugin } from 'vite
 import { LOCALHOST_API_URL, productionApiUrlProblem } from './src/api/require-api-url'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import fs from 'node:fs'
 import path from 'node:path'
 
 import siteConfiguration from './.figma/make/site.json'
@@ -17,6 +18,8 @@ export default defineConfig(({ mode }) => {
       sourcemap: emitSourcemaps ? 'inline' : false,
       minify: !emitSourcemaps,
     },
+    // History API routes fall back to index.html. Asset and API paths do not.
+    appType: 'spa',
     plugins: [
       react(),
       tailwindcss(),
@@ -25,6 +28,7 @@ export default defineConfig(({ mode }) => {
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
       figmaMakeKitPlugin({ storiesGlob: '/src/**/*.stories.{ts,tsx,js,jsx}' }),
+      previewSpaFallback(),
     ],
     resolve: {
       alias: {
@@ -50,6 +54,8 @@ export default defineConfig(({ mode }) => {
       // Without this proxy `vite preview` cannot reproduce that topology, so
       // realtime connections fail the handshake and the browser suite cannot
       // verify authenticated realtime behaviour.
+      // previewSpaFallback() answers unknown non-API paths with index.html
+      // and leaves /api, /socket.io, and real asset files on their own paths.
       proxy: {
         '/api': { target: 'http://127.0.0.1:3001', changeOrigin: true },
         '/socket.io': { target: 'http://127.0.0.1:3001', changeOrigin: true, ws: true },
@@ -364,6 +370,55 @@ function figmaReactRefreshBoundaryFallback(): Plugin {
  * builds (`vite build`) skip it entirely so the route doesn't leak
  * into shipped bundles.
  */
+const PREVIEW_ASSET_EXTENSION =
+  /\.(?:js|mjs|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|json|txt|xml|webmanifest)$/i
+
+/**
+ * `vite preview` already falls back to index.html for SPA navigations.
+ * That fallback also rewrites a missing asset when the browser sends
+ * `Accept: *\/*`, so a stale hash would be executed as HTML. Missing
+ * assets and API prefixes end here instead: assets 404, and `/api` plus
+ * `/socket.io` fall through to the preview proxy.
+ */
+function previewSpaFallback(): Plugin {
+  return {
+    name: 'neighborly-preview-spa-fallback',
+    configurePreviewServer(server) {
+      const distDir = path.resolve(server.config.root, server.config.build.outDir)
+      server.middlewares.use((req, res, next) => {
+        if (req.method !== 'GET' && req.method !== 'HEAD') return next()
+        const pathname = (req.url ?? '/').split('?')[0] || '/'
+        if (
+          pathname === '/api' ||
+          pathname.startsWith('/api/') ||
+          pathname === '/socket.io' ||
+          pathname.startsWith('/socket.io/')
+        ) {
+          return next()
+        }
+        const isAsset = pathname.startsWith('/assets/') || PREVIEW_ASSET_EXTENSION.test(pathname)
+        if (!isAsset) return next()
+
+        const relative = pathname.replace(/^\/+/, '')
+        const file = path.resolve(distDir, relative)
+        const rootWithSep = distDir.endsWith(path.sep) ? distDir : distDir + path.sep
+        if (file !== distDir && !file.startsWith(rootWithSep)) {
+          res.statusCode = 400
+          res.end()
+          return
+        }
+        if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
+          res.statusCode = 404
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+          res.end('Not found')
+          return
+        }
+        next()
+      })
+    },
+  }
+}
+
 function figmaMakeKitPlugin(options: { storiesGlob: string | string[] }): Plugin {
   const storiesGlob = Array.isArray(options.storiesGlob) ? options.storiesGlob : [options.storiesGlob]
   const ROUTE = '/.figma/make/kit.html'

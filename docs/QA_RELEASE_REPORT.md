@@ -1,5 +1,51 @@
 # QA and release report
 
+## Orbit lane, 19 Oct 2026
+
+Branch `cursor/orbit-devops-p1-7a93`, parent `12540f8`. This section is only the commands that ran on that working tree. The takeover section below is still the `dc761e5` audit and is not a result for this branch.
+
+Node v22.14.0. pnpm 10.34.3. Docker daemon: not installed. Compose config used the standalone Compose v2.40.3 binary.
+
+| Command | Exit | Count |
+| --- | --- | --- |
+| Root `pnpm install --frozen-lockfile` | 0 | 315 packages |
+| Root `pnpm lint` | 0 | |
+| Root `pnpm exec tsc --noEmit` | 0 | |
+| Root `pnpm test` | 0 | 266 passed, 25 files. None skipped |
+| Root `pnpm build` with `VITE_API_URL=https://api.neighborly.invalid/api/v1` | 0 | Built title is "Neighborly — Your local community marketplace". Robots meta is `noindex, nofollow` |
+| Backend `pnpm install --frozen-lockfile` | 0 | |
+| Backend `pnpm exec prisma generate` | 0 | |
+| Backend `pnpm exec prisma validate` with `DATABASE_URL` set and no server contacted | 0 | |
+| Backend `pnpm lint` | 0 | |
+| Backend `pnpm exec tsc --noEmit` | 0 | |
+| Backend `pnpm test` | 0 | 321 passed, 41 suites. None skipped |
+| Backend `pnpm build` | 0 | |
+| Root `pnpm audit --prod --audit-level=moderate` | 0 | |
+| Root `pnpm audit` | 0 | |
+| Backend `pnpm audit --prod --audit-level=moderate` | 0 | |
+| Backend `pnpm audit` | 1 | 1 high: `braces` `<=3.0.3`, patched versions `<0.0.0`, path `@types/jest → expect → jest-message-util → micromatch → braces`. GHSA-vfj7-8cjw-p6xm |
+| `docker compose config` (default project) | 0 | Postgres and Redis `host_ip` `127.0.0.1` |
+| `docker compose --profile staging config` | 0 | Image `rustfs/rustfs:1.0.1`. No `quay.io/minio` |
+
+`vite preview` on `127.0.0.1:4173` after that build:
+
+| Request | Result |
+| --- | --- |
+| `GET /listings/example-id` | 200, SPA shell (`id="root"`) |
+| `GET /not-a-real-page` | 200, SPA shell |
+| `GET /assets/does-not-exist.js` | 404, body `Not found` |
+| `GET /assets/index-vyWh-vny.js` | 200, `Content-Type: text/javascript` |
+| `GET /assets/index-B321tU8Z.css` | 200 |
+| `GET /api/v1/health` | 502 from the preview proxy. Body was not the shell. No API was running |
+| `GET /socket.io/?EIO=4&transport=polling` | 502. Body was not the shell |
+| `GET /robots.txt` | 200, `User-agent: *` / `Disallow: /` |
+
+These did not run, and are not passes: staging Compose boot, nginx and Caddy inside containers, `scripts/run-integration-tests.sh`, `scripts/run-storage-tests.sh`, backup and restore, journey probes, and the browser axe harness.
+
+Verdict for this lane: **not a release sign-off.**
+
+## Takeover audit (unchanged record)
+
 Date: 2026-10-19
 SHA under test: `dc761e51864e03a57c056b4bb2068c6362ced40b` (`main`)
 Report branch: `cursor/takeover-audit-m1n2`

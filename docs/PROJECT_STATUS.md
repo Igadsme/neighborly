@@ -1,12 +1,14 @@
 # Project Status
 
+**19 Oct 2026 — `main` at `12540f8`.** Milestones 1–12 are in this tree. BL-001 through BL-010 are merged (PRs #29, #30, and #31). Screens are History API paths in `src/lib/paths.ts`, not only in-memory page ids. The app is not launched. The dated notes below are the earlier board; where they disagree with this paragraph, this paragraph is the current contract. Progress after the takeover audit is `docs/IMPLEMENTATION_PROGRESS.md`.
+
 **12 Oct 2026 — Milestone 7 (Neighborly Borrow & Lending).** Borrowable items on the existing listing model, an explicit borrowing lifecycle, server-enforced double-booking prevention via a partial GiST exclusion constraint, two-sided pickup and return confirmation, extensions, an idempotent overdue sweep, condition reports, and a dispute workflow with private evidence. `docs/MILESTONE_7_NEIGHBORLY_BORROW.md`.
 
 **12 Oct 2026 — Milestone 6 (messaging, realtime & notifications).** Durable outbox consumer, persisted notifications with enforced preferences, saved-search alerts, realtime unread counts and read receipts over the existing Socket.IO gateway, and the notification center, preferences, and saved-search editing UI. Completes the saved-search deferral from Milestone 4. `docs/MILESTONE_6_MESSAGING_NOTIFICATIONS.md`.
 
 **12 Oct 2026 — Milestone 5 (I need request & matching engine).** Request lifecycle with a declared state machine, server-side request discovery, a deterministic explainable matching engine, expanded offer management, atomic acceptance that also fulfils the request, and the typed domain-event contract plus transactional outbox that Milestone 6 consumes. `docs/MILESTONE_5_REQUEST_MATCHING.md`.
 
-**12 Oct 2026 — Milestone 3 (authentication & user accounts).** Registration hardening, email verification, password recovery, refresh-token rotation with reuse detection, session management, account settings, email change, anonymizing account deletion, and suspension enforcement across REST and realtime landed on `milestone3-authentication-user-accounts`. Requirements, evidence, and verification runs: `docs/MILESTONE_3_AUTHENTICATION.md`. Email delivery has **no provider configured** (`docs/EMAIL_DELIVERY.md`); avatar upload is not available.
+**12 Oct 2026 — Milestone 3 (authentication & user accounts).** Registration hardening, email verification, password recovery, refresh-token rotation with reuse detection, session management, account settings, email change, anonymizing account deletion, and suspension enforcement across REST and realtime landed on `milestone3-authentication-user-accounts`. Requirements, evidence, and verification runs: `docs/MILESTONE_3_AUTHENTICATION.md`. Email delivery has **no provider configured** (`docs/EMAIL_DELIVERY.md`). Listing image upload is mounted; a separate avatar upload is not.
 
 **12 Oct 2026 — Milestone 2 (database, security, data integrity).** Atomic offer acceptance, transaction concurrency safety, request privacy, a guarded migration adding unique `Transaction.offerId`, a production category bootstrap, auth/WebSocket hardening, and isolated PostgreSQL integration tests landed on `milestone2-database-security-integrity`. Requirements, evidence, and verification runs: `docs/MILESTONE_2_DATABASE_SECURITY_INTEGRITY.md`.
 
@@ -19,7 +21,7 @@ The June Sprint 1 notes below are the handoff from `d0dab1c`. Where they disagre
 ## Source of truth
 
 - **Visual source of truth:** the Figma-generated React screens under `src/pages` and `src/components`. Layout, color, type, and component structure stay as generated.
-- **App shell:** Vite + React 19 + Tailwind CSS v4. Page changes are client state in `src/App.tsx` (`page` ids), not a URL router. That shell stays.
+- **App shell:** Vite + React 19 + Tailwind CSS v4. `src/App.tsx` still switches screens by page id, and each addressable screen has a History API path (`src/lib/paths.ts`) that survives refresh. Unknown paths render the 404 screen.
 - **Backend:** NestJS modular monolith under `backend/`, Prisma/PostgreSQL, global prefix `/api/v1`, Swagger at `/docs`.
 - **June Sprint 1 write scope was** `docs/` only. Sprint 2 added `backend/` persistence for housing, jobs, services, and community. The wiring pass points the existing Figma pages at those routes. It does not add page ids or a new visual design.
 
@@ -44,7 +46,7 @@ June's Sprint 1 deliverable is the orchestration and UX-state docs Nova needs to
 
 Implemented and reachable in code:
 
-- Auth: `POST /api/v1/auth/register`, `POST /api/v1/auth/login` (Argon2, JWT access token only).
+- Auth: `POST /api/v1/auth/register`, `POST /api/v1/auth/login` (Argon2). The access token is a bearer JWT. Refresh tokens are httpOnly cookies.
 - Session read: `GET /api/v1/users/me`. Onboarding write: `PATCH /api/v1/users/me/onboarding`.
 - Categories: `GET /api/v1/categories` (seed list in `backend/prisma/seed.ts`), plus `listingCount` for published listings. The Featured in Atlanta strip loads `GET /api/v1/listings` with `status=PUBLISHED` and `limit=6`.
 - Listings: list, get (drafts hidden), create (`PUBLISHED`), `POST /listings/drafts`, `POST /listings/:id/publish`, owner update, owner archive, favorite toggle, favorites list, saved searches. `ListingStatus.DRAFT` was already in `0001_init`; this pass did not add a migration.
@@ -80,14 +82,14 @@ State-by-state wiring instructions are in `docs/UX_REQUEST_FLOW_STATES.md`.
 
 Signed-out visitors can open `landing` and `onboarding`. Any other id shows the existing "Sign in to continue" gate. `Navigation` is hidden on `landing` and `onboarding`. When a session is present, the message badge reads `GET /conversations` and passes that unread-thread count into `Navigation`. It is 0 (badge hidden) when nothing is unread, the caller is signed out, or the list returns 401. The old hardcoded `2` is gone. There is still no notification-list route. Landing header Browse, Services, Housing, Jobs, and "Post a Listing" open the sign-in dialog. They do not jump into signed-in pages. Get started still opens onboarding. Login still calls `POST /auth/login`. The app is not release-complete. Docker Compose, migrate, seed, and signed-in browser e2e stay blocked because Docker Desktop is not installed on this Mac.
 
-`listing` loads `GET /listings/:id` when the selected id is a UUID. Similar listings come from `GET /listings` (same category, or recent published when that category has no other row). The seller link passes that seller's user id into `profile`. Non-UUID navigation still falls back to fixture listings. There is no selected-id route in the URL bar; `App` holds `listingId` and an optional profile user id in state. Message on a UUID listing calls `POST /conversations`. Negotiate, reserve, report, and share on this screen do not call the API. The screen does not paint mark sold, promote, or archive, so those owner routes are not hooked up here. Listing Detail is not a release-complete claim. Docker Compose, migrate, seed, and signed-in browser e2e stay blocked because Docker Desktop is not installed on this Mac.
+`listing` loads `GET /listings/:id` when the path is `/listings/:id`. Similar listings come from `GET /listings` (same category, or recent published when that category has no other row). The seller link passes that seller's user id into `profile` (`/profile/:id`). Message on a listing calls `POST /conversations`. Negotiate and reserve stay local. A UUID listing report calls `POST /safety/reports`. Share copies the listing path. Owner pause and mark-sold live on Dashboard and My Listings, not on this public screen. Listing Detail is not a release-complete claim.
 
 ## Nova handoff
 
 1. Read `docs/DECISIONS.md` before changing behavior.
 2. Wire only the states in `docs/UX_REQUEST_FLOW_STATES.md`. Do not add page ids, routes, or layouts.
 3. Treat `docs/API_SPEC.md` and `docs/DATABASE_DESIGN.md` **IMPLEMENTED** sections as the contract that exists. **TARGET** sections are not permission to pretend the UI is persisted.
-4. Where a control has no endpoint (Pause, Promote, Mark sold, Save draft, profile follow, the Messages plus button), keep the control and surface the existing error treatment when a call is attempted. Do not flip local fixture state and call it success. Listing Detail message send for a UUID listing is the exception that now calls `POST /conversations`.
+4. Where a control has no endpoint (Promote, profile follow, the Messages plus button), keep the control and surface the existing error treatment when a call is attempted. Do not flip local fixture state and call it success. Pause, mark sold, save draft, and Listing Detail message send call the API.
 5. Leave Figma sample copy and the AI Review step on the Create Listing wizard. Do not call a model.
 
 ## Explicitly not in this status
