@@ -29,7 +29,17 @@ export default function ReportQueue() {
     setError(null)
     setForbidden(false)
     try {
-      setReports(await api.moderation.reports(status))
+      if (status === "OPEN") {
+        setReports(await api.moderation.reports("OPEN"))
+      } else {
+        const [resolved, dismissed] = await Promise.all([
+          api.moderation.reports("RESOLVED"),
+          api.moderation.reports("DISMISSED"),
+        ])
+        setReports(
+          [...resolved, ...dismissed].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+        )
+      }
     } catch (cause) {
       setReports([])
       if (cause instanceof ApiError && cause.status === 403) {
@@ -53,7 +63,7 @@ export default function ReportQueue() {
       await api.moderation.act(id, { kind, ...(note.trim() ? { note: note.trim() } : {}) })
       setNotice(
         kind === "HIDE"
-          ? "Report hidden."
+          ? "Content hidden."
           : kind === "SUSPEND_USER"
             ? "Account suspended."
             : "Account restored.",

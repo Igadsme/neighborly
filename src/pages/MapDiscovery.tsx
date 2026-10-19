@@ -344,6 +344,7 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
             </div>
           </div>
           <select
+            aria-label="Sort listings"
             value={sort}
             onChange={(event) => setSort(event.target.value)}
             className="w-full h-9 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none"

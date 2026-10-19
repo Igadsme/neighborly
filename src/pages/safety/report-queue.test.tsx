@@ -68,8 +68,34 @@ describe("report queue", () => {
     await waitFor(() =>
       expect(calls.some((call) => call.method === "POST" && call.body?.includes('"kind":"HIDE"'))).toBe(true),
     )
+    expect(await screen.findByText("Content hidden.")).toBeTruthy()
+    expect(screen.queryByText("Report hidden.")).toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "Suspend" }))
     expect(await screen.findByText("This action does not apply to that report")).toBeTruthy()
+  })
+
+  it("lists dismissed reports on the Resolved tab", async () => {
+    const calls: string[] = []
+    const dismissed = {
+      ...report,
+      id: "report-2",
+      status: "DISMISSED",
+      details: "Dismissed spam.",
+      createdAt: "2026-10-02T12:00:00.000Z",
+    }
+    route((url) => {
+      calls.push(url)
+      if (url.includes("status=DISMISSED")) return json([dismissed])
+      if (url.includes("status=RESOLVED")) return json([])
+      return json([report])
+    })
+    render(<ReportQueue />)
+    expect(await screen.findByText("Repeated unwanted posts.")).toBeTruthy()
+    expect(screen.queryByText("Dismissed spam.")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Resolved" }))
+    expect(await screen.findByText("Dismissed spam.")).toBeTruthy()
+    expect(calls.some((url) => url.includes("status=DISMISSED"))).toBe(true)
+    expect(calls.some((url) => url.includes("status=RESOLVED"))).toBe(true)
   })
 
   it("shows the report queue link only after the staff probe returns a list", async () => {

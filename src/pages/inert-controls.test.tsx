@@ -52,6 +52,7 @@ describe("inert controls", () => {
     expect(locate.textContent).toMatch(/coming soon/i)
     expect(screen.queryByText("Within 5 miles of Inman Park")).toBeNull()
     expect(screen.queryByRole("option", { name: "Sort: Most popular" })).toBeNull()
+    expect(screen.getByRole("combobox", { name: "Sort listings" })).toBeTruthy()
 
     const filters = document.getElementById("map-filter-chips")
     expect(filters).toBeTruthy()

@@ -173,6 +173,7 @@ export default function Jobs() {
 
             <div className="ml-auto">
               <select
+                aria-label="Experience level"
                 value={activeLevel}
                 onChange={e => setActiveLevel(e.target.value)}
                 className="h-9 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-lg text-xs font-medium text-[#1B2A4A] focus:outline-none"

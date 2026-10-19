@@ -18,7 +18,6 @@ export default function Housing({ onNavigate }: HousingProps) {
   const [maxPrice, setMaxPrice] = useState('')
   const [pets, setPets] = useState(false)
   const [furnished, setFurnished] = useState(false)
-  const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [utilitiesIncluded, setUtilitiesIncluded] = useState(false)
   const [sort, setSort] = useState('newest')
   const [selected, setSelected] = useState<string | null>(null)
@@ -42,7 +41,6 @@ export default function Housing({ onNavigate }: HousingProps) {
         maxPriceCents: maxPrice && Number.isFinite(max) ? Math.round(max * 100) : undefined,
         pets: pets || undefined,
         furnished: furnished || undefined,
-        verified: verifiedOnly || undefined,
         utilitiesIncluded: utilitiesIncluded || undefined,
         sort: sort as 'newest' | 'price_asc' | 'price_desc' | 'beds',
         limit: 100,
@@ -59,7 +57,7 @@ export default function Housing({ onNavigate }: HousingProps) {
     return () => {
       active = false
     }
-  }, [listingType, type, minBeds, maxPrice, pets, furnished, verifiedOnly, utilitiesIncluded, sort, searchNonce])
+  }, [listingType, type, minBeds, maxPrice, pets, furnished, utilitiesIncluded, sort, searchNonce])
 
   const messageOwner = async (property: HousingCard) => {
     if (!property.ownerId) {
@@ -123,6 +121,7 @@ export default function Housing({ onNavigate }: HousingProps) {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {/* Type */}
             <select
+              aria-label="Home type"
               value={type}
               onChange={e => setType(e.target.value)}
               className="h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none"
@@ -132,6 +131,7 @@ export default function Housing({ onNavigate }: HousingProps) {
 
             {/* Beds */}
             <select
+              aria-label="Minimum bedrooms"
               value={minBeds}
               onChange={e => setMinBeds(parseInt(e.target.value))}
               className="h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none"
@@ -169,9 +169,9 @@ export default function Housing({ onNavigate }: HousingProps) {
               <input type="checkbox" checked={furnished} onChange={e => setFurnished(e.target.checked)} className="accent-[#2D6A4F]" />
               Furnished
             </label>
-            <label className="flex items-center gap-2 text-sm text-[#5C6E8A] cursor-pointer">
-              <input type="checkbox" checked={verifiedOnly} onChange={e => setVerifiedOnly(e.target.checked)} className="accent-[#2D6A4F]" />
-              Verified landlord
+            <label className="flex items-center gap-2 text-sm text-[#5C6E8A]">
+              <input type="checkbox" disabled className="accent-[#2D6A4F]" />
+              Verified landlord · Coming soon
             </label>
             <label className="flex items-center gap-2 text-sm text-[#5C6E8A] cursor-pointer">
               <input type="checkbox" checked={utilitiesIncluded} onChange={e => setUtilitiesIncluded(e.target.checked)} className="accent-[#2D6A4F]" />
@@ -199,7 +199,7 @@ export default function Housing({ onNavigate }: HousingProps) {
               </>
             )}
           </p>
-          <select value={sort} onChange={e => setSort(e.target.value)} className="h-9 px-3 bg-white border border-[#E8E6DF] rounded-xl text-xs font-medium text-[#1B2A4A] focus:outline-none">
+          <select aria-label="Sort homes" value={sort} onChange={e => setSort(e.target.value)} className="h-9 px-3 bg-white border border-[#E8E6DF] rounded-xl text-xs font-medium text-[#1B2A4A] focus:outline-none">
             <option value="newest">Newest first</option>
             <option value="price_asc">Price: Low to High</option>
             <option value="price_desc">Price: High to Low</option>
