@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Avatar, StarRating, Badge, Button, Icon, InlineAlert, LoadState } from '../components/ui'
+import { hasDisplayableRating } from '../lib/ratings'
 import { api, readStatus } from '../api/client'
 import { mediaSrc } from '../lib/view'
 import { serviceCard, type ServiceCard } from '../lib/verticals'
@@ -257,15 +258,6 @@ export default function Services({ onNavigate }: ServicesProps) {
                         <Badge variant="green">🔍 BG Check</Badge>
                       </div>
                     )}
-                    <div className="absolute top-3 right-3">
-                      <button
-                        onClick={() => setActionNote("Saving services isn't available yet.")}
-                        className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm"
-                        aria-label="Save service"
-                      >
-                        <Icon name="heart" size={14} className="stroke-[#5C6E8A]" />
-                      </button>
-                    </div>
                   </div>
 
                   {/* Content */}
@@ -282,8 +274,12 @@ export default function Services({ onNavigate }: ServicesProps) {
                     <h3 className="font-display text-lg font-semibold text-[#1B2A4A] mb-1">{svc.title}</h3>
 
                     <div className="flex items-center gap-2 mb-3">
-                      <StarRating rating={svc.rating} count={svc.reviews} size="sm" />
-                      <span className="text-[#5C6E8A]">·</span>
+                      {hasDisplayableRating(svc.rating, svc.reviews) && (
+                        <>
+                          <StarRating rating={svc.rating} count={svc.reviews ?? undefined} size="sm" />
+                          <span className="text-[#5C6E8A]">·</span>
+                        </>
+                      )}
                       <span className="text-xs text-[#5C6E8A]">{svc.availability}</span>
                     </div>
 
@@ -368,8 +364,8 @@ export default function Services({ onNavigate }: ServicesProps) {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide mb-1.5">Time</label>
-                    <select value={bookingTime} onChange={e => setBookingTime(e.target.value)} className="w-full h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F]">
+                    <label htmlFor="quote-time" className="block text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide mb-1.5">Time</label>
+                    <select id="quote-time" value={bookingTime} onChange={e => setBookingTime(e.target.value)} className="w-full h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F]">
                       <option value="">Select time</option>
                       {['8:00 AM', '10:00 AM', '12:00 PM', '2:00 PM', '4:00 PM'].map(t => <option key={t}>{t}</option>)}
                     </select>
@@ -428,7 +424,7 @@ export default function Services({ onNavigate }: ServicesProps) {
               <div className="space-y-3">
                 <input value={providerTitle} onChange={(event) => setProviderTitle(event.target.value)} placeholder="Service title" className="w-full h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm" />
                 <input value={providerBusiness} onChange={(event) => setProviderBusiness(event.target.value)} placeholder="Business name" className="w-full h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm" />
-                <select value={providerCategory} onChange={(event) => setProviderCategory(event.target.value)} className="w-full h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm">
+                <select aria-label="Service category" value={providerCategory} onChange={(event) => setProviderCategory(event.target.value)} className="w-full h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm">
                   {serviceCategories.map((cat) => <option key={cat.label}>{cat.label}</option>)}
                 </select>
                 <textarea value={providerDescription} onChange={(event) => setProviderDescription(event.target.value)} rows={3} placeholder="What do you offer?" className="w-full p-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm resize-none" />

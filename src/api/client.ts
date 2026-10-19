@@ -91,6 +91,12 @@ import type {
  */
 const DEV_API_URL = import.meta.env.DEV ? "http://localhost:3000/api/v1" : ""
 const API_URL = (import.meta.env.VITE_API_URL || DEV_API_URL).replace(/\/$/, "")
+/**
+ * BL-033: the access token stays in localStorage. Refresh stays in the
+ * httpOnly cookie, and logout still clears both. Moving the access token to
+ * memory is Cipher's call — an XSS bug is session compromise either way, so
+ * this lane does not relocate storage on its own.
+ */
 const ACCESS_TOKEN_KEY = "neighborly.access_token"
 
 export class ApiError extends Error {
@@ -307,6 +313,23 @@ function queryString(query: object) {
   return text ? `?${text}` : ""
 }
 
+export interface StaffReport {
+  id: string
+  targetType: string
+  targetId: string
+  reason: string
+  details: string | null
+  status: string
+  createdAt: string
+  reporter?: {
+    id: string
+    profile?: {
+      displayName?: string | null
+      firstName?: string | null
+    } | null
+  } | null
+}
+
 export const api = {
   auth: {
     register: async (input: {
@@ -465,6 +488,22 @@ export const api = {
     unblock: (userId: string) =>
       request<{ blocked: boolean; userId: string }>(`/safety/blocks/${userId}`, {
         method: "DELETE",
+      }),
+  },
+  moderation: {
+    reports: (status?: "OPEN" | "RESOLVED" | "DISMISSED") =>
+      request<StaffReport[]>(`/moderation/reports${status ? `?status=${status}` : ""}`),
+    report: (id: string) => request<StaffReport & { preview?: unknown }>(`/moderation/reports/${id}`),
+    act: (
+      id: string,
+      input: {
+        kind: "DISMISS" | "RESOLVE" | "HIDE" | "SUSPEND_USER" | "RESTORE_USER"
+        note?: string
+      },
+    ) =>
+      request<StaffReport>(`/moderation/reports/${id}/actions`, {
+        method: "POST",
+        body: JSON.stringify(input),
       }),
   },
   listings: {

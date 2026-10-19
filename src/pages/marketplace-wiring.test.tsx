@@ -59,7 +59,34 @@ describe("Create listing", () => {
     expect(publish?.body).toContain(categoryId)
     expect(publish?.body).toContain('"priceCents":48000')
     expect(publish?.body).toContain('"condition":"Good"')
+    expect(publish?.body).toContain('"shippingAvailable":false')
     expect(calls.some((call) => call.url.includes("/requests"))).toBe(false)
+  })
+
+  it("sends shipping when the Shipping option is selected", async () => {
+    const calls: Array<{ url: string; method?: string; body?: string }> = []
+    route((url, init) => {
+      calls.push({ url, method: init?.method, body: typeof init?.body === "string" ? init.body : undefined })
+      if (url.includes("/categories")) {
+        return json([{ id: categoryId, name: "Furniture", slug: "furniture", listingCount: 2 }])
+      }
+      return json({ id: "listing-1", title: "My Herman Miller Standing Desk" })
+    })
+    render(<CreateListing onNavigate={() => undefined} />)
+    fireEvent.click(screen.getByRole("button", { name: /Item for Sale/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    fireEvent.click(screen.getByRole("button", { name: /Shipping/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    expect(screen.getByText("Neighborly AI reviewed your listing and has suggestions.")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue to publish →" }))
+    const publishButton = await screen.findByRole("button", { name: /Publish now/ })
+    await waitFor(() => expect((publishButton as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(publishButton)
+    expect(await screen.findByText("Listing published!")).toBeTruthy()
+    const publish = calls.find((call) => call.method === "POST" && call.url.endsWith("/listings"))
+    expect(publish?.body).toContain('"shippingAvailable":true')
   })
 
   it("saves a draft and blocks a short title", async () => {
@@ -97,6 +124,110 @@ describe("Create listing", () => {
     fireEvent.click(publish)
     expect(await screen.findByText("Add a title of 3 to 140 characters.")).toBeTruthy()
     expect(calls.some((call) => call.method === "POST" && call.url.includes("/listings"))).toBe(false)
+  })
+
+  it("creates a draft for the first photo, then publishes that same draft", async () => {
+    const draftId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    const calls: Array<{ url: string; method?: string }> = []
+    const sent: Array<{ url: string }> = []
+    class FakeXhr {
+      upload = { onprogress: null as (() => void) | null }
+      status = 201
+      responseText = "{}"
+      withCredentials = false
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+      onabort: (() => void) | null = null
+      url = ""
+      open(_method: string, url: string) {
+        this.url = url
+      }
+      setRequestHeader() {}
+      send() {
+        sent.push({ url: this.url })
+        setTimeout(() => this.onload?.(), 0)
+      }
+    }
+    vi.stubGlobal("XMLHttpRequest", FakeXhr)
+    route((url, init) => {
+      calls.push({ url, method: init?.method })
+      if (url.includes("/categories")) {
+        return json([{ id: categoryId, name: "Furniture", slug: "furniture", listingCount: 2 }])
+      }
+      if (url.includes("/listings/storage-status")) return json({ configured: true })
+      if (url.includes("/listings/drafts")) {
+        return json({ id: draftId, title: "My Herman Miller Standing Desk", status: "DRAFT", images: [] })
+      }
+      if (url.includes(`/listings/${draftId}/manage`)) {
+        return json({
+          id: draftId,
+          images: [{ id: "img-1", objectKey: "a.png", sortOrder: 0, url: "/api/v1/media/x" }],
+        })
+      }
+      if (url.includes(`/listings/${draftId}`)) {
+        return json({ id: draftId, title: "My Herman Miller Standing Desk", status: "PUBLISHED" })
+      }
+      return json({ id: "listing-1" })
+    })
+
+    render(<CreateListing onNavigate={() => undefined} />)
+    fireEvent.click(screen.getByRole("button", { name: /Item for Sale/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    await waitFor(() => {
+      expect(calls.some((call) => call.url.includes("/categories"))).toBe(true)
+      expect(calls.some((call) => call.url.includes("/listings/storage-status"))).toBe(true)
+    })
+    const input = document.getElementById("listing-image-input") as HTMLInputElement
+    await waitFor(() => expect(input.disabled).toBe(false))
+
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "photo.png", { type: "image/png" })
+    fireEvent.change(input, { target: { files: [file] } })
+    expect(screen.getByText(/The first JPEG, PNG or WebP saves a draft/)).toBeTruthy()
+    expect(await screen.findByAltText("Listing photo 1")).toBeTruthy()
+    expect(sent).toHaveLength(1)
+    expect(sent[0].url).toContain(`/listings/${draftId}/images`)
+    expect(calls.some((call) => call.method === "POST" && call.url.endsWith("/listings/drafts"))).toBe(true)
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue to publish →" }))
+    const publishButton = await screen.findByRole("button", { name: /Publish now/ })
+    await waitFor(() => expect((publishButton as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(publishButton)
+    expect(await screen.findByText("Listing published!")).toBeTruthy()
+    expect(calls.some((call) => call.method === "PATCH" && call.url.endsWith(`/listings/${draftId}`))).toBe(true)
+    expect(calls.some((call) => call.method === "POST" && call.url.endsWith(`/listings/${draftId}/publish`))).toBe(true)
+    expect(calls.some((call) => call.method === "POST" && call.url.endsWith("/listings"))).toBe(false)
+  })
+
+  it("does not upload a photo before the required fields are filled", async () => {
+    const calls: Array<{ url: string; method?: string }> = []
+    route((url, init) => {
+      calls.push({ url, method: init?.method })
+      if (url.includes("/categories")) {
+        return json([{ id: categoryId, name: "Furniture", slug: "furniture", listingCount: 2 }])
+      }
+      if (url.includes("/listings/storage-status")) return json({ configured: true })
+      return json({ id: "should-not-be-created" })
+    })
+    render(<CreateListing onNavigate={() => undefined} />)
+    fireEvent.click(screen.getByRole("button", { name: /Item for Sale/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
+    fireEvent.change(screen.getByDisplayValue("My Herman Miller Standing Desk"), { target: { value: "" } })
+    fireEvent.change(screen.getByDisplayValue("Great desk, works perfectly. Minor scratch on top."), {
+      target: { value: "" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "← Back" }))
+    const input = document.getElementById("listing-image-input") as HTMLInputElement
+    await waitFor(() => expect(input.disabled).toBe(false))
+    const before = calls.length
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "photo.png", { type: "image/png" })
+    fireEvent.change(input, { target: { files: [file] } })
+    expect(await screen.findByText("Photos wait until a draft exists.")).toBeTruthy()
+    expect(calls).toHaveLength(before)
+    expect(calls.some((call) => call.method === "POST")).toBe(false)
   })
 })
 

@@ -1,5 +1,6 @@
 import { useId, useState, type ReactNode, type ButtonHTMLAttributes } from "react"
 import { api, ApiError } from "../api/client"
+import { hasDisplayableRating } from "../lib/ratings"
 import { mediaSrc } from "../lib/view"
 
 // ─── Button ────────────────────────────────────────────────────────────────────
@@ -677,7 +678,7 @@ export function ListingCard({
                 <p className="text-xs font-medium text-[#1B2A4A]">
                   {listing.seller.name}
                 </p>
-                {listing.seller.rating > 0 && (
+                {hasDisplayableRating(listing.seller.rating, listing.seller.reviews) && (
                   <StarRating
                     rating={listing.seller.rating}
                     count={listing.seller.reviews}

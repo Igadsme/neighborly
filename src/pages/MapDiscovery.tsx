@@ -161,6 +161,7 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
 
           {/* Filter chips */}
           <div
+            id="map-filter-chips"
             className="flex gap-2 scroll-x-focusable scrollbar-hide"
             tabIndex={0}
             role="group"
@@ -287,8 +288,14 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
         {/* Bottom controls */}
         <div className="absolute bottom-4 left-4 right-4 z-30 flex items-end justify-between">
           <div className="flex flex-col gap-2">
-            <button className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center border border-[#E8E6DF] hover:bg-[#F5F4EF] transition-colors">
+            <button
+              type="button"
+              disabled
+              aria-label="Locate me, coming soon"
+              className="h-10 px-2 bg-white rounded-xl shadow-md flex items-center justify-center gap-1 border border-[#E8E6DF] text-[10px] font-semibold text-[#5C6E8A] cursor-not-allowed"
+            >
               <Icon name="mapPin" size={16} className="text-[#4A7FB5]" />
+              <span>Coming soon</span>
             </button>
             <button
               onClick={() => setShowSafeSpots(!showSafeSpots)}
@@ -323,15 +330,21 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="font-semibold text-[#1B2A4A]">{loading ? 'Listings nearby' : `${visible.length} listings nearby`}</h2>
-              <p className="text-xs text-[#5C6E8A]">Within 5 miles of Inman Park</p>
+              <p className="text-xs text-[#5C6E8A]">Painted map. Pins follow neighborhood names, not live coordinates.</p>
             </div>
             <div className="flex items-center gap-2">
-              <button className="w-8 h-8 rounded-lg bg-[#F5F4EF] flex items-center justify-center">
+              <button
+                type="button"
+                aria-label="Focus map filters"
+                onClick={() => document.getElementById('map-filter-chips')?.focus()}
+                className="w-8 h-8 rounded-lg bg-[#F5F4EF] flex items-center justify-center"
+              >
                 <Icon name="sliders" size={14} className="text-[#5C6E8A]" />
               </button>
             </div>
           </div>
           <select
+            aria-label="Sort listings"
             value={sort}
             onChange={(event) => setSort(event.target.value)}
             className="w-full h-9 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none"
@@ -339,7 +352,6 @@ export default function MapDiscovery({ onNavigate }: MapDiscoveryProps) {
             <option value="closest">Sort: Closest first</option>
             <option value="newest">Sort: Newest first</option>
             <option value="price">Sort: Price low to high</option>
-            <option value="popular">Sort: Most popular</option>
           </select>
         </div>
 

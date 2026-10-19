@@ -65,6 +65,7 @@ const PassportEdit = lazy(() => import("./pages/passport/PassportEdit"))
 const PassportSettings = lazy(() => import("./pages/passport/PassportSettings"))
 const PassportView = lazy(() => import("./pages/passport/PassportView"))
 const StaffQueue = lazy(() => import("./pages/passport/StaffQueue"))
+const ReportQueue = lazy(() => import("./pages/safety/ReportQueue"))
 const NotificationCenter = lazy(() => import("./pages/notifications/NotificationCenter"))
 const NotificationPreferencesScreen = lazy(
   () => import("./pages/notifications/NotificationPreferencesScreen"),
@@ -108,6 +109,7 @@ type Page =
   | "mission-manage"
   | "mission-contributions"
   | "community-moderation"
+  | "report-queue"
   | "staff-queue"
   | "borrow"
   | "borrow-item"
@@ -593,6 +595,8 @@ export default function App() {
         {page === "passport-edit" && isSignedIn && <PassportEdit onNavigate={navigate} />}
 
         {page === "staff-queue" && isSignedIn && <StaffQueue onNavigate={navigate} />}
+
+        {page === "report-queue" && isSignedIn && <ReportQueue />}
 
         {page === "borrow" && isSignedIn && <BorrowMarketplace onNavigate={navigate} />}
 

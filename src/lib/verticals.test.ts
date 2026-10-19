@@ -36,6 +36,8 @@ describe("vertical field mapping", () => {
     expect(card.priceUnit).toBe("/mo")
     expect(card.type).toBe("Apartment")
     expect(card.seller.name).toBe("Ada L")
+    expect(card.seller.rating).toBeNull()
+    expect(card.seller.reviews).toBeNull()
     expect(card.distance).toBe("Nearby")
     expect(card.images).toEqual(["photo-1560448204-e02f11c3d0e2"])
     expect(JSON.stringify(card)).not.toContain("latitude")
@@ -90,6 +92,29 @@ describe("vertical field mapping", () => {
     expect(card.provider).toBe("Rosa's Spotless Cleaning")
     expect(card.reviews).toBe(142)
     expect(card.providerVerified).toBe(false)
+  })
+
+  it("keeps a missing service rating empty instead of zero", () => {
+    const base = {
+      id: "s1",
+      title: "House Cleaning",
+      businessName: "Rosa's Spotless Cleaning",
+      description: "Deep cleans for apartments.",
+      category: "Cleaning",
+      startingPriceCents: 8900,
+      location: "Decatur",
+      availability: "Mon–Sat",
+      backgroundCheck: false,
+      createdAt: new Date().toISOString(),
+      owner,
+    }
+    const omitted = serviceCard(base as ApiServiceListing)
+    expect(omitted.rating).toBeNull()
+    expect(omitted.reviews).toBeNull()
+    const none = serviceCard({ ...base, rating: null, reviewCount: 0 } as ApiServiceListing)
+    expect(none.rating).toBeNull()
+    expect(none.reviews).toBe(0)
+    expect(serviceCard({ ...base, rating: 4.5, reviewCount: 2 } as ApiServiceListing).rating).toBe(4.5)
   })
 
   it("treats email or identity verification as the only avatar signal", () => {

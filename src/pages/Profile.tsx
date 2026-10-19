@@ -178,10 +178,11 @@ export default function Profile({ onNavigate, userId }: ProfileProps) {
             </div>
             <div className="flex gap-2 pb-2">
               <button
-                onClick={() => setProfileNote("Following neighbors isn't available yet.")}
-                className="px-4 py-2 rounded-full text-sm font-semibold border transition-all bg-white text-[#1B2A4A] border-[#E8E6DF] hover:border-[#2D6A4F]"
+                type="button"
+                disabled
+                className="px-4 py-2 rounded-full text-sm font-semibold border bg-white text-[#5C6E8A] border-[#E8E6DF] cursor-not-allowed"
               >
-                Follow
+                Follow · Coming soon
               </button>
               <Button variant="primary" size="sm" onClick={() => void messageProfile()}>
                 <Icon name="message" size={13} />

@@ -420,11 +420,12 @@ export default function Community({ onNavigate }: { onNavigate?: (page: 'message
                             </button>
 
                             <button
-                              onClick={() => setActionError("Sharing a link isn't available in this version.")}
-                              className="flex items-center gap-1.5 text-xs text-[#5C6E8A] hover:text-[#1B2A4A] transition-colors ml-auto"
+                              type="button"
+                              disabled
+                              className="flex items-center gap-1.5 text-xs text-[#5C6E8A] ml-auto cursor-not-allowed"
                             >
                               <Icon name="share" size={13} />
-                              Share
+                              Share · Coming soon
                             </button>
                           </div>
                           {replyFor === post.id && (

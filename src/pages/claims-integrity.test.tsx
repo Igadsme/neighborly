@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import HomeFeed from "./HomeFeed"
 import Landing from "./Landing"
@@ -63,18 +63,124 @@ describe("Landing hero count", () => {
   })
 })
 
+describe("Landing trust copy", () => {
+  it("does not claim sellers or sample stories are verified", () => {
+    route(() => new Promise<Response>(() => {}))
+    render(<Landing onNavigate={() => undefined} onSignIn={() => undefined} />)
+    expect(screen.queryByText("Verified sellers")).toBeNull()
+    expect(screen.queryByText(/verified profiles/i)).toBeNull()
+    expect(document.querySelector("[data-verified-badge]")).toBeNull()
+    expect(screen.getByText("Neighbors nearby")).toBeTruthy()
+  })
+})
+
 describe("HomeFeed neighbour group", () => {
-  it("labels the neighbour group for what it is, not as free listings", async () => {
-    route(() => json([]))
+  it("loads opted-in neighbors without a verified badge or stars", async () => {
+    route((url) => {
+      if (url.includes("/passport/leaderboard")) {
+        return json([
+          {
+            userId: "11111111-1111-4111-8111-111111111111",
+            displayName: "Ada L",
+            avatarUrl: null,
+            completedBorrowings: 1,
+            borrowingsAsLender: 0,
+            completedExchanges: 3,
+          },
+        ])
+      }
+      return json([])
+    })
 
     render(<HomeFeed onNavigate={() => undefined} />)
 
-    await waitFor(() => {
-      const group = document.querySelector('[aria-label="Preview neighbor examples"]')
-      expect(group).toBeTruthy()
-    })
-    // The label had been copy-pasted from the free-listings carousel, so a
-    // screen reader announced three unrelated people as free listings.
+    expect(await screen.findByRole("group", { name: "Neighbors to follow" })).toBeTruthy()
+    expect(screen.getByText("Ada L")).toBeTruthy()
+    expect(screen.getByText("3 completed exchanges")).toBeTruthy()
+    expect(screen.queryByText("Sofia Martinez")).toBeNull()
+    expect(document.querySelector("[data-verified-badge]")).toBeNull()
+    expect(screen.queryByRole("img", { name: /rated/i })).toBeNull()
     expect(document.querySelector('[aria-label="Free listings"]')).toBeNull()
+    const follow = screen.getByRole("button", { name: "Follow · Coming soon" })
+    expect((follow as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it("shows an empty state when nobody opted in", async () => {
+    route((url) => (url.includes("/passport/leaderboard") ? json([]) : json([])))
+    render(<HomeFeed onNavigate={() => undefined} />)
+    expect(await screen.findByText("No neighbors to show yet.")).toBeTruthy()
+  })
+
+  it("shows an error when the leaderboard cannot be loaded", async () => {
+    route((url) =>
+      url.includes("/passport/leaderboard")
+        ? json({ message: "Leaderboard unavailable" }, 500)
+        : json([]),
+    )
+    render(<HomeFeed onNavigate={() => undefined} />)
+    expect(await screen.findByText("Leaderboard unavailable")).toBeTruthy()
+  })
+
+  it("filters a category chip on the server and counts every free item", async () => {
+    const furnitureId = "11111111-1111-4111-8111-111111111111"
+    const calls: string[] = []
+    const row = (id: string, title: string, priceCents: number) => ({
+      id,
+      title,
+      description: "Posted by a neighbor.",
+      priceCents,
+      condition: "Good",
+      neighborhood: "Inman Park",
+      city: "Atlanta",
+      createdAt: "2026-09-01T00:00:00.000Z",
+      category: { id: furnitureId, name: "Furniture", slug: "furniture" },
+      seller: { id: "22222222-2222-4222-8222-222222222222", profile: { displayName: "Ada L" } },
+    })
+    route((url) => {
+      calls.push(url)
+      if (url.includes("/categories")) {
+        return json([
+          { id: furnitureId, name: "Furniture", slug: "furniture", listingCount: 1 },
+          { id: "33333333-3333-4333-8333-333333333333", name: "Electronics", slug: "electronics", listingCount: 0 },
+        ])
+      }
+      if (url.includes("/listings")) {
+        if (url.includes(`categoryId=${furnitureId}`)) {
+          return json({
+            items: [row("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "Walnut desk", 12000)],
+            total: 1,
+            limit: 24,
+            offset: 0,
+          })
+        }
+        return json({
+          items: [
+            row("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "Other chair", 4500),
+            row("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "Free lamp", 0),
+            row("dddddddd-dddd-4ddd-8ddd-dddddddddddd", "Free crate", 0),
+            row("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "Free shelf", 0),
+            row("ffffffff-ffff-4fff-8fff-ffffffffffff", "Free mirror", 0),
+          ],
+          total: 5,
+          limit: 24,
+          offset: 0,
+        })
+      }
+      return json([])
+    })
+
+    render(<HomeFeed onNavigate={() => undefined} />)
+    expect(await screen.findByText("4 free items")).toBeTruthy()
+    expect(screen.getAllByText("Free lamp").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("Free crate").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("Free shelf").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("Free mirror").length).toBeGreaterThan(0)
+    expect(document.body.textContent).not.toMatch(/near you/i)
+    expect(document.body.textContent).not.toMatch(/in your neighborhood/i)
+
+    fireEvent.click(screen.getByRole("button", { name: /Furniture/ }))
+    expect((await screen.findAllByText("Walnut desk")).length).toBeGreaterThan(0)
+    expect(screen.queryByText("Other chair")).toBeNull()
+    expect(calls.some((url) => url.includes("/listings") && url.includes(`categoryId=${furnitureId}`))).toBe(true)
   })
 })

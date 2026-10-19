@@ -75,6 +75,7 @@ export default function CreateListingFlow({
   const [availability, setAvailability] = useState("Weekdays")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [draftId, setDraftId] = useState<string | null>(null)
 
   // Switching the domain switches the category select to that domain's
   // category, so the selection can never disagree with the chosen contract.
@@ -85,6 +86,25 @@ export default function CreateListingFlow({
 
   const effectiveCategoryId =
     visibleCategories.some(entry => entry.id === categoryId) ? categoryId : visibleCategories[0]?.id ?? ""
+
+  async function createPhotoDraft() {
+    if (title.trim().length < 3 || description.trim().length < 10 || !effectiveCategoryId) {
+      throw new Error("Photos wait until a draft exists. Add a title and a description first.")
+    }
+    const parsed = price.trim() === "" ? undefined : Number(price)
+    const body = {
+      categoryId: effectiveCategoryId,
+      title: title.trim(),
+      description: description.trim(),
+      condition,
+      ...(parsed !== undefined && Number.isFinite(parsed) && parsed >= 0
+        ? { priceCents: Math.round(parsed * 100) }
+        : {}),
+      ...(neighborhood.trim() ? { neighborhood: neighborhood.trim() } : {}),
+    }
+    if (draftId) return api.listings.update(draftId, body)
+    return api.listings.saveDraft(body)
+  }
 
   function pickDomain(next: Domain) {
     setDomain(next)
@@ -164,14 +184,21 @@ export default function CreateListingFlow({
         return
       }
 
-      const created = await api.listings.create({
+      const body = {
         categoryId: effectiveCategoryId,
         title: title.trim(),
         description: description.trim(),
         ...(parsedPrice !== undefined ? { priceCents: Math.round(parsedPrice * 100) } : {}),
         condition,
         ...(neighborhood.trim() ? { neighborhood: neighborhood.trim() } : {}),
-      } as never)
+      }
+      if (draftId) {
+        await api.listings.update(draftId, body)
+        const published = await api.listings.publish(draftId)
+        onDone(published)
+        return
+      }
+      const created = await api.listings.create(body as never)
       onDone(created)
     } catch (cause) {
       setError(readStatus(cause, "That listing could not be created."))
@@ -245,7 +272,6 @@ export default function CreateListingFlow({
                 className={inputClass(null)}
               />
             </Field>
-            <ImageManager listingId={null} />
           </>
         )}
 
@@ -364,6 +390,20 @@ export default function CreateListingFlow({
             className={inputClass(null)}
           />
         </Field>
+
+        {domain === "marketplace" && (
+          <div className="space-y-2">
+            <p className="text-sm text-[#5A6B85]">
+              Photos wait until a draft exists. Add a title and description, then choose a JPEG, PNG or WebP.
+              The first photo saves the draft and uploads to it.
+            </p>
+            <ImageManager
+              listingId={draftId}
+              createDraft={createPhotoDraft}
+              onListingCreated={(row) => setDraftId(row.id)}
+            />
+          </div>
+        )}
 
         {error && title.trim().length >= 3 && <Alert tone="error">{error}</Alert>}
 

@@ -191,8 +191,9 @@ describe("Profile screen", () => {
     expect(screen.getByText("Sold")).toBeTruthy()
 
     expect(screen.queryByRole("button", { name: "Block this profile" })).toBeNull()
-    fireEvent.click(screen.getByRole("button", { name: "Follow" }))
-    expect(screen.getByText("Following neighbors isn't available yet.")).toBeTruthy()
+    const follow = screen.getByRole("button", { name: "Follow · Coming soon" })
+    expect((follow as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByText("Following neighbors isn't available yet.")).toBeNull()
     expect(screen.queryByRole("button", { name: "✓ Following" })).toBeNull()
     expect(calls.some((url) => url.includes("/follow"))).toBe(false)
   })

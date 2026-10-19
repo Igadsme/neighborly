@@ -28,7 +28,6 @@ export default function Jobs() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [actionError, setActionError] = useState('')
-  const [shareNote, setShareNote] = useState('')
   const [acting, setActing] = useState(false)
 
   useEffect(() => {
@@ -174,6 +173,7 @@ export default function Jobs() {
 
             <div className="ml-auto">
               <select
+                aria-label="Experience level"
                 value={activeLevel}
                 onChange={e => setActiveLevel(e.target.value)}
                 className="h-9 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-lg text-xs font-medium text-[#1B2A4A] focus:outline-none"
@@ -331,14 +331,15 @@ export default function Jobs() {
                     {applied.includes(selectedJob.id) ? '✓ Applied!' : acting ? 'Applying...' : 'Apply now →'}
                   </Button>
                   <button
-                    onClick={() => setShareNote("Sharing a link isn't available in this version.")}
-                    className="px-4 h-12 rounded-full border border-[#E8E6DF] text-[#5C6E8A] hover:bg-[#F5F4EF] transition-colors"
-                    aria-label="Share job"
+                    type="button"
+                    disabled
+                    className="px-3 h-12 rounded-full border border-[#E8E6DF] text-[#5C6E8A] text-[10px] font-semibold leading-tight cursor-not-allowed"
+                    aria-label="Share job, coming soon"
                   >
                     <Icon name="share" size={16} />
+                    <span className="block">Coming soon</span>
                   </button>
                 </div>
-                {shareNote && <p className="text-xs text-[#A63D27] text-center mt-2" role="alert">{shareNote}</p>}
                 <p className="text-xs text-[#5C6E8A] text-center mt-3">
                   🔒 Apply through Neighborly — your info stays private until you decide to share it.
                 </p>

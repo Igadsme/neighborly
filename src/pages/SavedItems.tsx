@@ -25,6 +25,7 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
   const [activeCollection, setActiveCollection] = useState("all")
   const [activeTab, setActiveTab] = useState("Saved Listings")
   const [comparingIds, setComparingIds] = useState<string[]>([])
+  const [compareOpen, setCompareOpen] = useState(false)
   const [savedListings, setSavedListings] = useState<Listing[]>([])
   const [savedSearches, setSavedSearches] = useState<ApiSavedSearch[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,8 +52,6 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
       active = false
     }
   }, [])
-
-  const priceDropListings = savedListings
 
   const toggleCompare = (id: string) => {
     setComparingIds((prev) =>
@@ -129,9 +128,13 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
                   </span>
                 </button>
               ))}
-              <button className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-dashed border-[#E8E6DF] text-[#5C6E8A] hover:border-[#2D6A4F]/30 hover:text-[#2D6A4F] transition-all bg-white">
+              <button
+                type="button"
+                disabled
+                className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-dashed border-[#E8E6DF] text-[#5C6E8A] bg-white cursor-not-allowed"
+              >
                 <Icon name="plus" size={12} />
-                New collection
+                New collection · Coming soon
               </button>
             </div>
 
@@ -149,16 +152,59 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setComparingIds([])}
+                    type="button"
+                    onClick={() => {
+                      setComparingIds([])
+                      setCompareOpen(false)
+                    }}
                     className="text-xs text-white/60 hover:text-white"
                   >
                     Clear
                   </button>
-                  <button className="bg-[#2D6A4F] text-white text-xs font-semibold px-4 py-2 rounded-xl hover:bg-[#40916C] transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => setCompareOpen(true)}
+                    className="bg-[#2D6A4F] text-white text-xs font-semibold px-4 py-2 rounded-xl hover:bg-[#40916C] transition-colors"
+                  >
                     Compare →
                   </button>
                 </div>
               </div>
+            )}
+
+            {compareOpen && comparingIds.length > 0 && (
+              <section
+                aria-label="Saved listing comparison"
+                className="mb-6 overflow-x-auto rounded-2xl border border-[#E8E6DF] bg-white"
+              >
+                <table className="w-full text-sm text-left">
+                  <caption className="px-4 py-3 text-left font-semibold text-[#1B2A4A]">
+                    Saved listing comparison
+                  </caption>
+                  <thead className="text-xs uppercase tracking-wide text-[#5C6E8A]">
+                    <tr>
+                      <th className="px-4 py-2 font-semibold">Title</th>
+                      <th className="px-4 py-2 font-semibold">Price</th>
+                      <th className="px-4 py-2 font-semibold">Condition</th>
+                      <th className="px-4 py-2 font-semibold">Neighborhood</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {savedListings
+                      .filter((listing) => comparingIds.includes(listing.id))
+                      .map((listing) => (
+                        <tr key={listing.id} className="border-t border-[#F5F4EF]">
+                          <td className="px-4 py-3 text-[#1B2A4A]">{listing.title}</td>
+                          <td className="px-4 py-3 text-[#1B2A4A]">
+                            {listing.isFree || listing.price == null ? "Free" : `$${listing.price.toLocaleString()}`}
+                          </td>
+                          <td className="px-4 py-3 text-[#5C6E8A]">{listing.condition || "—"}</td>
+                          <td className="px-4 py-3 text-[#5C6E8A]">{listing.neighborhood}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </section>
             )}
 
             {loading ? (
@@ -304,62 +350,16 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
           <div>
             <SectionHeader
               title="Price drops"
-              subtitle="Saved items that recently dropped in price"
+              subtitle="Price changes are not tracked yet"
             />
             <div className="space-y-4">
-              {priceDropListings.length === 0 ? (
-                <EmptyState
-                  title="No price alerts yet"
-                  description="Price alerts will appear when a saved listing changes price."
-                  action={() => setActiveTab("Saved Listings")}
-                  actionLabel="View saved listings"
-                  icon={<Icon name="bell" size={24} />}
-                />
-              ) : (
-                priceDropListings.map((listing) => (
-                  <div
-                    key={listing.id}
-                    onClick={() => onNavigate("listing", listing.id)}
-                    className="flex gap-4 bg-white rounded-2xl border border-[#E8E6DF] p-4 cursor-pointer card-hover"
-                  >
-                    <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF]">
-                      {listing.images[0] && (
-                        <img
-                          src={`${
-                            listing.images[0].startsWith("http")
-                              ? listing.images[0]
-                              : `https://images.unsplash.com/${listing.images[0]}`
-                          }?w=160&h=160&fit=crop&auto=format`}
-                          alt={listing.title}
-                          className="w-full h-full object-cover"
-                        />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-1">
-                        {listing.title}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-lg font-bold text-[#1B2A4A]">
-                          ${listing.price?.toLocaleString()}
-                        </span>
-                        <span className="text-sm text-[#5C6E8A] line-through">
-                          ${((listing.price || 0) + 100).toLocaleString()}
-                        </span>
-                        <Badge variant="coral" size="sm">
-                          ↓ $100 off
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-[#5C6E8A] mt-1">
-                        {listing.neighborhood} · {listing.distance}
-                      </p>
-                      <p className="text-xs text-[#B94C2A] font-medium mt-1">
-                        Price dropped {listing.postedAt}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
+              <EmptyState
+                title="No price alerts yet"
+                description="Price alerts will appear when a saved listing changes price."
+                action={() => setActiveTab("Saved Listings")}
+                actionLabel="View saved listings"
+                icon={<Icon name="bell" size={24} />}
+              />
             </div>
 
             {/* New listings alerts */}

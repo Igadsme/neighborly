@@ -167,6 +167,10 @@ describe("Listing detail", () => {
     expect(screen.getAllByText("Ada L").length).toBeGreaterThan(0)
     expect(document.body.textContent).toContain("— views")
     expect(document.body.textContent).not.toContain("West Elm")
+    expect(screen.getByRole("heading", { name: "Safety tips" })).toBeTruthy()
+    expect(screen.getByText("Publix on Moreland Ave")).toBeTruthy()
+    expect(document.body.textContent).not.toContain("passed our automated safety review")
+    expect(document.body.textContent).not.toContain("Neighborly Safety Check")
     expect(document.body.textContent).not.toContain("ada@example.com")
     expect(document.body.textContent).not.toContain("secret-hash")
     expect(document.body.textContent).not.toContain("Lovelace")
@@ -362,34 +366,15 @@ describe("Listing detail", () => {
     expect(reportBody.current).toEqual({ targetType: "LISTING", targetId: listingId, reason: "OTHER" })
   })
 
-  it("keeps fixture reporting local", () => {
-    vi.stubGlobal("fetch", vi.fn())
-    render(<ListingDetail listingId="l1" onNavigate={() => undefined} />)
-    fireEvent.click(screen.getAllByRole("button", { name: "Report this listing" })[0])
-    expect(screen.getAllByText("Reporting isn't available yet.").length).toBeGreaterThan(0)
-  })
-
-  it("keeps fixture detail for non-uuid ids without calling the API", () => {
+  it("shows not-found for a non-uuid id and does not call the API", () => {
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
     render(<ListingDetail listingId="l1" onNavigate={() => undefined} />)
-    expect(screen.getAllByText("West Elm Mid-Century Modern Sofa — Excellent Condition").length).toBeGreaterThan(0)
+    expect(screen.getByText("Listing not found")).toBeTruthy()
+    expect(screen.queryByText("West Elm Mid-Century Modern Sofa — Excellent Condition")).toBeNull()
+    expect(screen.queryByRole("button", { name: "Report this listing" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Message seller" })).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it("keeps the local sent state for a fixture listing and does not call the API", async () => {
-    const onNavigate = vi.fn()
-    const fetchMock = vi.fn()
-    vi.stubGlobal("fetch", fetchMock)
-    render(<ListingDetail listingId="l1" onNavigate={onNavigate} />)
-    fireEvent.click(screen.getAllByRole("button", { name: "Message seller" })[0])
-    fireEvent.change(screen.getByPlaceholderText("Ask about the item, availability, or suggest a meetup..."), {
-      target: { value: "Is this still available?" },
-    })
-    fireEvent.click(screen.getByRole("button", { name: /Send message/ }))
-    expect(await screen.findByText("Message sent!")).toBeTruthy()
-    expect(fetchMock).not.toHaveBeenCalled()
-    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes("/notifications"))).toBe(false)
   })
 
   it("asks for a listing when no id is selected", () => {
