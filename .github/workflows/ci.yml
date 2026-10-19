@@ -88,30 +88,16 @@ jobs:
         env:
           NEIGHBORLY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55432/neighborly_m2
 
-  # Real object storage. Storage specs are excluded from the integration job
-  # because they need both PostgreSQL and a live S3-compatible service.
+  # The storage harness owns disposable PostGIS and RustFS containers. Running
+  # the exact local harness here prevents image drift from hiding migration
+  # failures such as CREATE EXTENSION postgis errors.
   storage-integration:
     name: Storage integration (S3)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55436/neighborly_m4
-    services:
-      postgres:
-        image: postgis/postgis:16-3.4
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: neighborly_m4
-        ports:
-          - 55436:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     defaults:
       run:
-        working-directory: backend
+        working-directory: .
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -123,82 +109,9 @@ jobs:
           cache: pnpm
           cache-dependency-path: backend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec prisma generate
-      - run: pnpm exec prisma migrate deploy
-      - name: Start a disposable S3-compatible store
-        env:
-          # Pinned, and the reason is recorded here because this has already
-          # broken once. `minio/minio` was withdrawn from Docker Hub upstream -
-          # that repository returns 404 and pulling it fails with "pull access
-          # denied". MinIO's own quay.io registry is not anonymously pullable
-          # either: tags/list returns 401 even with an anonymous token.
-          #
-          # RustFS is an S3-compatible server published on Docker Hub, and it
-          # is what scripts/run-storage-tests.sh already uses successfully, so
-          # CI and local verification now exercise the same server. This is a
-          # real object store over the S3 API, not a mock: the suite writes,
-          # reads, deletes and lists objects. The adapter only uses PutObject,
-          # GetObject, DeleteObject and ListObjectsV2.
-          S3_IMAGE: rustfs/rustfs:1.0.1
-        run: |
-          set -euo pipefail
-          # No command override: the image's own entrypoint takes no arguments
-          # and reads RUSTFS_ACCESS_KEY / RUSTFS_SECRET_KEY. Passing MinIO's
-          # MINIO_ROOT_* variables or a `server /data` argument starts a
-          # container that never listens, which is what the previous attempt
-          # did.
-          docker run -d --name neighborly-m4-s3 \
-            -e RUSTFS_ACCESS_KEY=neighborly-m4-local \
-            -e RUSTFS_SECRET_KEY=neighborly-m4-local-only \
-            -p 127.0.0.1:59000:9000 \
-            "$S3_IMAGE" >/dev/null
-
-          ready=0
-          for _ in $(seq 1 45); do
-            if curl -fsS http://127.0.0.1:59000/minio/health/live >/dev/null 2>&1; then
-              ready=1
-              break
-            fi
-            sleep 2
-          done
-          if [ "$ready" -ne 1 ]; then
-            echo "Object storage did not become ready; container logs follow." >&2
-            docker logs neighborly-m4-s3 >&2 || true
-            exit 1
-          fi
-          curl -fsS http://127.0.0.1:59000/minio/health/live
-      - name: Run the storage suites
-        env:
-          NEIGHBORLY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55436/neighborly_m4
-          NEIGHBORLY_TEST_S3_ENDPOINT: http://127.0.0.1:59000
-          NEIGHBORLY_TEST_S3_BUCKET: neighborly-m4-media
-          NEIGHBORLY_TEST_S3_ACCESS_KEY: neighborly-m4-local
-          NEIGHBORLY_TEST_S3_SECRET_KEY: neighborly-m4-local-only
-        run: |
-          set -euo pipefail
-          S3_BUCKET_NAME=neighborly-m4-media \
-          S3_ENDPOINT_URL=http://127.0.0.1:59000 \
-          S3_ACCESS_KEY_ID=neighborly-m4-local \
-          S3_SECRET_ACCESS_KEY=neighborly-m4-local-only \
-            node -e '
-          const { S3Client, CreateBucketCommand } = require("@aws-sdk/client-s3")
-          const client = new S3Client({
-            region: "us-east-1",
-            endpoint: process.env.S3_ENDPOINT_URL,
-            forcePathStyle: true,
-            credentials: {
-              accessKeyId: process.env.S3_ACCESS_KEY_ID,
-              secretAccessKey: process.env.S3_SECRET_ACCESS_KEY
-            }
-          })
-          client.send(new CreateBucketCommand({ Bucket: process.env.S3_BUCKET_NAME }))
-            .then(() => process.stdout.write("bucket ready\n"))
-            .catch(error => {
-              if (error.name === "BucketAlreadyOwnedByYou") process.stdout.write("bucket ready\n")
-              else { process.stderr.write(String(error) + "\n"); process.exit(1) }
-            })
-          '
-          pnpm exec jest --config jest.storage.config.cjs --runInBand --testPathPattern storage
+        working-directory: backend
+      - name: Run the storage harness
+        run: bash scripts/run-storage-tests.sh
 
   backend:
     name: Backend
