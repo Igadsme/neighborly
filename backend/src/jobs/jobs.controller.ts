@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuard
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
+import { enforceRateLimit } from '../common/rate-limit'
 import { ApplyJobDto, CreateJobDto, ListJobsQuery, UpdateJobDto } from './dto'
 import { JobsService } from './jobs.service'
 
@@ -44,35 +45,40 @@ export class JobsController {
   @Post()
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  create(@Req() request: AuthenticatedRequest, @Body() input: CreateJobDto) {
+  async create(@Req() request: AuthenticatedRequest, @Body() input: CreateJobDto) {
+    await enforceRateLimit('jobs', request.user.id)
     return this.jobs.create(request.user.id, input)
   }
 
   @Post(':id/apply')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  apply(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: ApplyJobDto) {
+  async apply(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: ApplyJobDto) {
+    await enforceRateLimit('jobs', request.user.id)
     return this.jobs.apply(request.user.id, id, input)
   }
 
   @Post(':id/save')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  save(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async save(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    await enforceRateLimit('jobs', request.user.id)
     return this.jobs.toggleSave(request.user.id, id)
   }
 
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  update(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdateJobDto) {
+  async update(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdateJobDto) {
+    await enforceRateLimit('jobs', request.user.id)
     return this.jobs.update(request.user.id, id, input)
   }
 
   @Delete(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  archive(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  async archive(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    await enforceRateLimit('jobs', request.user.id)
     return this.jobs.archive(request.user.id, id)
   }
 }

@@ -42,10 +42,15 @@ describe('Transaction state transitions against real PostgreSQL', () => {
     const id = '80000000-0000-4000-8000-000000000001'
     await createTransaction(TransactionStatus.ACCEPTED, id)
 
-    for (const next of [TransactionStatus.SCHEDULED, TransactionStatus.IN_PROGRESS, TransactionStatus.COMPLETED]) {
+    for (const next of [TransactionStatus.SCHEDULED, TransactionStatus.IN_PROGRESS]) {
       const updated = await service.transition(INTEGRATION_IDS.requester, id, { status: next })
       expect(updated.status).toBe(next)
     }
+    const pending = await service.transition(INTEGRATION_IDS.requester, id, { status: TransactionStatus.COMPLETED })
+    expect(pending.status).toBe(TransactionStatus.IN_PROGRESS)
+    expect(pending).toMatchObject({ awaitingConfirmation: true, completionConfirmedBy: [INTEGRATION_IDS.requester] })
+    const completed = await service.transition(INTEGRATION_IDS.offerer, id, { status: TransactionStatus.COMPLETED })
+    expect(completed.status).toBe(TransactionStatus.COMPLETED)
 
     const milestones = await prisma.transactionMilestone.findMany({
       where: { transactionId: id },

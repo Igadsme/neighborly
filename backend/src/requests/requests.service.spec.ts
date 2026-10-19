@@ -284,7 +284,8 @@ describe('RequestsService public reads', () => {
     expect(query.where).toEqual({
       id: 'request-1',
       status: { notIn: ['DRAFT', 'CANCELLED'] },
-      deletedAt: null
+      deletedAt: null,
+      requester: { status: 'ACTIVE', deletedAt: null }
     })
     expect(query.select.requester).toEqual(publicRequester)
     // Offers moved to GET /requests/:id/offers, which is authenticated and

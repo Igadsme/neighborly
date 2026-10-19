@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { activeAccountWhere } from '../common/active-account'
 import { PrismaService } from '../prisma/prisma.service'
 
 @Injectable()
@@ -12,7 +13,7 @@ export class CategoriesService {
         id: true,
         name: true,
         slug: true,
-        _count: { select: { listings: { where: { status: 'PUBLISHED', deletedAt: null } } } }
+        _count: { select: { listings: { where: { status: 'PUBLISHED', deletedAt: null, seller: activeAccountWhere } } } }
       }
     })
     return rows.map(row => ({

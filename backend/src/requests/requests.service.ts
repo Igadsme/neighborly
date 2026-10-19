@@ -8,6 +8,7 @@ import {
 import { OfferStatus, Prisma, TransactionStatus } from '@prisma/client'
 import { assertNotBlocked } from '../common/blocks'
 import { audit } from '../common/logger'
+import { activeAccountWhere } from '../common/active-account'
 import { publicUserSelect } from '../common/public-user.select'
 import { sanitizeText } from '../common/text'
 import { DOMAIN_EVENTS } from '../events/domain-events'
@@ -47,7 +48,7 @@ export class RequestsService {
     private readonly outbox: OutboxWriter
   ) {}  list() {
     return this.prisma.needRequest.findMany({
-      where: { status: 'PUBLISHED', deletedAt: null },
+      where: { status: 'PUBLISHED', deletedAt: null, requester: activeAccountWhere },
       select: { ...publicRequestSelect, offers: { select: { id: true, status: true } } },
       orderBy: { createdAt: 'desc' }
     })

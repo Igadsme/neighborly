@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma, QuoteStatus } from '@prisma/client'
 import { assertNotBlocked } from '../common/blocks'
+import { activeAccountWhere } from '../common/active-account'
 import { publicUserSelect } from '../common/public-user.select'
 import { cleanList, cleanText, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
@@ -78,6 +79,7 @@ export class ServicesService {
       where: {
         status: 'PUBLISHED',
         deletedAt: null,
+        owner: activeAccountWhere,
         ...(query.category ? { category: query.category } : {}),
         ...(search
           ? {
@@ -99,7 +101,7 @@ export class ServicesService {
 
   async get(id: string) {
     const row = await this.prisma.serviceListing.findFirst({
-      where: { id, status: 'PUBLISHED', deletedAt: null },
+      where: { id, status: 'PUBLISHED', deletedAt: null, owner: activeAccountWhere },
       select: publicServiceSelect
     })
     if (!row) throw new NotFoundException('Service not found')
@@ -157,7 +159,7 @@ export class ServicesService {
 
   async createQuote(userId: string, serviceId: string, input: CreateQuoteDto) {
     const service = await this.prisma.serviceListing.findFirst({
-      where: { id: serviceId, status: 'PUBLISHED', deletedAt: null },
+      where: { id: serviceId, status: 'PUBLISHED', deletedAt: null, owner: activeAccountWhere },
       select: { ownerId: true }
     })
     if (!service) throw new NotFoundException('Service not found')

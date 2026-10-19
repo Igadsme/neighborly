@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { assertNotBlocked } from '../common/blocks'
+import { activeAccountWhere } from '../common/active-account'
 import { publicUserSelect } from '../common/public-user.select'
 import { cleanText, sanitizeText } from '../common/text'
 import { reactionEmojis } from '../common/vertical-values'
@@ -119,16 +120,16 @@ export class CommunityService {
 
   async summary() {
     const [neighbors, posts, events] = await Promise.all([
-      this.prisma.user.count({ where: { status: 'ACTIVE', deletedAt: null } }),
-      this.prisma.communityPost.count({ where: published }),
-      this.prisma.communityEvent.count({ where: published })
+      this.prisma.user.count({ where: activeAccountWhere }),
+      this.prisma.communityPost.count({ where: { ...published, author: activeAccountWhere } }),
+      this.prisma.communityEvent.count({ where: { ...published, organizer: activeAccountWhere } })
     ])
     return { neighbors, posts, events }
   }
 
   async listPosts(query: ListPostsQuery) {
     const rows = await this.prisma.communityPost.findMany({
-      where: { ...published, ...(query.type ? { type: query.type } : {}) },
+      where: { ...published, author: activeAccountWhere, ...(query.type ? { type: query.type } : {}) },
       select: postSelect,
       orderBy: { createdAt: 'desc' },
       take: query.limit,
@@ -138,7 +139,10 @@ export class CommunityService {
   }
 
   async getPost(id: string) {
-    const row = await this.prisma.communityPost.findFirst({ where: { id, ...published }, select: postSelect })
+    const row = await this.prisma.communityPost.findFirst({
+      where: { id, ...published, author: activeAccountWhere },
+      select: postSelect
+    })
     if (!row) throw new NotFoundException('Community post not found')
     return presentPost(row)
   }
@@ -193,7 +197,7 @@ export class CommunityService {
 
   listComments(postId: string) {
     return this.prisma.communityComment.findMany({
-      where: { postId, deletedAt: null, post: published },
+      where: { postId, deletedAt: null, author: activeAccountWhere, post: { ...published, author: activeAccountWhere } },
       select: commentSelect,
       orderBy: { createdAt: 'asc' }
     })
@@ -212,7 +216,7 @@ export class CommunityService {
 
   async listEvents(query: ListLimitQuery) {
     const rows = await this.prisma.communityEvent.findMany({
-      where: published,
+      where: { ...published, organizer: activeAccountWhere },
       select: eventSelect,
       orderBy: { createdAt: 'asc' },
       take: query.limit,
@@ -222,7 +226,10 @@ export class CommunityService {
   }
 
   async getEvent(id: string) {
-    const row = await this.prisma.communityEvent.findFirst({ where: { id, ...published }, select: eventSelect })
+    const row = await this.prisma.communityEvent.findFirst({
+      where: { id, ...published, organizer: activeAccountWhere },
+      select: eventSelect
+    })
     if (!row) throw new NotFoundException('Event not found')
     return presentEvent(row)
   }
@@ -280,7 +287,7 @@ export class CommunityService {
 
   async listLostFound(query: ListLimitQuery) {
     const rows = await this.prisma.lostFoundItem.findMany({
-      where: published,
+      where: { ...published, author: activeAccountWhere },
       select: lostSelect,
       orderBy: { createdAt: 'desc' },
       take: query.limit,
@@ -290,7 +297,10 @@ export class CommunityService {
   }
 
   async getLostFound(id: string) {
-    const row = await this.prisma.lostFoundItem.findFirst({ where: { id, ...published }, select: lostSelect })
+    const row = await this.prisma.lostFoundItem.findFirst({
+      where: { id, ...published, author: activeAccountWhere },
+      select: lostSelect
+    })
     if (!row) throw new NotFoundException('Lost and found item not found')
     return presentLost(row)
   }
@@ -334,7 +344,7 @@ export class CommunityService {
 
   async listGiveaways(query: ListLimitQuery) {
     const rows = await this.prisma.giveaway.findMany({
-      where: published,
+      where: { ...published, author: activeAccountWhere },
       select: giveawaySelect,
       orderBy: { createdAt: 'desc' },
       take: query.limit,
@@ -344,7 +354,10 @@ export class CommunityService {
   }
 
   async getGiveaway(id: string) {
-    const row = await this.prisma.giveaway.findFirst({ where: { id, ...published }, select: giveawaySelect })
+    const row = await this.prisma.giveaway.findFirst({
+      where: { id, ...published, author: activeAccountWhere },
+      select: giveawaySelect
+    })
     if (!row) throw new NotFoundException('Giveaway not found')
     return presentGiveaway(row)
   }
@@ -384,7 +397,7 @@ export class CommunityService {
 
   async claimGiveaway(userId: string, id: string) {
     const updated = await this.prisma.giveaway.updateMany({
-      where: { id, claimed: false, ...published },
+      where: { id, claimed: false, ...published, author: activeAccountWhere },
       data: { claimed: true, claimedById: userId }
     })
     if (updated.count === 0) {
