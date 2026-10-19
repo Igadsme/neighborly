@@ -80,16 +80,16 @@ These are outside the June docs PR. A checked line is in the tree at `1f38563` w
 
 ### Still open
 
-- Refresh tokens, MFA, device sessions
+- MFA and device sessions. Refresh tokens are issued. Moving the access token out of `localStorage` is still open (BL-033)
 - Draft requests and draft listings
 - Withdraw an offer
 - Messages plus button, typing, and attachments. Listing Detail message send for a UUID listing calls `POST /conversations` and reuses a pairwise thread. Fixture listing ids still use the local modal
 - Trust scores computed from reviews. The reviews list route exists; Dashboard still does not use it to hide a prompt
 - Lost-and-found and giveaway composers (`+ Post lost/found` and `+ Give something` have no form). Reply, Share, and lost-and-found Contact do not start a thread
-- Dashboard Pause, Promote, and Mark sold (the buttons render and have no route)
+- Dashboard Promote (no route). Pause and Mark sold call the listing API
 - Landing marketing cards (`listings` fixtures). The Categories featured strip reads `GET /listings` (`status=PUBLISHED`, `limit=6`) and is not a fixture strip. Map, Profile, and Listing Detail primary content for UUID ids read the API. Non-UUID listing ids still use fixtures. Negotiate, reserve, report, and share on Listing Detail stay local. Message send on a UUID listing persists through `POST /conversations`; fixture listings still use the local modal. The featured-strip wiring is not a release, and Docker/e2e in Section E were not run
 - A notification list and notification mark-read. The nav message badge is no longer `unreadMessages={2}`; it counts unread threads from `GET /conversations`. That is not a notification feed, and it is not a release.
-- Image upload (S3 is env-only)
+- A production object-storage bucket. Listing image upload is mounted when `S3_*` is complete
 - Price history writes and real price-drop alerts
 - Radius / PostGIS search (columns are decimals)
 - Payments, refunds, disputes beyond the status enum

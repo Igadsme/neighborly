@@ -59,6 +59,19 @@ jobs:
           curl -kfsS --resolve staging.neighborly.localhost:8444:127.0.0.1 \
             https://staging.neighborly.localhost:8444/api/v1/categories \
             | grep -q Furniture
+          # History API: an unknown listing path is the shell. The API body
+          # and a missing hashed asset are not.
+          deep=$(curl -kfsS --resolve staging.neighborly.localhost:8444:127.0.0.1 \
+            https://staging.neighborly.localhost:8444/listings/not-a-real-id)
+          printf '%s' "$deep" | grep -q 'id="root"'
+          api_body=$(curl -kfsS --resolve staging.neighborly.localhost:8444:127.0.0.1 \
+            https://staging.neighborly.localhost:8444/api/v1/health)
+          printf '%s' "$api_body" | grep -q '"status"'
+          printf '%s' "$api_body" | grep -q 'id="root"' && exit 1
+          asset_code=$(curl -k -o /dev/null -s -w '%{http_code}' \
+            --resolve staging.neighborly.localhost:8444:127.0.0.1 \
+            https://staging.neighborly.localhost:8444/assets/does-not-exist.js)
+          test "$asset_code" = "404"
 
       # `down -v` is safe on this ephemeral runner. Do not copy it onto a machine
       # that also uses the dev Postgres volume. Operators use scripts/staging-down.sh.

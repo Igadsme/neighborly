@@ -20,7 +20,7 @@ pnpm install
 
 ## Run locally
 
-Start Postgres and Redis (no API container in this compose file):
+Start Postgres and Redis (no API container in this compose file). Dev ports bind to loopback only: `127.0.0.1:5432` and `127.0.0.1:6379`.
 
 ```bash
 docker compose up -d
@@ -34,7 +34,7 @@ cp env.example backend/.env
 cp env.example .env
 ```
 
-The API boots with `DATABASE_URL`, `JWT_SECRET` (at least 32 characters), and `CORS_ORIGIN`. `REDIS_URL`, `JWT_REFRESH_SECRET`, and the `S3_*` variables are optional until those clients exist.
+The API boots with `DATABASE_URL`, `JWT_SECRET` (at least 32 characters), and `CORS_ORIGIN`. `REDIS_URL` is optional outside production. Refresh tokens are issued as httpOnly cookies; `JWT_REFRESH_SECRET` is optional locally. Listing image upload is mounted when all four `S3_*` values are set, and a partial set fails boot. Leave them unset to run without object storage.
 
 Backend:
 
@@ -71,6 +71,8 @@ VITE_API_URL=http://localhost:3000/api/v1 pnpm dev
 ```
 
 Vite binds to `$PORT` or **8443** (`vite.config.ts`). `CORS_ORIGIN` in `env.example` matches that origin.
+
+Screens use real History API paths (`src/lib/paths.ts`). `vite preview`, the staging Caddyfile, and the web image's nginx config fall back to `index.html` for unknown extensionless paths. `/api`, `/socket.io`, and `/assets` are not rewritten to that shell. The root package name is `neighborly-web`. The API package name is `neighborly-api`.
 
 ## Checks
 

@@ -92,9 +92,9 @@ Placeholders live in `env.production.example`. Real values stay in the host secr
 | `REDIS_URL` | BLOCKED | Required in production. `redis://` or `rediss://` |
 | `CORS_ORIGIN` | BLOCKED | Required. Comma-separated absolute `http` or `https` origins. `*` is rejected. Userinfo in the URL is rejected |
 | `TRUST_PROXY` | BLOCKED | Required in production. Exactly `0` or `1`. Use `1` only when the proxy overwrites `X-Forwarded-For` |
-| S3 access key and secret | BLOCKED | Optional until uploads exist. A partial set fails boot |
+| S3 access key and secret | BLOCKED | Optional. Listing image upload uses them when the whole S3 set is present. A partial set fails boot. No production bucket is configured |
 | `SENTRY_DSN` | BLOCKED | Optional. If set, it must be `https`. The SDK is not bundled, so leave it empty |
-| `JWT_REFRESH_SECRET` | BLOCKED | Unused. Refresh tokens are not issued. If set, at least 32 characters |
+| `JWT_REFRESH_SECRET` | BLOCKED | Optional. Refresh tokens are httpOnly cookies. If this secret is set, it must be at least 32 characters |
 | GitHub Environment `production` reviewers | BLOCKED | Add required reviewers before anyone sets `PRODUCTION_DEPLOY_ENABLED` |
 
 Boot implementation: `backend/src/common/config/env.validation.ts`.

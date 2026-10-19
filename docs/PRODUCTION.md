@@ -18,7 +18,7 @@ Local Compose staging, recorded in `docs/PHASE_5_STAGING.md` and `docs/PHASE_6_S
 | API | Container `api`, loopback `http://127.0.0.1:3001`, `NODE_ENV=production` |
 | Database | `staging-postgres` (PostGIS), host port 5433, database `neighborly` |
 | Redis | `staging-redis`, host port 6380, AOF on |
-| Object storage | MinIO on the Compose network. The API does not upload |
+| Object storage | rustfs `1.0.1` on the Compose network (service name `minio`). Listing image upload is mounted |
 | Migrate and seed | `deploy/staging/db-setup.sh` refuses any host other than `staging-postgres`, then migrates and seeds |
 | CI smoke | `.github/workflows/deploy-staging.yml` is manual. Phase 7 did not dispatch it |
 
@@ -37,7 +37,7 @@ These rows are the intended difference. They are not a provisioned design, and t
 | Client address | Docker bridge address at the Compose edge (Phase 6) | The real client address. Auth rate limits must not collapse to one shared IP |
 | Postgres | Compose PostGIS 16, fixture password | Managed Postgres with PostGIS, private networking, provider backups. Empty database. No seed |
 | Redis | Compose Redis, no TLS | `rediss://` unless the product owner accepts a private `redis://`. Required at boot |
-| Object storage | Local MinIO fixture keys | A complete S3 set from the secret store, or all four values empty. Uploads are unwired, so empty is valid |
+| Object storage | Local rustfs fixture keys | A complete S3 set from the secret store, or all four values empty. Empty boots without uploads |
 | Secrets | `.env.staging` on the operator machine, gitignored | Host secret store. Template: `env.production.example`. Never commit the filled file |
 | Seed | Upsert of fixture users | Do not run `backend/prisma/seed.ts` |
 | Images | Local tags `neighborly-api:staging` and `neighborly-web:staging` | A registry tag the product owner names. Push only behind `PRODUCTION_PUSH_IMAGES`, and only after the stub in this repo is replaced with a reviewed job |
@@ -70,8 +70,8 @@ Also rejected:
 
 - A partial S3 set. `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, and `S3_SECRET_KEY` are all set or all empty. `S3_REGION` defaults to `us-east-1` and is not part of that check.
 - `SENTRY_DSN` that is not `https`.
-- `JWT_REFRESH_SECRET`, if set, shorter than 32 characters. Refresh tokens are not issued.
-- `MAX_UPLOAD_SIZE_MB` outside 1–10. No upload route is mounted.
+- `JWT_REFRESH_SECRET`, if set, shorter than 32 characters. Refresh tokens are httpOnly cookies. The secret is optional.
+- `MAX_UPLOAD_SIZE_MB` outside 1–10. Listing image upload is `POST /api/v1/listings/:id/images`. Other routes still reject multipart.
 
 The API does not read `APP_ENV`. Do not invent a second boot path for production. The frontend reads `VITE_API_URL` at image build time, not from the API process.
 
@@ -132,4 +132,4 @@ Not purchased and not configured: a log drain, an alert route, Sentry, an error 
 
 ## Out of this path
 
-v1 does not call a model. Payments, Mapbox, email, and uploads are unwired. The Figma screens stay, including copy that mentions AI review or scam detection. That copy is not a capability. Share stays disabled. Do not add those services as part of standing up a host.
+v1 does not call a model. Payments, Mapbox, and email delivery to a person are unwired. Listing image upload is mounted when S3 is configured. The Figma screens stay, including copy that mentions AI review or scam detection. That copy is not a capability. Do not add payments, maps, email, or error-tracking vendors as part of standing up a host.

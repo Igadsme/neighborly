@@ -57,23 +57,17 @@ limits.
 `scripts/run-storage-tests.sh` starts a disposable PostgreSQL and a disposable
 S3-compatible object store, applies all migrations, runs both storage suites,
 and removes both containers on exit. It never touches the development Compose
-stack, the staging MinIO, or any production host.
+stack, the staging rustfs volume, or any production host.
 
 ```bash
 ./scripts/run-storage-tests.sh
 ```
 
-**Note on the object store image.** This environment cannot pull
-`quay.io/minio/minio` or `minio/minio` from its registry mirror. The script
-therefore defaults to `rustfs/rustfs`, which implements the MinIO API and
-passed every test. Where MinIO is reachable, use it unchanged:
+**Object store image.** `scripts/run-storage-tests.sh`, the storage CI job, and the staging Compose profile all use `rustfs/rustfs:1.0.1`. `minio/minio` was withdrawn from Docker Hub, and `quay.io/minio` is not anonymously pullable. Do not point staging back at that pin. The storage layer speaks the S3 API (path-style, `us-east-1`).
 
-```bash
-S3_IMAGE=quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z ./scripts/run-storage-tests.sh
-```
+**Staging healthcheck binary.** The staging service probes `GET /minio/health/live` with `curl` inside the container. The published `rustfs/rustfs:1.0.1` linux/amd64 image ships that binary. Its index points at manifest `sha256:7465b31993156ca5cc0eb4b3c59a01ff69651961be62bcfeb6ce569f22034a56`. Image history step 6 is `apk add --no-cache ca-certificates coreutils curl tzdata`. Layer `sha256:6a4ac81fe189f8ad06b56d60236c80f721f3e213206474082887f032710b9945` contains `/usr/bin/curl`, `/usr/bin/wcurl`, and `libcurl.so.4`. That layer has no `wget`. The healthcheck stays on `curl`.
 
-No application code differs between the two: the storage layer speaks the S3
-API.
+**Staging volume.** RustFS mounts the named volume `rustfs-staging-data` at `/data`. `neighborly-staging-minio` is the previous MinIO volume. It stays declared and unused. Do not delete it with `docker compose down -v` or `docker volume rm`. Staging objects are disposable test data. After switching to `rustfs-staging-data`, existing ListingImage rows in Postgres still reference storage keys that no longer exist, so those images will fail to load. Re-seed staging so the database and object store start empty together, then re-upload test photos. Keep the old `neighborly-staging-minio` volume until the owner explicitly approves removing it. The script above never touches either volume.
 
 ## Configuration
 

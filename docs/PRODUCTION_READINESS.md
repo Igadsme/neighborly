@@ -1,8 +1,8 @@
 # Production readiness
 
 Date: 2026-10-19
-SHA: `dc761e51864e03a57c056b4bb2068c6362ced40b`
-Environment: not deployed. `deploy-production.yml` was not dispatched. No DNS change. No paid service.
+SHA: parent `12540f88303f8e5ab2404ee10fc43ec657d02cf0`, plus the Orbit lane on `cursor/orbit-devops-p1-7a93`. The commit SHA is the PR head after this file lands.
+Environment: not deployed. `deploy-production.yml` was not dispatched. No DNS change. No paid service. Sentry and Resend were not added.
 
 This file records the honest state. It is a skeleton for later updates. Empty sections stay empty until evidence exists.
 
@@ -14,7 +14,7 @@ This file records the honest state. It is a skeleton for later updates. Empty se
 | Public DNS and TLS | None |
 | Production database | None |
 | Production Redis | None. Production env validation requires `REDIS_URL` before boot |
-| Object storage | Code and CI rustfs proof exist. No production bucket is configured in this repo |
+| Object storage | Staging Compose now pins the same `rustfs/rustfs:1.0.1` image as CI. No production bucket is configured in this repo. The image was not pulled on this VM |
 | Email provider | None. Messages stop in `EmailOutbox` |
 | Error tracking | `SENTRY_DSN` is accepted and ignored. No SDK |
 | Uptime monitor | None |
@@ -24,14 +24,14 @@ This file records the honest state. It is a skeleton for later updates. Empty se
 
 | Check | State |
 | --- | --- |
-| Single-process API | Implemented in source. CI integration on this SHA passed. Not booted in production |
+| Single-process API | Implemented in source. Not booted in production. This branch's CI is not counted until the Actions run on the PR head finishes |
 | More than one API process | Not ready. No Socket.IO Redis adapter |
-| Auth, refresh, logout | Implemented. CI auth integration passed on this SHA |
+| Auth, refresh, logout | Implemented in source. Not booted in production |
 | Email verification that a person can complete | Not ready. No provider |
-| Marketplace pause and suspension privacy | Not ready. Direct reads still expose paused listings and suspended sellers' rows |
-| Marketplace settlement | Not ready. One participant can complete or close a dispute |
-| Trust badges | Not ready. Service avatars are always verified. Demo seed writes trust fields |
-| Shareable URLs | Not ready. In-app screens are component state. No 404 |
+| Marketplace pause and suspension privacy | Merged (BL-001, BL-002, PRs #29 and #30). Not booted in production |
+| Marketplace settlement | Merged (BL-003, PR #30). Not booted in production |
+| Trust badges | Merged (BL-004, BL-010, PRs #31 and #29). Not booted in production |
+| Shareable URLs | Merged (BL-005, PR #31). Web servers fall back to `index.html` for those paths. Staging was not booted here |
 | Payments and AI | Absent on purpose |
 | Legal consent | Placeholders only. Links do not open them |
 | Search indexing | `noindex` is set. Correct until the owner says otherwise |
@@ -40,19 +40,19 @@ This file records the honest state. It is a skeleton for later updates. Empty se
 
 | Check | State |
 | --- | --- |
-| Migrations on an empty database | CI Integration job applied them on this SHA. Not re-run locally |
-| Migration drift | CI job passed on this SHA. Not re-run locally |
+| Migrations on an empty database | Not re-run locally on this VM. The last recorded CI pass in the takeover audit is `dc761e5`, not this branch |
+| Migration drift | Not re-run locally. Same limit as the row above |
 | Down migrations | None |
 | Backup and restore rehearsal | Scripts exist. Not executed in this audit. Not a pass |
-| Dev Compose network exposure | Postgres and Redis publish on all interfaces. Staging profile binds loopback. Not probed live |
+| Dev Compose network exposure | Postgres and Redis publish on `127.0.0.1` only. Not probed live. Docker is not installed on this VM |
 
 ## Evidence this conclusion uses
 
-- Source at `dc761e5`, recorded in `docs/ENGINEERING_TAKEOVER_AUDIT.md`.
-- Local unit, lint, typecheck, and production builds on 2026-10-19. Those passed.
-- CI run 38623514967 on `dc761e5`. Six jobs passed, including PostgreSQL integration, storage, and migration drift.
+- Takeover audit of `dc761e5` in `docs/ENGINEERING_TAKEOVER_AUDIT.md`, plus PRs #29–#31 on `main`.
+- Local unit, lint, typecheck, and production builds for this lane are in `docs/QA_RELEASE_REPORT.md`. A command that is not listed there did not run.
+- CI run 38623514967 on `dc761e5` is not evidence for this branch. This branch's six jobs are counted only after Actions reports them.
 - Local Docker, journey, security-probe, browser axe, and backup rehearsal did not run. They are not counted as passes.
-- Older pass counts from `343584a` are not evidence for this SHA's journeys or axe run.
+- Older pass counts from `343584a` are not evidence for this branch's journeys or axe run.
 
 ## Not filled in
 
@@ -66,4 +66,4 @@ This file records the honest state. It is a skeleton for later updates. Empty se
 
 **NOT READY**
 
-A production approval would need, at minimum, a named host that is still not deployed from the refusing workflow, an email path that leaves `EmailOutbox`, the four product privacy and trust defects closed (pause, suspension, one-sided settlement, service verified badge), addressable URLs, rate limits with `Retry-After`, UUID 400s, a fail-closed frontend API URL, and legal text the owner is willing to show. None of that is done. CI being green does not close those gaps. Suites that did not run are not evidence that production would pass them.
+BL-001 through BL-010 are merged, and this lane binds dev database ports to loopback, pins staging object storage to rustfs, and adds the History API fallback. A production approval still needs a named host that is not deployed from the refusing workflow, an email path that leaves `EmailOutbox`, legal text the owner is willing to show, and a decision to keep `noindex`. CI being green does not close those gaps. Suites that did not run are not evidence that production would pass them.

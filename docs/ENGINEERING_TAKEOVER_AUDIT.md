@@ -1,5 +1,7 @@
 # Engineering Takeover Audit — Phase 1
 
+Status update, 19 Oct 2026: this audit's evidence is still `dc761e5`. It is not a description of current `main`. BL-001 through BL-010 landed in PRs #29, #30, and #31 (`12540f8`). Current status is `docs/IMPLEMENTATION_PROGRESS.md`. Do not treat a finding below as still open without checking that file.
+
 Audit date: 2026-10-19
 Auditor run: read-only against `main`
 Baseline: `dc761e51864e03a57c056b4bb2068c6362ced40b` (merge of PR #27)
