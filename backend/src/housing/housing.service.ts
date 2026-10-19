@@ -206,7 +206,7 @@ export class HousingService {
 }
 
 function housingRadiusExtra(query: ListHousingQuery): Prisma.Sql {
-  const parts: Prisma.Sql[] = [Prisma.sql`row.status::text = 'PUBLISHED'`]
+  const parts: Prisma.Sql[] = [Prisma.sql`row.status = 'PUBLISHED'`]
   if (query.listingType) parts.push(Prisma.sql`row."listingType" = ${query.listingType}`)
   if (query.type) parts.push(Prisma.sql`row."propertyType" = ${query.type}`)
   if (query.minBeds) parts.push(Prisma.sql`row.beds >= ${query.minBeds}`)

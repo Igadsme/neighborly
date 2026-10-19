@@ -1,7 +1,8 @@
 import { BadRequestException } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { assertGeoQuery, MAX_RADIUS_MILES } from './geo-search'
+import { assertGeoQuery, MAX_RADIUS_MILES, pageWithinRadius } from './geo-search'
 
 describe('assertGeoQuery', () => {
   it('rejects latitude and longitude outside the valid range', () => {
@@ -31,6 +32,25 @@ describe('assertGeoQuery', () => {
       longitude: 180,
       radiusMiles: MAX_RADIUS_MILES
     })
+  })
+})
+
+describe('pageWithinRadius', () => {
+  it('returns the true total when a page with offset > 0 is empty', async () => {
+    const queryRaw = jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ total: 4 }])
+    const page = await pageWithinRadius(
+      { $queryRaw: queryRaw } as never,
+      'Listing',
+      { latitude: 33.75, longitude: -84.35, radiusMiles: 5 },
+      Prisma.sql`row.status = 'PUBLISHED'`,
+      2,
+      10
+    )
+    expect(page).toMatchObject({ ids: [], total: 4 })
+    expect(queryRaw).toHaveBeenCalledTimes(2)
+    const count = queryRaw.mock.calls[1][0] as Prisma.Sql
+    expect(count.text).toContain('SELECT COUNT(*)')
+    expect(count.text).not.toContain('LIMIT')
   })
 })
 

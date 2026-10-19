@@ -214,7 +214,7 @@ export class JobsService {
 }
 
 function jobRadiusExtra(query: ListJobsQuery): Prisma.Sql {
-  const parts: Prisma.Sql[] = [Prisma.sql`row.status::text = 'PUBLISHED'`]
+  const parts: Prisma.Sql[] = [Prisma.sql`row.status = 'PUBLISHED'`]
   if (query.type) parts.push(Prisma.sql`row."employmentType" = ${query.type}`)
   if (query.level) parts.push(ilikeContains('row.level', query.level))
   if (query.remote) parts.push(Prisma.sql`row.remote = ${query.remote}`)

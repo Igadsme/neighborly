@@ -321,6 +321,20 @@ describe('Listing lifecycle and discovery against real PostgreSQL', () => {
     await service.remove(seller, outside.id)
   })
 
+  it('keeps the radius total when the page offset is past the last row', async () => {
+    const marker = randomUUID().slice(0, 8)
+    const origin = { latitude: 33.75, longitude: -84.35 }
+    const first = await makeListing({ title: `Past ${marker} a`, ...origin })
+    const second = await makeListing({ title: `Past ${marker} b`, ...shift(origin, 1, 0) })
+
+    const page = await service.list({ ...origin, radiusMiles: 5, query: marker, limit: 1, offset: 10 })
+    expect(page.items).toEqual([])
+    expect(page.total).toBe(2)
+
+    await service.remove(seller, first.id)
+    await service.remove(seller, second.id)
+  })
+
   it('rejects coordinates and a radius the server cannot search', async () => {
     await expect(service.list({ latitude: 91, longitude: 0, radiusMiles: 5 })).rejects.toBeInstanceOf(BadRequestException)
     await expect(service.list({ latitude: 0, longitude: 181, radiusMiles: 5 })).rejects.toBeInstanceOf(BadRequestException)

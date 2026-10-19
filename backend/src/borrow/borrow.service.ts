@@ -1814,7 +1814,7 @@ function clamp(limit?: number) {
 }
 
 function borrowRadiusExtra(query: ListBorrowItemsQuery): Prisma.Sql {
-  const parts: Prisma.Sql[] = [Prisma.sql`row.borrowable = true`, Prisma.sql`row.status::text = 'PUBLISHED'`]
+  const parts: Prisma.Sql[] = [Prisma.sql`row.borrowable = true`, Prisma.sql`row.status = 'PUBLISHED'`]
   if (query.categoryId) parts.push(Prisma.sql`row."categoryId" = CAST(${query.categoryId} AS uuid)`)
   if (query.city) parts.push(Prisma.sql`LOWER(row.city) = LOWER(${query.city})`)
   if (query.neighborhood) parts.push(Prisma.sql`LOWER(row.neighborhood) = LOWER(${query.neighborhood})`)
@@ -1822,7 +1822,7 @@ function borrowRadiusExtra(query: ListBorrowItemsQuery): Prisma.Sql {
     parts.push(Prisma.sql`NOT EXISTS (
       SELECT 1 FROM "BorrowAvailabilityWindow" w
       WHERE w."listingId" = row.id
-        AND w.kind::text = 'UNAVAILABLE'
+        AND w.kind = 'UNAVAILABLE'
         AND w."startsAt" < NOW()
         AND w."endsAt" > NOW()
     )`)

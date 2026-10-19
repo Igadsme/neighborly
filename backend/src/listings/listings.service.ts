@@ -457,7 +457,8 @@ export class ListingsService {
    */
   private radiusExtra(query: ListListingsQuery): Prisma.Sql {
     this.priceWhere(query)
-    const parts: Prisma.Sql[] = [Prisma.sql`row.status::text = ${query.status ?? 'PUBLISHED'}`]
+    const status = query.status ?? 'PUBLISHED'
+    const parts: Prisma.Sql[] = [Prisma.sql`row.status = CAST(${status} AS "ListingStatus")`]
     if (query.sellerId) parts.push(Prisma.sql`row."sellerId" = CAST(${query.sellerId} AS uuid)`)
     if (query.categoryId) parts.push(Prisma.sql`row."categoryId" = CAST(${query.categoryId} AS uuid)`)
     if (query.city) parts.push(Prisma.sql`LOWER(row.city) = LOWER(${query.city})`)

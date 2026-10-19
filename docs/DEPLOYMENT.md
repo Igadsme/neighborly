@@ -142,7 +142,7 @@ services:
 
 The Compose file in the repo is the local dev database (`postgres`, `redis`) plus a `staging` profile. Dev `docker compose up -d` is unchanged. Staging is documented in section 8 and in `docs/PHASE_5_STAGING.md`.
 
-Migration `0015_postgis_geography` runs `CREATE EXTENSION IF NOT EXISTS postgis`. On a managed Postgres service that statement needs a superuser, or the provider's admin role (`rds_superuser` on RDS, the cloudsqlsuperuser role, or the equivalent console action). If the application role cannot create extensions, create `postgis` before `prisma migrate deploy`. The local Compose image `postgis/postgis:16-3.4` already allows the database user to create it. A manual undo of the geography columns, triggers, and indexes is in `docs/DATABASE_DESIGN.md`. It keeps the extension.
+Migration `0015_postgis_geography` runs `CREATE EXTENSION IF NOT EXISTS postgis`. On a managed Postgres service that statement needs a superuser, or the provider's admin role (`rds_superuser` on RDS, the cloudsqlsuperuser role, or the equivalent console action). If the application role cannot create extensions, create `postgis` before `prisma migrate deploy`. The local Compose image `postgis/postgis:16-3.4` already allows the database user to create it. Undoing the geography columns is a new forward migration, described in `docs/DATABASE_DESIGN.md`. It keeps the extension. Do not run that SQL by hand.
 
 ## 4. CI/CD expectations
 

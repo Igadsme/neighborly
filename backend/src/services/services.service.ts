@@ -269,7 +269,7 @@ export class ServicesService {
 }
 
 function serviceRadiusExtra(query: ListServicesQuery): Prisma.Sql {
-  const parts: Prisma.Sql[] = [Prisma.sql`row.status::text = 'PUBLISHED'`]
+  const parts: Prisma.Sql[] = [Prisma.sql`row.status = 'PUBLISHED'`]
   if (query.category) parts.push(Prisma.sql`row.category = ${query.category}`)
   const search = query.query?.trim()
   if (search) {

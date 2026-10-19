@@ -84,8 +84,8 @@ function round1(value: number) {
  * Published, non-deleted rows whose owner is ACTIVE, inside the radius,
  * ordered by distance. Drafts, paused rows, archived rows, and suspended
  * sellers are excluded by the WHERE clause, not by a later filter.
- * COUNT(*) OVER() is the full match count. A page past the last row has
- * no row to carry that count, so its total is 0.
+ * COUNT(*) OVER() is the full match count on each returned row. A page
+ * past the last row has no row to carry it, so that case runs a count.
  */
 export async function pageWithinRadius(
   prisma: PrismaService,
@@ -97,7 +97,7 @@ export async function pageWithinRadius(
 ): Promise<RadiusPage> {
   const from = TABLES[table]
   const meters = origin.radiusMiles * METERS_PER_MILE
-  const where = Prisma.sql`
+  const where = () => Prisma.sql`
     row."deletedAt" IS NULL
     AND owner.status = 'ACTIVE'
     AND owner."deletedAt" IS NULL
@@ -117,7 +117,7 @@ export async function pageWithinRadius(
            ) / ${METERS_PER_MILE}) AS distance_miles,
            (COUNT(*) OVER())::int AS total
     ${from}
-    WHERE ${where}
+    WHERE ${where()}
     ORDER BY distance_miles ASC, row.id ASC
     LIMIT ${limit} OFFSET ${offset}
   `)
@@ -128,5 +128,12 @@ export async function pageWithinRadius(
     const miles = Number(row.distance_miles)
     distances.set(row.id, Number.isFinite(miles) ? round1(miles) : 0)
   }
-  return { ids, distances, total: Number(rows[0]?.total ?? 0) }
+  let total = Number(rows[0]?.total ?? 0)
+  if (rows.length === 0 && offset > 0) {
+    const [c] = await prisma.$queryRaw<{ total: number }[]>(
+      Prisma.sql`SELECT COUNT(*)::int AS total ${from} WHERE ${where()}`
+    )
+    total = Number(c?.total ?? 0)
+  }
+  return { ids, distances, total }
 }

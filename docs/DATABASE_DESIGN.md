@@ -86,9 +86,9 @@ Added in `0003_verticals`. Screens still read `src/data/index.ts` until the wiri
 
 Latitude and longitude stay `Decimal(9, 6)` and are write-only on public reads. Migration `0015_postgis_geography` enables PostGIS and adds a nullable `geog geography(Point,4326)` column, maintained by a trigger, on `Listing`, `NeedRequest`, `HousingListing`, `JobListing`, and `ServiceListing`. Each has a GiST index. Prisma Client does not read or write `geog`. Profile coordinates stay off the public card. Service quote `address` is stored and returned to the requester, and to the provider only after `ACCEPTED`.
 
-#### Manual rollback for `0015_postgis_geography`
+#### Rolling back `0015_postgis_geography`
 
-There is no down migration. `0015_postgis_geography/migration.sql` stays as approved. Stop the API that reads `geog` before running this. The statements drop the five triggers, the five GiST indexes, the five `geog` columns, and `neighborly_sync_location()`. They keep the `postgis` extension. Do not run `DROP EXTENSION postgis`.
+There is no down migration. `0015_postgis_geography/migration.sql` stays as approved. Ship the drop SQL below as a new forward migration, for example `0016_drop_geography`, in the same change that reverts the Prisma schema. Do not run it by hand. A hand-run drop leaves `_prisma_migrations` saying `0015` is applied while the columns are gone, so migration drift and `prisma migrate dev` break. The statements drop the five triggers, the five GiST indexes, the five `geog` columns, and `neighborly_sync_location()`. They keep the `postgis` extension. Do not run `DROP EXTENSION postgis`.
 
 ```sql
 DROP TRIGGER IF EXISTS listing_geog_sync ON "Listing";
@@ -112,7 +112,7 @@ ALTER TABLE "ServiceListing" DROP COLUMN IF EXISTS "geog";
 DROP FUNCTION IF EXISTS neighborly_sync_location();
 ```
 
-Revert the Prisma schema in the same change: remove `geog Unsupported("geography(Point,4326)")?` and `@@index([geog], type: Gist)` from `Listing`, `NeedRequest`, `HousingListing`, `JobListing`, and `ServiceListing`. Latitude and longitude stay. A later `prisma migrate deploy` does not re-apply an already recorded `0015`, so this rollback is the operator SQL plus that schema revert, not an edit to the migration file.
+Revert the Prisma schema in that same change: remove `geog Unsupported("geography(Point,4326)")?` and `@@index([geog], type: Gist)` from `Listing`, `NeedRequest`, `HousingListing`, `JobListing`, and `ServiceListing`. Latitude and longitude stay. Do not edit `0015`. `prisma migrate deploy` applies the new forward migration; it does not re-apply an already recorded `0015`.
 
 `verified`, `backgroundCheck`, `rating`, and `reviewCount` are columns the API does not accept from clients. Seed writes them.
 

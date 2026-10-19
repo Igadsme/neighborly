@@ -526,9 +526,9 @@ export class RequestLifecycleService {
     query?: string
   }): Prisma.Sql {
     const status = query.status && query.status !== RequestStatus.DRAFT ? query.status : RequestStatus.PUBLISHED
-    const parts: Prisma.Sql[] = [Prisma.sql`row.status::text = ${status}`]
+    const parts: Prisma.Sql[] = [Prisma.sql`row.status = CAST(${status} AS "RequestStatus")`]
     if (query.categoryId) parts.push(Prisma.sql`row."categoryId" = CAST(${query.categoryId} AS uuid)`)
-    if (query.mode) parts.push(Prisma.sql`row.mode::text = ${query.mode}`)
+    if (query.mode) parts.push(Prisma.sql`row.mode = CAST(${query.mode} AS "ExchangeMode")`)
     if (query.urgency) parts.push(Prisma.sql`row.urgency = ${query.urgency}`)
     if (query.city) parts.push(Prisma.sql`LOWER(row.city) = LOWER(${query.city})`)
     if (query.neighborhood) parts.push(Prisma.sql`LOWER(row.neighborhood) = LOWER(${query.neighborhood})`)
