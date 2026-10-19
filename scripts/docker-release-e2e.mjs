@@ -273,7 +273,7 @@ async function main() {
   )
   if (!skipped.ok) return
 
-  for (const status of ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED']) {
+  for (const status of ['SCHEDULED', 'IN_PROGRESS']) {
     const hop = await call(
       `status-${status.toLowerCase()}`,
       'PATCH',
@@ -295,6 +295,48 @@ async function main() {
       })
       return
     }
+  }
+
+  const firstCompletion = await call(
+    'status-completed-requester',
+    'PATCH',
+    `/transactions/${transactionId}/status`,
+    {
+      token: userA.token,
+      expectStatus: [200],
+      body: { status: 'COMPLETED' }
+    }
+  )
+  if (!firstCompletion.ok || firstCompletion.json?.status !== 'IN_PROGRESS') {
+    failed = true
+    steps.push({
+      step: 'status-completed-requester-body',
+      ok: false,
+      error: 'The first completion confirmation must leave the transaction in progress',
+      body: redact(firstCompletion.json)
+    })
+    return
+  }
+
+  const secondCompletion = await call(
+    'status-completed-offerer',
+    'PATCH',
+    `/transactions/${transactionId}/status`,
+    {
+      token: userB.token,
+      expectStatus: [200],
+      body: { status: 'COMPLETED' }
+    }
+  )
+  if (!secondCompletion.ok || secondCompletion.json?.status !== 'COMPLETED') {
+    failed = true
+    steps.push({
+      step: 'status-completed-offerer-body',
+      ok: false,
+      error: 'The second participant confirmation must complete the transaction',
+      body: redact(secondCompletion.json)
+    })
+    return
   }
 
   const review = await call('submit-review', 'POST', '/reviews', {

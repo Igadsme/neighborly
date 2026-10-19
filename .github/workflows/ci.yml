@@ -445,9 +445,9 @@ jobs:
           cache-dependency-path: backend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: backend
+      - run: docker compose up -d --wait postgres redis
       - run: pnpm exec prisma generate && pnpm exec prisma migrate deploy && pnpm prisma:seed
         working-directory: backend
-      - run: docker compose up -d --wait postgres redis
       - run: pnpm build && nohup pnpm start > /tmp/neighborly-security-api.log 2>&1 &
         working-directory: backend
       - run: for i in {1..45}; do curl -fsS http://127.0.0.1:3000/api/v1/ready && exit 0; sleep 1; done; cat /tmp/neighborly-security-api.log; exit 1
