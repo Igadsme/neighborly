@@ -8,6 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:frontend": "playwright test",
+    "test:security": "node backend/test/security-smoke.mjs",
+    "test:devops": "bash scripts/devops-smoke.sh",
     "lint": "eslint \"src/**/*.{ts,tsx}\" vite.config.ts vitest.config.ts",
     "format": "oxfmt"
   },
@@ -17,6 +20,8 @@
     "socket.io-client": "^4.8.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",

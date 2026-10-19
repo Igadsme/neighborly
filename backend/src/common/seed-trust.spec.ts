@@ -14,6 +14,6 @@ describe('demo seed trust', () => {
     expect(seed).toMatch(/backgroundCheck:\s*false/)
     expect(seed).toMatch(/rating:\s*null/)
     expect(seed).toMatch(/reviewCount:\s*0/)
-    expect(readme).toMatch(/never run in production/)
+    expect(readme).toMatch(/not been deployed to production/)
   })
 })

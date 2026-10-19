@@ -1,9 +1,14 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, qa/automated-pipeline]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
 
 # No deployment happens in this workflow. Deployments live in
 # deploy-staging.yml and deploy-production.yml and are gated behind
@@ -345,3 +350,170 @@ jobs:
       - name: Stop object-store containers
         if: always()
         run: docker compose --profile staging stop minio minio-init || true
+  frontend-qa:
+    name: Frontend browser and accessibility QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+
+  e2e:
+    name: E2E marketplace journey
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgresql://neighborly:neighborly@127.0.0.1:5432/neighborly
+      REDIS_URL: redis://127.0.0.1:6379
+      JWT_SECRET: qa-only-access-secret-with-more-than-32-characters
+      JWT_REFRESH_SECRET: qa-only-refresh-secret-with-more-than-32-characters
+      CORS_ORIGIN: http://127.0.0.1:4173
+      APP_URL: http://127.0.0.1:4173
+      API_BASE: http://127.0.0.1:3000/api/v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
+        working-directory: backend
+      - run: docker compose up -d --wait postgres redis
+      - run: pnpm exec prisma generate && pnpm exec prisma migrate deploy && pnpm prisma:seed
+        working-directory: backend
+      - run: pnpm build
+        working-directory: backend
+      - run: nohup pnpm start > /tmp/neighborly-api.log 2>&1 &
+        working-directory: backend
+      - run: for i in {1..45}; do curl -fsS http://127.0.0.1:3000/api/v1/ready && exit 0; sleep 1; done; cat /tmp/neighborly-api.log; exit 1
+      - run: node scripts/docker-release-e2e.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: |
+            /tmp/neighborly-api.log
+            artifacts/docker-release-verification/e2e-report.json
+          if-no-files-found: ignore
+
+  security:
+    name: Security authorization and abuse controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://neighborly:neighborly@127.0.0.1:5432/neighborly
+      REDIS_URL: redis://127.0.0.1:6379
+      JWT_SECRET: qa-only-access-secret-with-more-than-32-characters
+      JWT_REFRESH_SECRET: qa-only-refresh-secret-with-more-than-32-characters
+      CORS_ORIGIN: http://127.0.0.1:4173
+      RATE_LIMIT_MAX: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: backend
+      - run: docker compose up -d --wait postgres redis
+      - run: pnpm exec prisma generate && pnpm exec prisma migrate deploy && pnpm prisma:seed
+        working-directory: backend
+      - run: pnpm build && nohup pnpm start > /tmp/neighborly-security-api.log 2>&1 &
+        working-directory: backend
+      - run: for i in {1..45}; do curl -fsS http://127.0.0.1:3000/api/v1/ready && exit 0; sleep 1; done; cat /tmp/neighborly-security-api.log; exit 1
+      - run: pnpm test:security
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-artifacts
+          path: /tmp/neighborly-security-api.log
+          if-no-files-found: ignore
+
+  backend-qa:
+    name: Backend migrations and integrity QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: neighborly
+          POSTGRES_USER: neighborly
+          POSTGRES_PASSWORD: neighborly
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U neighborly -d neighborly"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://neighborly:neighborly@127.0.0.1:5432/neighborly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: backend
+      - run: pnpm exec prisma generate && pnpm exec prisma migrate deploy && pnpm exec prisma validate
+        working-directory: backend
+      - run: pnpm test --coverage
+        working-directory: backend
+      - run: pnpm build
+        working-directory: backend
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/src/coverage/
+          if-no-files-found: error
+
+  devops:
+    name: DevOps Docker health and restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/devops-smoke.sh
+      - if: always()
+        run: docker compose -p "neighborly-qa-${GITHUB_RUN_ID}" -f docker-compose.yml logs --no-color > /tmp/neighborly-docker.log || true
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: devops-logs
+          path: /tmp/neighborly-docker.log
+          if-no-files-found: ignore

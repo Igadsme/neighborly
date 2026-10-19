@@ -4,6 +4,10 @@ node_modules/
 **/._*
 dist/
 build/
+.DS_Store
+._*
+**/.DS_Store
+**/._*
 .cache/
 # Real environment files hold secrets and are never committed. The templates
 # that document which variables exist contain no secrets and must be tracked,

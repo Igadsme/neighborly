@@ -61,6 +61,7 @@ S3_BUCKET=neighborly-media
 S3_ACCESS_KEY=neighborly
 S3_SECRET_KEY=replace-with-object-store-secret
 S3_REGION=us-east-1
+S3_PUBLIC_URL=http://localhost:9000/neighborly-media
 
 # Maps
 MAPBOX_TOKEN=replace-with-mapbox-token

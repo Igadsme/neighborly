@@ -1,4 +1,4 @@
-# Frontend-to-Backend Feature Map
+# Frontend-to-backend feature map
 
 Page engine: `src/App.tsx` holds `page` and swaps screens. There is no URL per screen. Remaining fixtures live in `src/data/index.ts` (`sellers`, `listings`, `mapListings`). Map and Profile no longer read those arrays. Housing, jobs, services, and community fixture arrays were removed after those screens were pointed at `/api/v1`. Landing still uses `listings`. The Categories featured strip loads published rows from `GET /listings` and does not import that fixture array. Listing Detail uses `GET /listings/:id` for UUID ids, including the similar strip. Non-UUID ids still use `listings`.
 
