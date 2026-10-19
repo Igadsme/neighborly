@@ -1,0 +1,13 @@
+.git
+.github
+.agents
+.codex
+node_modules
+backend/node_modules
+dist
+backend/dist
+*.log
+.env
+backend/.env
+._*
+.DS_Store

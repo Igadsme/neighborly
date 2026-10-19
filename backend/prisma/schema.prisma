@@ -13,6 +13,42 @@ enum UserStatus {
   DELETED
 }
 
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum ReactionType {
+  LIKE
+  HELPFUL
+  CELEBRATE
+}
+
+enum EventStatus {
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+enum RsvpStatus {
+  GOING
+  INTERESTED
+  NOT_GOING
+}
+
+enum AuthTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
 enum ListingStatus {
   DRAFT
   PUBLISHED
@@ -68,6 +104,7 @@ model User {
   email              String               @unique
   passwordHash       String
   status             UserStatus           @default(ACTIVE)
+  role               UserRole             @default(USER)
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   deletedAt          DateTime?
@@ -79,11 +116,170 @@ model User {
   savedSearches      SavedSearch[]
   preference         UserPreference?
   notificationPreference NotificationPreference?
+  notifications       Notification[]
   conversations      ConversationParticipant[]
   sentMessages       Message[]            @relation("MessageSender")
   reviewsGiven       Review[]             @relation("ReviewAuthor")
   reviewsReceived    Review[]             @relation("ReviewSubject")
   transactionMembers TransactionParticipant[]
+  deviceSessions      DeviceSession[]
+  blocksInitiated     BlockedUser[]        @relation("Blocker")
+  blocksReceived      BlockedUser[]        @relation("Blocked")
+  reportsFiled        Report[]             @relation("ReportReporter")
+  moderationActions   ModerationAction[]   @relation("ModerationActor")
+  communityPosts      CommunityPost[]
+  communityComments   CommunityComment[]
+  postReactions       PostReaction[]
+  organizedEvents     CommunityEvent[]
+  eventRsvps          EventRsvp[]
+  authTokens          AuthToken[]
+}
+
+model AuthToken {
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String        @db.Uuid
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, usedAt, expiresAt])
+}
+
+model DeviceSession {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  tokenHash    String    @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  lastUsedAt   DateTime  @default(now())
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, expiresAt])
+}
+
+model BlockedUser {
+  blockerId String   @db.Uuid
+  blockedId String   @db.Uuid
+  createdAt DateTime @default(now())
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+model Report {
+  id         String       @id @default(uuid()) @db.Uuid
+  reporterId String       @db.Uuid
+  targetType String
+  targetId   String
+  reason     String
+  details    String?
+  status     ReportStatus @default(OPEN)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  reporter   User         @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  actions    ModerationAction[]
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+  @@index([reporterId, createdAt])
+}
+
+model ModerationAction {
+  id          String   @id @default(uuid()) @db.Uuid
+  reportId    String   @db.Uuid
+  actorId     String   @db.Uuid
+  action      String
+  note        String?
+  createdAt   DateTime @default(now())
+  report      Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  actor       User     @relation("ModerationActor", fields: [actorId], references: [id])
+
+  @@index([reportId, createdAt])
+}
+
+model CommunityPost {
+  id           String             @id @default(uuid()) @db.Uuid
+  authorId     String             @db.Uuid
+  neighborhood String?
+  body         String
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  deletedAt    DateTime?
+  author       User               @relation(fields: [authorId], references: [id])
+  comments     CommunityComment[]
+  reactions    PostReaction[]
+
+  @@index([neighborhood, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model CommunityComment {
+  id        String        @id @default(uuid()) @db.Uuid
+  postId    String        @db.Uuid
+  authorId  String        @db.Uuid
+  body      String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  deletedAt DateTime?
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User          @relation(fields: [authorId], references: [id])
+
+  @@index([postId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model PostReaction {
+  postId    String       @db.Uuid
+  userId    String       @db.Uuid
+  type      ReactionType
+  createdAt DateTime     @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId, type])
+  @@index([userId, createdAt])
+}
+
+model CommunityEvent {
+  id           String       @id @default(uuid()) @db.Uuid
+  organizerId  String       @db.Uuid
+  title        String
+  description  String
+  neighborhood String?
+  location     String
+  startsAt     DateTime
+  endsAt       DateTime?
+  capacity     Int?
+  status       EventStatus  @default(PUBLISHED)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  organizer    User         @relation(fields: [organizerId], references: [id])
+  rsvps        EventRsvp[]
+
+  @@index([status, startsAt])
+  @@index([neighborhood, startsAt])
+  @@index([organizerId, startsAt])
+}
+
+model EventRsvp {
+  eventId   String         @db.Uuid
+  userId    String         @db.Uuid
+  status    RsvpStatus
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  event     CommunityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+  @@index([userId, status])
 }
 
 model Profile {
@@ -127,6 +323,20 @@ model NotificationPreference {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  type        String
+  title       String
+  body        String
+  data        Json?
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
 }
 
 model Category {
@@ -279,6 +489,7 @@ model RequestMatch {
 
 model Conversation {
   id           String                    @id @default(uuid()) @db.Uuid
+  directKey    String?                   @unique
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
   participants ConversationParticipant[]
@@ -362,6 +573,8 @@ model Review {
   transaction   Transaction @relation(fields: [transactionId], references: [id])
   author        User        @relation("ReviewAuthor", fields: [authorId], references: [id])
   subject       User        @relation("ReviewSubject", fields: [subjectId], references: [id])
+
+  @@unique([transactionId, authorId, subjectId])
 }
 
 model PriceHistory {

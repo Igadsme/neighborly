@@ -18,7 +18,7 @@ pnpm install
 
 ## Run locally
 
-Start Postgres and Redis (no API container in this compose file):
+Start Postgres, Redis, and local S3-compatible object storage (no API container in this compose file):
 
 ```bash
 docker compose up -d
@@ -32,7 +32,7 @@ cp env.example backend/.env
 cp env.example .env
 ```
 
-The API boots with `DATABASE_URL`, `JWT_SECRET` (at least 32 characters), and `CORS_ORIGIN`. `REDIS_URL`, `JWT_REFRESH_SECRET`, and the `S3_*` variables are optional until those clients exist.
+The API boots with `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET` (secrets must be at least 32 characters), `CORS_ORIGIN`, and the `S3_*` variables.
 
 Backend:
 
@@ -70,3 +70,26 @@ pnpm exec tsc --noEmit
 pnpm test
 pnpm build
 ```
+
+Run the live workflow after the dependency stack, migrations, seed, and built API are running:
+
+```bash
+cd backend
+pnpm test:smoke
+```
+
+The smoke test creates isolated test users and verifies sessions, profiles, listings and image storage, saved searches, requests and offers, transactions, chat, reviews, notifications, community activity, reports, and blocking.
+
+## Production containers
+
+The root `Dockerfile` builds the static frontend on Node 22 and serves it from an unprivileged application port through Nginx. `backend/Dockerfile` builds the NestJS API on Node 22 and runs it as a non-root user. Both images include container health checks.
+
+Apply migrations once per release before starting or rolling out API replicas:
+
+```bash
+docker compose -f compose.production.yml build backend
+docker compose -f compose.production.yml run --rm backend pnpm prisma:deploy
+docker compose -f compose.production.yml up -d
+```
+
+`compose.production.yml` intentionally requires production database, Redis, S3, JWT, public API URL, and CORS settings. It does not start disposable stateful services or contain fallback production secrets. Put TLS and request routing at the hosting platform or reverse proxy, schedule database backups, and use managed Redis/object storage for a real deployment.

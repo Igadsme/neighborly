@@ -9,12 +9,18 @@
     "lint": "eslint \"src/**/*.ts\"",
     "test": "jest --config jest.config.cjs --runInBand",
     "test:e2e": "jest --config test/jest-e2e.json --runInBand",
+    "test:smoke": "node test/live-smoke.mjs",
     "prisma:generate": "prisma generate",
-    "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:seed": "prisma db seed",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy"
   },
+  "prisma": {
+    "seed": "node --import tsx prisma/seed.ts"
+  },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1146.0",
+    "@aws-sdk/s3-presigned-post": "^3.1146.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",

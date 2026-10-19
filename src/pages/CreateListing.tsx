@@ -5,7 +5,12 @@ import { api, ApiError } from "../api/client"
 type Page = "home" | "listing"
 
 interface CreateListingProps {
-  onNavigate: (p: Page) => void
+  onNavigate: (p: Page, entityId?: string) => void
+}
+
+interface LocalPhoto {
+  id: string
+  file: File
 }
 
 const listingTypes = [
@@ -59,104 +64,185 @@ const listingTypes = [
   },
 ]
 
-const categories = [
-  "Furniture",
-  "Electronics",
-  "Clothing & Accessories",
-  "Vehicles",
-  "Sports & Outdoors",
-  "Toys & Games",
-  "Books & Media",
-  "Home & Garden",
-  "Tools & Equipment",
-  "Musical Instruments",
-  "Art & Collectibles",
-  "Other",
-]
-
-const aiSuggestions = {
-  title: "West Elm Mid-Century Modern Walnut Desk — Adjustable Height",
-  desc: 'Selling my Herman Miller Ratio sit-stand desk. Walnut 60" x 30" top, quiet motor, smooth adjustment from 25–51". Light surface scratches. Original retail $1,000+. Works perfectly. Pet-free, smoke-free home. Cash or Venmo. Pickup only.',
-  price: "$480",
-  issues: [],
-}
-
 export default function CreateListing({ onNavigate }: CreateListingProps) {
   const [step, setStep] = useState(0)
   const [listingType, setListingType] = useState<string | null>(null)
-  const [photos, setPhotos] = useState<string[]>([
-    "photo-1593640408182-31c228067bec",
-    "photo-1614744682560-11d22b92aab4",
-  ])
-  const [title, setTitle] = useState("My Herman Miller Standing Desk")
-  const [description, setDescription] = useState(
-    "Great desk, works perfectly. Minor scratch on top.",
-  )
-  const [price, setPrice] = useState("480")
-  const [condition, setCondition] = useState("Good")
-  const [category, setCategory] = useState("Furniture")
-  const [tags, setTags] = useState<string[]>(["Desk", "Office", "WFH"])
+  const [title, setTitle] = useState("")
+  const [description, setDescription] = useState("")
+  const [price, setPrice] = useState("")
+  const [aiApplied, setAiApplied] = useState(false)
+  const aiSuggestions = { title: "", desc: "", price: "", issues: [] as string[] }
+  const [tags, setTags] = useState<string[]>([])
   const [newTag, setNewTag] = useState("")
+  const [condition, setCondition] = useState("Good")
+  const [category, setCategory] = useState("")
+  const [categoryItems, setCategoryItems] = useState<Array<{ id: string; name: string }>>([])
+  const [isFree, setIsFree] = useState(false)
   const [pickup, setPickup] = useState(true)
   const [delivery, setDelivery] = useState(false)
-  const [aiApplied, setAiApplied] = useState(false)
+  const [shipping, setShipping] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [published, setPublished] = useState(false)
-  const [coverImage, setCoverImage] = useState(0)
   const [categoryId, setCategoryId] = useState("")
   const [publishError, setPublishError] = useState("")
+  const [draftNotice, setDraftNotice] = useState("")
   const [categoryLoading, setCategoryLoading] = useState(true)
+  const [createdListingId, setCreatedListingId] = useState("")
+  const [photos, setPhotos] = useState<LocalPhoto[]>([])
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
+  const [uploadedImageIds, setUploadedImageIds] = useState<Record<string, string>>({})
+  const [uploadProgress, setUploadProgress] = useState(0)
 
-  const steps = ["Type", "Photos", "Details", "AI Review", "Preview", "Publish"]
+  const steps = ["Type", "Photos", "Details", "Review", "Preview", "Publish"]
+
+  const addTag = () => setPublishError("Tags are not stored by the listing API yet.")
+
+  const addPhotos = (files: File[]) => {
+    const accepted = files.filter((file) =>
+      ["image/jpeg", "image/png", "image/webp"].includes(file.type) &&
+      file.size > 0 &&
+      file.size <= 10 * 1024 * 1024,
+    )
+    if (accepted.length !== files.length) {
+      setPublishError("Use JPG, PNG, or WebP photos no larger than 10 MB each.")
+    } else {
+      setPublishError("")
+    }
+    const available = Math.max(0, 5 - photos.length)
+    if (accepted.length > available) {
+      setPublishError("A listing can have at most 5 photos.")
+    }
+    setPhotos((current) => [
+      ...current,
+      ...accepted.slice(0, available).map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+      })),
+    ])
+  }
+
+  const movePhoto = (index: number, direction: -1 | 1) => {
+    setPhotos((current) => {
+      const destination = index + direction
+      if (destination < 0 || destination >= current.length) return current
+      const next = [...current]
+      ;[next[index], next[destination]] = [next[destination], next[index]]
+      return next
+    })
+  }
 
   useEffect(() => {
-    api.categories
-      .list()
-      .then((items) => {
-        const match = items.find((item) => item.name === category)
-        if (match) setCategoryId(match.id)
+    let current = true
+    api.categories.list()
+      .then(items => {
+        if (!current) return
+        setCategoryItems(items)
+        const initial = items.find(item => item.name === "Furniture") ?? items[0]
+        if (initial) setCategory(initial.name)
       })
-      .catch(() =>
-        setPublishError(
-          "Categories are unavailable. Please retry before publishing.",
-        ),
-      )
-      .finally(() => setCategoryLoading(false))
-  }, [category])
+      .catch(() => current && setPublishError("Categories are unavailable. Please retry before publishing."))
+      .finally(() => current && setCategoryLoading(false))
+    return () => { current = false }
+  }, [])
 
-  const handlePublish = async () => {
+  useEffect(() => {
+    const previews = photos.map((photo) => URL.createObjectURL(photo.file))
+    setPhotoPreviews(previews)
+    return () => previews.forEach((preview) => URL.revokeObjectURL(preview))
+  }, [photos])
+
+  useEffect(() => {
+    const match = categoryItems.find(item => item.name === category)
+    setCategoryId(match?.id ?? "")
+  }, [category, categoryItems])
+
+  const validateListing = () => {
+    if (title.trim().length < 3 || description.trim().length < 10) {
+      setPublishError("Add a title of at least 3 characters and a description of at least 10 characters.")
+      setStep(2)
+      return false
+    }
     if (!categoryId) {
       setPublishError("Choose a valid category before publishing.")
-      return
+      return false
     }
-    setPublishing(true)
-    setPublishError("")
-    try {
-      await api.listings.create({
+    return true
+  }
+
+  const saveDraft = async () => {
+    let listingId = createdListingId
+    if (!listingId) {
+      const created = await api.listings.create({
         categoryId,
-        title: aiApplied ? aiSuggestions.title : title,
-        description,
-        priceCents: price ? Math.round(Number(price) * 100) : undefined,
+        title: title.trim(),
+        description: description.trim(),
+        priceCents: isFree ? 0 : price ? Math.round(Number(price) * 100) : undefined,
         condition,
         pickupAvailable: pickup,
         deliveryAvailable: delivery,
+        shippingAvailable: shipping,
       })
-      setPublished(true)
+      listingId = created.id
+      setCreatedListingId(listingId)
+    } else {
+      await api.listings.update(listingId, {
+        title: title.trim(),
+        description: description.trim(),
+        priceCents: isFree ? 0 : price ? Math.round(Number(price) * 100) : undefined,
+        condition,
+        pickupAvailable: pickup,
+        deliveryAvailable: delivery,
+        shippingAvailable: shipping,
+      })
+    }
+    const imageIds = { ...uploadedImageIds }
+    for (const photo of photos) {
+      if (imageIds[photo.id]) continue
+      setUploadProgress(0)
+      const uploaded = await api.listings.uploadImage(listingId, photo.file, setUploadProgress)
+      imageIds[photo.id] = uploaded.id
+      setUploadedImageIds((current) => ({ ...current, [photo.id]: uploaded.id }))
+    }
+    if (photos.length) {
+      await api.listings.reorderImages(listingId, photos.map((photo) => imageIds[photo.id]))
+    }
+    return listingId
+  }
+
+  const handleSaveDraft = async () => {
+    if (!validateListing()) return
+    setPublishing(true)
+    setPublishError("")
+    setDraftNotice("")
+    try {
+      await saveDraft()
+      setDraftNotice("Draft saved. You can edit or publish it from My dashboard.")
     } catch (cause) {
-      setPublishError(
-        cause instanceof ApiError
-          ? cause.message
-          : "Unable to publish this listing. Please try again.",
-      )
+      setPublishError(cause instanceof ApiError ? cause.message : "Unable to save this draft. Please try again.")
     } finally {
       setPublishing(false)
     }
   }
 
-  const addTag = () => {
-    if (newTag.trim() && !tags.includes(newTag.trim())) {
-      setTags([...tags, newTag.trim()])
-      setNewTag("")
+  const handlePublish = async () => {
+    if (!validateListing()) return
+    setPublishing(true)
+    setPublishError("")
+    setDraftNotice("")
+    let hasSavedDraft = Boolean(createdListingId)
+    try {
+      const listingId = await saveDraft()
+      hasSavedDraft = true
+      await api.listings.publish(listingId)
+      setPublished(true)
+    } catch (cause) {
+      setPublishError(
+        cause instanceof ApiError
+          ? `${hasSavedDraft ? "Your draft is saved. Retry publishing to continue. " : ""}${cause.message}`
+          : "Unable to publish this listing. Please try again.",
+      )
+    } finally {
+      setPublishing(false)
     }
   }
 
@@ -169,14 +255,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
             <h1 className="font-display text-2xl font-semibold text-[#1B2A4A]">
               Post a listing
             </h1>
-            {step > 0 && (
-              <button
-                onClick={() => onNavigate("home")}
-                className="text-sm text-[#8A9AB5] hover:text-[#1B2A4A] transition-colors"
-              >
-                Save draft
-              </button>
-            )}
+            {step > 0 && <span className="text-xs text-[#8A9AB5]">Drafts are managed from My dashboard</span>}
           </div>
           <ProgressBar steps={6} current={step} />
           <div className="flex justify-between mt-2">
@@ -210,8 +289,17 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
               {listingTypes.map((type) => (
                 <button
                   key={type.id}
-                  onClick={() => setListingType(type.id)}
-                  className={`p-4 rounded-2xl border-2 text-left transition-all ${
+                  disabled={!["item", "free", "vehicle"].includes(type.id)}
+                  onClick={() => {
+                    setListingType(type.id)
+                    const categoryName = type.id === "vehicle" ? "Vehicles" : "Furniture"
+                    const target = categoryItems.find(item => item.name === categoryName)
+                    if (target) setCategory(target.name)
+                    setIsFree(type.id === "free")
+                    if (type.id === "free") setPrice("0")
+                    else if (isFree) setPrice("")
+                  }}
+                  className={`p-4 rounded-2xl border-2 text-left transition-all disabled:cursor-not-allowed disabled:opacity-55 ${
                     listingType === type.id
                       ? "border-[#2D6A4F] bg-[#F0FBF3]"
                       : "border-[#E8E6DF] bg-white hover:border-[#2D6A4F]/30"
@@ -230,6 +318,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                   <p className="text-xs text-[#8A9AB5] mt-0.5 leading-tight">
                     {type.desc}
                   </p>
+                  {!["item", "free", "vehicle"].includes(type.id) && <p className="mt-2 text-[10px] font-semibold text-[#C4512D]">Not available yet</p>}
                 </button>
               ))}
             </div>
@@ -242,82 +331,44 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
             <h2 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">
               Add photos
             </h2>
-            <p className="text-[#8A9AB5] mb-6">
-              High-quality photos sell faster. Add up to 12 photos. The first
-              photo is your cover image.
-            </p>
-
-            {/* Photo grid */}
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              {photos.map((photo, i) => (
-                <div
-                  key={i}
-                  className={`relative rounded-2xl overflow-hidden aspect-square border-2 ${
-                    coverImage === i ? "border-[#2D6A4F]" : "border-transparent"
-                  }`}
-                >
-                  <img
-                    src={`https://images.unsplash.com/${photo}?w=300&h=300&fit=crop&auto=format`}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                  {coverImage === i && (
-                    <div className="absolute top-2 left-2 bg-[#2D6A4F] text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
-                      COVER
+            <p className="text-[#8A9AB5] mb-6">Add up to 5 JPG, PNG, or WebP photos (10 MB maximum each). Files upload directly to secure storage when you publish.</p>
+            {publishError && (
+              <p role="alert" className="mb-3 text-sm text-[#C4512D]">{publishError}</p>
+            )}
+            <label className={`flex min-h-36 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#E8E6DF] bg-white text-center ${createdListingId ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:border-[#2D6A4F]"}`}>
+              <Icon name="camera" size={28} className="text-[#C5CCDA]" />
+              <span className="mt-3 text-sm font-semibold text-[#5C6E8A]">
+                {createdListingId ? "Photos locked while the saved draft is being resumed" : "Choose photos"}
+              </span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                disabled={Boolean(createdListingId)}
+                onChange={(event) => {
+                  addPhotos(Array.from(event.target.files ?? []))
+                  event.target.value = ""
+                }}
+                className="sr-only"
+              />
+            </label>
+            {photos.length > 0 && (
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {photos.map((photo, index) => (
+                  <div key={photo.id} className="overflow-hidden rounded-xl border border-[#E8E6DF] bg-white">
+                    <img src={photoPreviews[index]} alt={`Listing photo ${index + 1} preview`} className="aspect-square w-full object-cover" />
+                    <div className="flex items-center justify-between gap-2 p-2">
+                      <span className="text-xs font-medium text-[#5C6E8A]">{index === 0 ? "Cover photo" : `Photo ${index + 1}`}</span>
+                      <div className="flex gap-1">
+                        <button type="button" disabled={Boolean(createdListingId) || index === 0} onClick={() => movePhoto(index, -1)} aria-label="Move photo earlier" className="rounded px-1 text-[#5C6E8A] disabled:opacity-40">↑</button>
+                        <button type="button" disabled={Boolean(createdListingId) || index === photos.length - 1} onClick={() => movePhoto(index, 1)} aria-label="Move photo later" className="rounded px-1 text-[#5C6E8A] disabled:opacity-40">↓</button>
+                        <button type="button" disabled={Boolean(createdListingId)} onClick={() => setPhotos((current) => current.filter((item) => item.id !== photo.id))} aria-label={`Remove photo ${index + 1}`} className="rounded px-1 text-[#C4512D] disabled:opacity-40">×</button>
+                      </div>
                     </div>
-                  )}
-                  <div className="absolute top-2 right-2 flex gap-1">
-                    <button
-                      onClick={() => setCoverImage(i)}
-                      className="w-6 h-6 rounded-full bg-white/90 shadow flex items-center justify-center text-[9px]"
-                    >
-                      ⭐
-                    </button>
-                    <button
-                      onClick={() =>
-                        setPhotos(photos.filter((_, j) => j !== i))
-                      }
-                      className="w-6 h-6 rounded-full bg-white/90 shadow flex items-center justify-center"
-                    >
-                      <Icon name="x" size={10} className="text-[#E8694A]" />
-                    </button>
                   </div>
-                </div>
-              ))}
-
-              {/* Add photo */}
-              {photos.length < 12 && (
-                <button
-                  onClick={() => setPhotos([...photos, `photo-${Date.now()}`])}
-                  className="aspect-square rounded-2xl border-2 border-dashed border-[#E8E6DF] flex flex-col items-center justify-center text-[#C5CCDA] hover:border-[#2D6A4F]/50 hover:text-[#2D6A4F] transition-all bg-white"
-                >
-                  <Icon name="plus" size={22} />
-                  <span className="text-xs mt-1 font-medium">Add photo</span>
-                </button>
-              )}
-            </div>
-
-            {/* AI photo feedback */}
-            <div className="bg-gradient-to-r from-[#F0FBF3] to-[#F0F7FF] border border-[#74C69D]/30 rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span>✨</span>
-                <span className="text-xs font-semibold text-[#2D6A4F]">
-                  AI Photo Review
-                </span>
+                ))}
               </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-xs text-[#1B2A4A]">
-                  <span className="text-[#2D6A4F]">✓</span> Good lighting
-                  detected
-                </div>
-                <div className="flex items-center gap-2 text-xs text-[#1B2A4A]">
-                  <span className="text-[#2D6A4F]">✓</span> Item clearly visible
-                </div>
-                <div className="flex items-center gap-2 text-xs text-[#D97706]">
-                  ⚠️ Try to show multiple angles for best results
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -329,8 +380,8 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                 Listing details
               </h2>
               <p className="text-[#8A9AB5] mb-6">
-                Be specific and honest — listings with complete details sell 3x
-                faster.
+                Be specific and honest so nearby neighbors can decide whether
+                your listing meets their needs.
               </p>
             </div>
 
@@ -373,11 +424,13 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                 </label>
                 <select
                   value={category}
+                  required
                   onChange={(e) => setCategory(e.target.value)}
                   className="w-full h-11 px-3 bg-white border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F]"
                 >
-                  {categories.map((c) => (
-                    <option key={c}>{c}</option>
+                  <option value="">Choose category</option>
+                  {categoryItems.map((c) => (
+                    <option key={c.id}>{c.name}</option>
                   ))}
                 </select>
               </div>
@@ -409,19 +462,22 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                   </span>
                   <input
                     type="number"
+                    min="0"
+                    step="0.01"
                     value={price}
+                    disabled={isFree}
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="0"
                     className="w-full h-11 pl-8 pr-4 bg-white border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F] transition-all"
                   />
                 </div>
                 <label className="flex items-center gap-2 px-4 h-11 bg-white border border-[#E8E6DF] rounded-xl cursor-pointer hover:border-[#2D6A4F]/30 transition-colors">
-                  <input type="checkbox" className="accent-[#2D6A4F]" />
+                  <input type="checkbox" checked={isFree} onChange={event => { setIsFree(event.target.checked); if (event.target.checked) setPrice("0"); else if (price === "0") setPrice("") }} className="accent-[#2D6A4F]" />
                   <span className="text-sm text-[#1B2A4A]">Free item</span>
                 </label>
               </div>
               <p className="text-xs text-[#8A9AB5] mt-1.5 flex items-center gap-1">
-                💡 Similar items in Atlanta sell for $400–$600
+                Price suggestions are unavailable; choose a price based on your item.
               </p>
             </div>
 
@@ -450,6 +506,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                 <input
                   type="text"
                   value={newTag}
+                  disabled
                   onChange={(e) => setNewTag(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && addTag()}
                   placeholder="Add a tag (e.g. WFH, West Elm)"
@@ -457,6 +514,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                 />
                 <button
                   onClick={addTag}
+                  disabled
                   className="px-3 h-9 bg-[#F0FBF3] text-[#2D6A4F] border border-[#74C69D]/30 rounded-lg text-sm font-medium hover:bg-[#D8F3DC] transition-colors"
                 >
                   + Add
@@ -505,10 +563,10 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                     </span>
                   </button>
                 ))}
-                <button className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-[#E8E6DF] bg-white">
+                <button onClick={() => setShipping(!shipping)} className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 ${shipping ? "border-[#2D6A4F] bg-[#F0FBF3]" : "border-[#E8E6DF] bg-white"}`}>
                   <span className="text-2xl">📬</span>
                   <span className="text-xs font-semibold text-[#5C6E8A]">
-                    Shipping
+                    Shipping {shipping ? "✓" : ""}
                   </span>
                 </button>
               </div>
@@ -516,8 +574,21 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
           </div>
         )}
 
-        {/* Step 3: AI assistance */}
         {step === 3 && (
+          <div className="animate-fade-in rounded-2xl border border-[#E8E6DF] bg-white p-6">
+            <h2 className="font-display text-xl font-semibold text-[#1B2A4A]">Review your details</h2>
+            <p className="mt-2 text-sm text-[#8A9AB5]">Automated writing, pricing, photo, and moderation assistance is not enabled. Check your own listing details before continuing.</p>
+            <div className="mt-5 space-y-2 rounded-xl bg-[#FAFAF7] p-4 text-sm">
+              <p><strong>Title:</strong> {title || "Not entered"}</p>
+              <p><strong>Category:</strong> {category || "Not selected"}</p>
+              <p><strong>Photos:</strong> {photos.length} selected for secure upload</p>
+              <p><strong>Price:</strong> {isFree ? "Free" : price ? `$${price}` : "Negotiable"}</p>
+            </div>
+          </div>
+        )}
+
+        {/* AI assistance intentionally disabled in v1. */}
+        {step === 30 && (
           <div className="animate-fade-in">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2D6A4F] to-[#4A7FB5] flex items-center justify-center text-xl">
@@ -637,19 +708,17 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
             <div className="bg-white rounded-3xl border border-[#E8E6DF] shadow-md overflow-hidden">
               {/* Image */}
               <div className="h-64 bg-[#F5F4EF] overflow-hidden">
-                <img
-                  src={`https://images.unsplash.com/${photos[coverImage]}?w=800&h=500&fit=crop&auto=format`}
-                  alt={title}
-                  className="w-full h-full object-cover"
-                />
+                {photoPreviews[0]
+                  ? <img src={photoPreviews[0]} alt="Listing cover preview" className="h-full w-full object-cover" />
+                  : <div className="flex h-full items-center justify-center text-sm text-[#8A9AB5]">No cover photo selected</div>}
               </div>
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <h3 className="font-display text-xl font-semibold text-[#1B2A4A] leading-tight">
-                    {aiApplied ? aiSuggestions.title : title}
+                    {title || "Your listing title"}
                   </h3>
                   <span className="text-2xl font-bold text-[#1B2A4A] flex-shrink-0">
-                    ${price}
+                    {isFree ? "Free" : price ? `$${price}` : "Negotiable"}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 mb-3">
@@ -661,14 +730,14 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                 </p>
                 <div className="flex items-center gap-2 pt-4 border-t border-[#F5F4EF]">
                   <div className="w-8 h-8 rounded-full bg-[#D8F3DC] flex items-center justify-center text-sm font-bold text-[#2D6A4F]">
-                    G
+                    <Icon name="user" size={15} />
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-[#1B2A4A]">
-                      Gad M. (You)
+                      Your profile
                     </p>
                     <p className="text-xs text-[#8A9AB5]">
-                      Inman Park · Just now
+                      Member profile
                     </p>
                   </div>
                 </div>
@@ -704,16 +773,15 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                   Listing published!
                 </h3>
                 <p className="text-[#5C6E8A] mb-2">
-                  Your listing is live and visible to neighbors nearby.
+                  Your listing is published and visible in marketplace search.
                 </p>
                 <p className="text-sm text-[#8A9AB5] mb-8">
-                  We'll notify you when someone messages you or saves your
-                  listing.
+                  Your photos are stored securely with the listing.
                 </p>
                 <div className="flex justify-center gap-3">
                   <Button
                     variant="primary"
-                    onClick={() => onNavigate("listing")}
+                    onClick={() => createdListingId ? onNavigate("listing", createdListingId) : onNavigate("home")}
                   >
                     View my listing →
                   </Button>
@@ -737,10 +805,10 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                       label: "Save as draft",
                       desc: "Save your work and publish when you're ready",
                       icon: "📝",
-                      action: () => onNavigate("home"),
+                      action: handleSaveDraft,
                       primary: false,
                     },
-                  ].map(({ label, desc, icon, action, primary }) => (
+                ].map(({ label, desc, icon, action, primary }) => (
                     <button
                       key={label}
                       onClick={action}
@@ -760,13 +828,22 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                             primary ? "text-[#2D6A4F]" : "text-[#1B2A4A]"
                           }`}
                         >
-                          {publishing && primary ? "Publishing..." : label}
+                          {publishing && primary
+                            ? uploadProgress > 0 && uploadProgress < 100
+                              ? `Uploading photo (${uploadProgress}%)...`
+                              : "Publishing..."
+                            : label}
                         </p>
-                        <p className="text-xs text-[#8A9AB5] mt-0.5">{desc}</p>
+                        <p className="text-xs text-[#8A9AB5] mt-0.5">
+                          {primary
+                            ? `${photos.length} photo${photos.length === 1 ? "" : "s"} upload securely before the listing goes live.`
+                            : desc}
+                        </p>
                       </div>
                     </button>
-                  ))}
+                ))}
                 </div>
+                {draftNotice && <div role="status" className="rounded-xl border border-[#74C69D] bg-[#F0FBF3] p-3 text-sm text-[#1B4332]">{draftNotice}</div>}
 
                 {/* Promote option */}
                 <div className="bg-gradient-to-r from-[#FDE8E0] to-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5">
@@ -780,7 +857,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
                         days
                       </p>
                     </div>
-                    <Button variant="secondary" size="sm">
+                    <Button variant="secondary" size="sm" disabled title="Paid promotions are not available yet">
                       Promote
                     </Button>
                   </div>
@@ -813,7 +890,7 @@ export default function CreateListing({ onNavigate }: CreateListingProps) {
               <Button
                 variant="primary"
                 size="md"
-                onClick={() => setStep(step + 1)}
+                onClick={() => setStep(step === 2 ? 3 : step + 1)}
                 disabled={step === 0 && !listingType}
               >
                 {step === 4 ? "Continue to publish →" : "Continue →"}

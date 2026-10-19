@@ -1,24 +1,40 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Avatar, Icon } from "./ui"
+import { api } from "../api/client"
+import type { CurrentUser } from "../api/types"
 
-type Page = "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community"
+type Page = "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community" | "requests" | "notifications"
 
 interface NavProps {
   currentPage: Page
   onNavigate: (p: Page) => void
-  unreadMessages?: number
+  unreadNotifications: number | null
   onSignOut?: () => void
 }
 
 export default function Navigation({
   currentPage,
   onNavigate,
-  unreadMessages = 2,
+  unreadNotifications,
   onSignOut,
 }: NavProps) {
-  const [locationOpen, setLocationOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
-  const [mobileSearch, setMobileSearch] = useState("")
+  const [user, setUser] = useState<CurrentUser | null>(null)
+  const displayName =
+    [user?.profile?.firstName, user?.profile?.lastName]
+      .filter(Boolean)
+      .join(" ") || "Neighbor"
+  const neighborhood = [
+    user?.profile?.neighborhood,
+    user?.profile?.city,
+    user?.profile?.state,
+  ]
+    .filter(Boolean)
+    .join(" · ") || "Location not set"
+
+  useEffect(() => {
+    api.auth.me().then(setUser).catch(() => setUser(null))
+  }, [])
 
   const isActive = (p: Page) => currentPage === p
 
@@ -54,35 +70,12 @@ export default function Navigation({
               </span>
             </button>
 
-            {/* Location selector */}
-            <div className="relative">
-              <button
-                onClick={() => setLocationOpen(!locationOpen)}
-                className="flex items-center gap-1.5 text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A] transition-colors px-3 py-2 rounded-lg hover:bg-[#F5F4EF] border border-[#E8E6DF]"
-              >
-                <Icon name="mapPin" size={13} className="text-[#E8694A]" />
-                Atlanta, GA
-                <Icon name="chevronDown" size={11} />
-              </button>
-              {locationOpen && (
-                <div className="absolute top-10 left-0 w-64 bg-white border border-[#E8E6DF] rounded-xl shadow-lg p-2 z-50">
-                  {[
-                    "Atlanta, GA",
-                    "Decatur, GA",
-                    "Midtown, Atlanta",
-                    "Buckhead",
-                    "Inman Park",
-                  ].map((loc) => (
-                    <button
-                      key={loc}
-                      onClick={() => setLocationOpen(false)}
-                      className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[#F5F4EF] text-[#1B2A4A]"
-                    >
-                      {loc}
-                    </button>
-                  ))}
-                </div>
-              )}
+            <div
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[#5C6E8A]"
+              title="Location editing and radius search are not available yet"
+            >
+              <Icon name="mapPin" size={13} className="text-[#E8694A]" />
+              {neighborhood}
             </div>
 
             {/* Search bar */}
@@ -95,8 +88,10 @@ export default function Navigation({
                 />
                 <input
                   type="text"
-                  placeholder="Search for anything nearby..."
-                  className="w-full h-9 pl-9 pr-4 bg-[#F5F4EF] border border-transparent rounded-full text-sm text-[#1B2A4A] placeholder:text-[#C5CCDA] focus:outline-none focus:bg-white focus:border-[#2D6A4F] transition-all"
+                  placeholder="Search listings and requests..."
+                  readOnly
+                  aria-label="Open marketplace search"
+                  className="w-full h-9 pl-9 pr-4 bg-[#F5F4EF] border border-transparent rounded-full text-sm text-[#1B2A4A] placeholder:text-[#C5CCDA] focus:outline-none focus:bg-white focus:border-[#2D6A4F] transition-all cursor-pointer"
                   onFocus={() => onNavigate("explore")}
                 />
               </div>
@@ -106,6 +101,7 @@ export default function Navigation({
             <nav className="flex items-center gap-1 ml-2">
               {[
                 { label: "Explore", page: "explore" as Page, icon: "compass" },
+                { label: "Requests", page: "requests" as Page, icon: null },
                 { label: "Map", page: "map" as Page, icon: "map" },
                 { label: "Housing", page: "housing" as Page, icon: null },
                 { label: "Services", page: "services" as Page, icon: null },
@@ -130,6 +126,23 @@ export default function Navigation({
             <div className="flex items-center gap-2 ml-auto">
               {/* Messages */}
               <button
+                onClick={() => onNavigate("notifications")}
+                aria-label="Notifications"
+                className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+                  isActive("notifications")
+                    ? "bg-[#F0FBF3] text-[#2D6A4F]"
+                    : "hover:bg-[#F5F4EF] text-[#5C6E8A]"
+                }`}
+              >
+                <Icon name="bell" size={18} />
+                {unreadNotifications !== null && unreadNotifications > 0 && (
+                  <span className="absolute top-0.5 right-0.5 min-w-4 h-4 px-1 bg-[#E8694A] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                  </span>
+                )}
+              </button>
+
+              <button
                 onClick={() => onNavigate("messages")}
                 className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
                   isActive("messages")
@@ -138,11 +151,6 @@ export default function Navigation({
                 }`}
               >
                 <Icon name="message" size={18} />
-                {unreadMessages > 0 && (
-                  <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#E8694A] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                    {unreadMessages}
-                  </span>
-                )}
               </button>
 
               {/* Saved */}
@@ -173,10 +181,8 @@ export default function Navigation({
                   className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-full border border-[#E8E6DF] hover:border-[#C5CCDA] transition-colors"
                 >
                   <Avatar
-                    src="photo-1544005313-94ddf0286df2"
-                    name="Gad"
+                    name={displayName}
                     size="sm"
-                    verified
                   />
                   <Icon
                     name="chevronDown"
@@ -188,10 +194,10 @@ export default function Navigation({
                   <div className="absolute right-0 top-11 w-52 bg-white border border-[#E8E6DF] rounded-2xl shadow-xl p-2 z-50">
                     <div className="px-3 py-2 border-b border-[#F5F4EF] mb-1">
                       <p className="font-semibold text-sm text-[#1B2A4A]">
-                        Gad Miller
+                        {displayName}
                       </p>
                       <p className="text-xs text-[#8A9AB5]">
-                        Inman Park · Atlanta
+                        {neighborhood}
                       </p>
                     </div>
                     {[
@@ -262,9 +268,9 @@ export default function Navigation({
             />
             <input
               type="text"
-              placeholder="Search..."
-              value={mobileSearch}
-              onChange={(e) => setMobileSearch(e.target.value)}
+              placeholder="Search listings..."
+              readOnly
+              aria-label="Open marketplace search"
               className="w-full h-8 pl-8 pr-3 bg-[#F5F4EF] rounded-full text-sm text-[#1B2A4A] placeholder:text-[#C5CCDA] focus:outline-none"
               onFocus={() => onNavigate("explore")}
             />
@@ -275,9 +281,16 @@ export default function Navigation({
             className="relative w-8 h-8 flex items-center justify-center text-[#5C6E8A]"
           >
             <Icon name="message" size={18} />
-            {unreadMessages > 0 && (
-              <span className="absolute top-0 right-0 w-4 h-4 bg-[#E8694A] text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                {unreadMessages}
+          </button>
+          <button
+            onClick={() => onNavigate("notifications")}
+            aria-label="Notifications"
+            className="relative w-8 h-8 flex items-center justify-center text-[#5C6E8A]"
+          >
+            <Icon name="bell" size={18} />
+            {unreadNotifications !== null && unreadNotifications > 0 && (
+              <span className="absolute top-0 right-0 min-w-4 h-4 px-1 bg-[#E8694A] text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                {unreadNotifications > 99 ? "99+" : unreadNotifications}
               </span>
             )}
           </button>
@@ -290,6 +303,7 @@ export default function Navigation({
           {[
             { label: "Home", page: "home" as Page, icon: "home" },
             { label: "Explore", page: "explore" as Page, icon: "compass" },
+            { label: "Requests", page: "requests" as Page, icon: "search" },
             {
               label: "Post",
               page: "create" as Page,
@@ -317,11 +331,6 @@ export default function Navigation({
               ) : (
                 <div className="relative">
                   <Icon name={icon} size={20} />
-                  {page === "messages" && unreadMessages > 0 && (
-                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#E8694A] text-white text-[8px] font-bold rounded-full flex items-center justify-center">
-                      {unreadMessages}
-                    </span>
-                  )}
                 </div>
               )}
               <span

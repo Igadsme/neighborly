@@ -1,6 +1,7 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common'
 import { JwtModule, JwtService } from '@nestjs/jwt'
 import { Test } from '@nestjs/testing'
+import { ConfigService } from '@nestjs/config'
 import { AuthGuard } from './auth.guard'
 
 const SECRET = 'unit-test-jwt-secret-32-characters-min'
@@ -13,7 +14,10 @@ describe('AuthGuard', () => {
     process.env.JWT_SECRET = SECRET
     const moduleRef = await Test.createTestingModule({
       imports: [JwtModule.register({})],
-      providers: [AuthGuard]
+      providers: [
+        AuthGuard,
+        { provide: ConfigService, useValue: { getOrThrow: () => SECRET } },
+      ]
     }).compile()
     guard = moduleRef.get(AuthGuard)
     jwt = moduleRef.get(JwtService)

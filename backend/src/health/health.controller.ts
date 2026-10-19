@@ -1,9 +1,13 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { RateLimitService } from '../common/rate-limit/rate-limit.service'
 
 @Controller()
 export class HealthController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly rateLimits: RateLimitService,
+  ) {}
 
   @Get('health')
   health() {
@@ -14,11 +18,19 @@ export class HealthController {
   async ready() {
     try {
       await this.prisma.$queryRaw`SELECT 1`
-      return { status: 'ready', dependencies: { postgres: 'up' } }
+      const redis = await this.rateLimits.isRedisReady()
+      if (redis === false) throw new Error('Redis is unavailable')
+      return {
+        status: 'ready',
+        dependencies: {
+          postgres: 'up',
+          ...(redis === null ? {} : { redis: 'up' }),
+        },
+      }
     } catch {
       throw new ServiceUnavailableException({
         status: 'not_ready',
-        dependencies: { postgres: 'down' }
+        dependencies: { postgres: 'unknown', redis: 'unknown' }
       })
     }
   }

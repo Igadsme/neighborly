@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator'
+import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator'
 
 export class RegisterDto {
   @IsEmail()
@@ -36,4 +36,28 @@ export class LoginDto {
   @IsString()
   @MinLength(1)
   password!: string
+}
+
+export class ForgotPasswordDto {
+  @IsEmail()
+  email!: string
+}
+
+export class ResetPasswordDto {
+  @IsString()
+  @MinLength(32)
+  @MaxLength(256)
+  token!: string
+
+  @IsString()
+  @MinLength(12)
+  @MaxLength(256)
+  password!: string
+}
+
+export class ConfirmEmailDto {
+  @IsString()
+  @MinLength(32)
+  @MaxLength(256)
+  token!: string
 }

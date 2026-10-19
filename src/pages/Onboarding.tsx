@@ -41,7 +41,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [password, setPassword] = useState("")
   const [fullName, setFullName] = useState("")
   const [neighborhood, setNeighborhood] = useState("")
-  const [locationGranted, setLocationGranted] = useState(false)
   const [selectedInterests, setSelectedInterests] = useState<string[]>([
     "buy-sell",
     "services",
@@ -109,8 +108,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       setSaving(true)
       try {
         await api.auth.completeOnboarding({
-          neighborhood:
-            neighborhood || (locationGranted ? "Inman Park" : undefined),
+          neighborhood: neighborhood || undefined,
           city: "Atlanta",
           state: "GA",
           interests: selectedInterests,
@@ -163,25 +161,12 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             your community.
           </h2>
           <p className="text-white/70 leading-relaxed">
-            Join 47,000+ neighbors buying, selling, and connecting across
-            Atlanta.
+            Create an account to browse persisted listings and connect with
+            neighbors as the marketplace grows.
           </p>
-          <div className="flex items-center gap-4 mt-6">
-            {[
-              "photo-1472099645785-5658abf4ff4e",
-              "photo-1494790108755-2616b612b77c",
-              "photo-1438761681033-6461ffad8d80",
-              "photo-1500648767791-00dcc994a43e",
-            ].map((src, i) => (
-              <img
-                key={i}
-                src={`https://images.unsplash.com/${src}?w=60&h=60&fit=crop&auto=format`}
-                alt=""
-                className="w-10 h-10 rounded-full border-2 border-white object-cover -ml-3 first:ml-0"
-              />
-            ))}
-            <span className="text-sm text-white/70 ml-1">+47k neighbors</span>
-          </div>
+          <p className="mt-6 text-xs font-medium text-white/60">
+            Request, listing, and messaging features are under active development.
+          </p>
         </div>
       </div>
 
@@ -354,15 +339,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                       />
                     </div>
                     <p className="text-xs text-[#8A9AB5]">
-                      By continuing, you agree to our{" "}
-                      <a href="#" className="text-[#2D6A4F] font-medium">
-                        Terms of Service
-                      </a>{" "}
-                      and{" "}
-                      <a href="#" className="text-[#2D6A4F] font-medium">
-                        Privacy Policy
-                      </a>
-                      .
+                      Terms and privacy documents are not published yet. Avoid using real sensitive personal data in this early build.
                     </p>
                   </div>
                 )}
@@ -389,35 +366,22 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   Your exact address is never shared.
                 </p>
 
-                <button
-                  onClick={() => setLocationGranted(true)}
-                  className={`w-full p-5 rounded-2xl border-2 transition-all mb-4 text-left ${
-                    locationGranted
-                      ? "border-[#2D6A4F] bg-[#F0FBF3]"
-                      : "border-[#E8E6DF] bg-white hover:border-[#2D6A4F]/50"
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-[#D8F3DC] flex items-center justify-center text-2xl flex-shrink-0">
-                      {locationGranted ? "✅" : "📍"}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-[#1B2A4A]">
-                        {locationGranted
-                          ? "Location detected"
-                          : "Allow location access"}
-                      </p>
-                      <p className="text-sm text-[#8A9AB5]">
-                        {locationGranted
-                          ? "Inman Park, Atlanta, GA"
-                          : "Automatically find your neighborhood"}
-                      </p>
-                    </div>
+                <div className="mb-4 flex items-center gap-4 rounded-2xl border border-[#E8E6DF] bg-white p-5">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-[#EEF0F5] text-2xl">
+                    📍
                   </div>
-                </button>
+                  <div>
+                    <p className="font-semibold text-[#1B2A4A]">
+                      Automatic location detection unavailable
+                    </p>
+                    <p className="text-sm text-[#8A9AB5]">
+                      Choose a neighborhood below. Your exact address is not requested.
+                    </p>
+                  </div>
+                </div>
 
                 <p className="text-xs text-center text-[#C5CCDA] mb-4">
-                  — or choose your neighborhood —
+                  Choose your neighborhood
                 </p>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -487,8 +451,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   Stay in the loop
                 </h1>
                 <p className="text-[#8A9AB5] mb-8">
-                  Choose what matters to you. You can change these anytime in
-                  Settings.
+                  Choose preference values to save to your profile. Notification delivery is not available yet.
                 </p>
                 <div className="space-y-4">
                   {[
@@ -549,32 +512,31 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   🎉
                 </div>
                 <h1 className="font-display text-4xl font-semibold text-[#1B2A4A] mb-3">
-                  You're all set, Gad!
+                  You're all set, {fullName.trim().split(/\s+/)[0] || "Neighbor"}!
                 </h1>
                 <p className="text-[#5C6E8A] mb-8 leading-relaxed">
-                  Welcome to Neighborly. Your personalized feed is ready with
-                  listings, neighbors, and community content near Inman Park.
+                  Your account and preferences were saved. Browse published listings and requests currently available in Neighborly.
                 </p>
                 <div className="grid grid-cols-3 gap-3 mb-8">
                   <div className="bg-[#F0FBF3] rounded-xl p-4 text-center">
                     <p className="text-2xl font-bold font-display text-[#2D6A4F]">
-                      3.2k
+                      ✓
                     </p>
                     <p className="text-xs text-[#5C6E8A] mt-0.5">
-                      Nearby listings
+                      Account created
                     </p>
                   </div>
                   <div className="bg-[#FFF5F2] rounded-xl p-4 text-center">
                     <p className="text-2xl font-bold font-display text-[#E8694A]">
-                      47k
+                      {neighborhood ? "✓" : "—"}
                     </p>
-                    <p className="text-xs text-[#5C6E8A] mt-0.5">Neighbors</p>
+                    <p className="text-xs text-[#5C6E8A] mt-0.5">Neighborhood</p>
                   </div>
                   <div className="bg-[#F0F7FF] rounded-xl p-4 text-center">
                     <p className="text-2xl font-bold font-display text-[#4A7FB5]">
-                      Free
+                      {selectedInterests.length}
                     </p>
-                    <p className="text-xs text-[#5C6E8A] mt-0.5">To use</p>
+                    <p className="text-xs text-[#5C6E8A] mt-0.5">Interests saved</p>
                   </div>
                 </div>
               </div>

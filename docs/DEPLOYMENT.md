@@ -37,6 +37,7 @@ S3_BUCKET=neighborly-media
 S3_ACCESS_KEY=neighborly
 S3_SECRET_KEY=neighborly-secret
 S3_REGION=us-east-1
+S3_PUBLIC_URL=http://localhost:9000/neighborly-media
 
 # Maps
 MAPBOX_TOKEN=replace-with-mapbox-token
@@ -68,53 +69,17 @@ ENABLE_MAPS=true
 
 ## 3. Containerized runtime
 
-Use Docker Compose with the following services:
+`docker-compose.yml` provides local Postgres, Redis, and RustFS S3-compatible storage (including automatic bucket/CORS setup by the API). Copy `backend/.env.example` to `backend/.env`, replace the local-only storage password with a strong value, and use the same username/password for `S3_ACCESS_KEY` and `S3_SECRET_KEY`. Start dependencies with `docker compose up -d`; run the NestJS API and Vite frontend from their package directories.
 
-- `app` – NestJS API server
+The local Compose services are:
+
 - `postgres` – PostgreSQL with PostGIS extension
-- `redis` – cache, queue, rate-limit store, session cache
-- `minio` – S3-compatible object storage
-- `pgadmin` or `supabase` optional admin tool for local development
+- `redis` – shared rate-limit state and readiness dependency
+- `minio` – RustFS-backed S3-compatible object storage (the service name remains stable)
 
-A simple deployment topology:
+The production images are defined by `Dockerfile` and `backend/Dockerfile`. `compose.production.yml` wires those stateless images to externally managed PostgreSQL, Redis, and S3 services and refuses to start when required configuration is missing. Run `pnpm prisma:deploy` as a one-off release step before the API rollout; do not let every application replica race to apply migrations.
 
-```yaml
-services:
-  app:
-    build: .
-    ports:
-      - '3000:3000'
-    env_file:
-      - .env
-    depends_on:
-      - postgres
-      - redis
-      - minio
-
-  postgres:
-    image: postgis/postgis:16-3.4
-    environment:
-      POSTGRES_DB: neighborly
-      POSTGRES_USER: neighborly
-      POSTGRES_PASSWORD: neighborly
-    ports:
-      - '5432:5432'
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - '6379:6379'
-
-  minio:
-    image: minio/minio
-    command: server /data --console-address ':9001'
-    environment:
-      MINIO_ROOT_USER: neighborly
-      MINIO_ROOT_PASSWORD: neighborly-secret
-    ports:
-      - '9000:9000'
-      - '9001:9001'
-```
+For a deployed environment, set S3-compatible endpoint, bucket, access key, secret, region, and public image URL to the provider/CDN values. Never reuse local MinIO credentials. The local bucket permits public reads for published listing images; configure the equivalent narrowly scoped read policy and browser CORS origins for the production app.
 
 ## 4. CI/CD expectations
 

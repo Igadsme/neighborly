@@ -21,7 +21,33 @@ services:
       - "6379:6379"
     volumes:
       - neighborly-redis:/data
+  minio:
+    # MinIO stopped publishing its community Docker images in 2026. RustFS
+    # provides the same S3-compatible API and ports for local development.
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+      # Local-only defaults keep `docker compose up` self-contained. Override
+      # them through the shell or root .env for shared development hosts.
+      RUSTFS_ACCESS_KEY: ${MINIO_ROOT_USER:-neighborly}
+      RUSTFS_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-neighborly-local-storage-secret}
+      RUSTFS_UNSAFE_BYPASS_DISK_CHECK: "true"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - neighborly-minio:/data
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -fsS http://127.0.0.1:9000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
 volumes:
   neighborly-postgres:
   neighborly-redis:
+  neighborly-minio:

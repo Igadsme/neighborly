@@ -8,7 +8,11 @@ import { AppModule } from './app.module'
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true })
   app.use(helmet())
-  app.enableCors({ origin: process.env.CORS_ORIGIN?.split(',').map(value => value.trim()) ?? false })
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN?.split(',').map(value => value.trim()) ?? false,
+    credentials: true,
+  })
+  app.getHttpAdapter().getInstance().set('trust proxy', 1)
   app.setGlobalPrefix('api/v1')
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
 

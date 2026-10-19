@@ -1,300 +1,132 @@
-# API Specification (Initial Production Contract)
-
-## 1. API conventions
-
-- Base URL: `/api/v1`
-- Auth: JWT via Authorization header, plus refresh token rotation
-- Validation: Zod for request validation and DTO parsing
-- Errors: structured JSON envelope with `code`, `message`, `details`, `timestamp`
-- Pagination: `page`, `limit`, `cursor`
-- Filtering: query parameters with standardized operators on `category`, `price`, `distance`, `status`, `verified`, `sort`
-- Rate limiting: global and per-user limits for high-risk endpoints
-
-## 2. Authentication and profile endpoints
-
-### `POST /auth/register`
-Creates a user account and initial profile.
-
-Request:
-```json
-{
-  "email": "user@example.com",
-  "password": "StrongPass!123",
-  "firstName": "Gad",
-  "lastName": "Miller",
-  "neighborhood": "Inman Park",
-  "city": "Atlanta",
-  "state": "GA"
-}
-```
-
-Response:
-```json
-{
-  "user": { "id": "uuid", "email": "user@example.com" },
-  "tokens": {
-    "accessToken": "...",
-    "refreshToken": "..."
-  }
-}
-```
-
-### `POST /auth/login`
-Authenticates an existing user.
-
-### `POST /auth/refresh`
-Refreshes access tokens.
-
-### `GET /users/me`
-Returns authenticated user profile and trust summary.
-
-### `PATCH /users/me/profile`
-Updates profile fields, availability, and preferences.
-
-### `GET /users/:id/profile`
-Public profile including trust passport and reviews.
-
-Implemented in the first frontend integration slice:
-
-- `GET /users/me`
-- `PATCH /users/me/onboarding`
-- `GET /categories`
-
-The onboarding endpoint persists neighborhood, interests, capabilities, and notification preferences.
-
-## 3. Marketplace and listings endpoints
-
-### `GET /categories`
-Returns the seeded category catalog used by listing creation and filtering.
-
-### `GET /listings`
-Returns paginated listings with filters.
-
-Query params:
-- `query`
-- `category`
-- `condition`
-- `minPrice`
-- `maxPrice`
-- `distance`
-- `verifiedOnly`
-- `freeOnly`
-- `deliveryOnly`
-- `sort`
-- `neighborhood`
-
-### `GET /listings/:id`
-Returns listing detail, seller summary, related items, reviews, and availability.
-
-Implemented listing persistence endpoints:
-
-- `PATCH /listings/:id` – ownership-protected listing edits
-- `DELETE /listings/:id` – ownership-protected archive/soft delete
-- `POST /listings/:id/favorite` – authenticated favorite toggle
-- `GET /listings/favorites` – authenticated saved listings
-- `POST /listings/saved-searches` – persist a search and filter JSON
-- `GET /listings/saved-searches` – retrieve the current user's saved searches
-
-The Saved Items page consumes the favorites and saved-search endpoints. Price-drop history,
-saved-search alert toggles, and notification delivery are not implemented yet and are shown
-as unavailable rather than represented by fixture data.
-
-### `POST /listings`
-Creates a new listing.
-
-Request example:
-```json
-{
-  "title": "West Elm Mid-Century Modern Sofa",
-  "category": "Furniture",
-  "subcategory": "Sofas & Couches",
-  "price": 650,
-  "condition": "Like New",
-  "description": "Clean, smoke-free sofa.",
-  "location": {
-    "latitude": 33.7490,
-    "longitude": -84.3880,
-    "neighborhood": "Decatur",
-    "city": "Atlanta"
-  },
-  "pickupAvailable": true,
-  "deliveryAvailable": false,
-  "shippingAvailable": false,
-  "images": ["s3://bucket/uuid.png"]
-}
-```
+# API specification
+
+This document records implemented routes only. The live OpenAPI document is served at `/docs`; the API base path is `/api/v1`.
+
+## Conventions
+
+- JSON REST API. Authenticated operations accept `Authorization: Bearer <access-token>`.
+- DTOs are validated by NestJS validation pipes.
+- Pagination for listing search uses `limit` and `offset`.
+- `DATABASE_URL`, `JWT_SECRET`, and `CORS_ORIGIN` are required by the backend. Redis and S3-compatible storage are required for production.
+- Short-lived access tokens are paired with rotated, revocable HTTP-only refresh sessions. Redis-backed route rate limiting is global.
+
+## Health and authentication
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/health` | No | Process health |
+| GET | `/ready` | No | Database readiness check |
+| POST | `/auth/register` | No | Create account and issue access token |
+| POST | `/auth/login` | No | Authenticate and issue access token |
+| POST | `/auth/refresh` | Refresh cookie | Rotate refresh session and issue access token |
+| POST | `/auth/logout` | Refresh cookie | Revoke the current device session |
+| POST | `/auth/logout-all` | Yes | Revoke all device sessions |
+| GET | `/users/me` | Yes | Current user and profile |
+| PATCH | `/users/me/onboarding` | Yes | Persist neighborhood, interests, capabilities, and notification preferences |
+| PATCH | `/users/me` | Yes | Edit the caller's profile |
+| GET | `/users/me/export` | Yes | Export account data without credentials |
+| DELETE | `/users/me` | Yes + password | Anonymize the account and revoke sessions |
+| GET | `/users/:id/profile` | Yes | Read a minimized active public profile |
+
+## Categories and listings
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/categories` | No | List available categories |
+| GET | `/listings` | No | Search listings |
+| GET | `/listings/mine` | Yes | List caller's published listings and private drafts |
+| GET | `/listings/:id` | No | Read a listing |
+| POST | `/listings` | Yes | Create a private draft listing |
+| POST | `/listings/:id/publish` | Yes, owner | Publish a draft listing |
+| PATCH | `/listings/:id` | Yes, owner | Edit a listing |
+| DELETE | `/listings/:id` | Yes, owner | Archive a listing |
+| POST | `/listings/:id/images/upload` | Yes, owner | Get a short-lived S3-compatible signed form for one image |
+| POST | `/listings/:id/images/complete` | Yes, owner | Verify uploaded object metadata and persist its listing image |
+| POST | `/listings/:id/images/reorder` | Yes, owner | Set the cover image and order for all attached images |
+| DELETE | `/listings/:id/images/:imageId` | Yes, owner | Remove a listing image |
+| POST | `/listings/:id/favorite` | Yes | Toggle favorite; response reports resulting `saved` state |
+| GET | `/listings/favorites` | Yes | List the caller's saved listings |
+| GET | `/listings/saved-searches` | Yes | List saved searches |
+| POST | `/listings/saved-searches` | Yes | Persist query and filter JSON |
+| DELETE | `/listings/saved-searches/:id` | Yes, owner | Delete a saved search |
+
+Listing search currently supports query, category ID, price bounds, condition, free-only, delivery availability, sort (`newest`, `price_asc`, `price_desc`), limit, and offset. Verified-only and radius filtering are not supported. Unknown query fields are rejected by request validation.
+
+Image uploads use short-lived presigned POST forms; the server checks ownership, image count, object size, declared MIME type, and image file signature before persisting the image. JPEG, PNG, and WebP are supported, up to 10 MB each and 5 images per listing. Storage routes return service-unavailable until the S3 endpoint, bucket, credentials, and public read URL are configured.
+
+## Need requests and offers
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/requests` | Yes | List visible requests; offer data is restricted to request participants |
+| POST | `/requests` | Yes | Create a need request |
+| POST | `/requests/:id/offers` | Yes | Submit an offer |
+| POST | `/requests/offers/:id/counter` | Yes | Counter an offer |
+| PATCH | `/requests/offers/:id/accept` | Yes, request owner | Accept offer, close request, create transaction and private conversation |
+| PATCH | `/requests/offers/:id/reject` | Yes, request owner | Reject offer |
+
+There is no standalone request detail, matching, nearby radius discovery, attachment, or expiration endpoint yet.
+
+## Conversations and messages
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/conversations` | Yes | List caller's conversations |
+| POST | `/conversations` | Yes | Find or create a direct conversation with a participant |
+| GET | `/conversations/:id/messages` | Yes, participant | Read conversation history |
+| POST | `/conversations/:id/messages` | Yes, participant | Persist and send a message |
+| PATCH | `/conversations/:id/read` | Yes, participant | Mark messages read |
+
+Socket.IO namespace `/realtime` requires a valid access token at handshake. Joining a conversation room requires participant authorization. Message delivery, read updates, and typing events are restricted to authorized rooms. Attachments and Socket.IO notification delivery are not implemented.
+
+## Notifications
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/notifications` | Yes | List the caller's latest 50 notifications |
+| GET | `/notifications/unread-count` | Yes | Return the caller's unread notification count |
+| PATCH | `/notifications/:id/read` | Yes, owner | Mark one notification as read |
+| PATCH | `/notifications/read-all` | Yes | Mark all of the caller's notifications as read |
+
+New offers, counteroffers, offer decisions, and incoming messages create durable in-app notifications in the same database transaction as their source action. Message notifications respect the user's `messages` preference. The frontend polls the unread count and provides a persisted notification center; push/email delivery and notification pagination are not implemented.
+
+## Transactions and reviews
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/transactions` | Yes, participant | List caller's transactions |
+| PATCH | `/transactions/:id/status` | Yes, participant | Apply a permitted transaction state transition |
+| POST | `/transactions/:id/appointments` | Yes, participant | Schedule the exchange |
+| POST | `/transactions/:id/reviews` | Yes, eligible participant | Review the other participant after completion |
+
+Offer acceptance creates a transaction at `ACCEPTED`; scheduling uses the appointment endpoint. The server enforces allowed status transitions and participant access. A database uniqueness constraint prevents duplicate reviews for the same transaction, author, and subject.
 
-### `PATCH /listings/:id`
-Updates listing fields.
+## Community
 
-### `DELETE /listings/:id`
-Soft deletes a listing.
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET/POST | `/community/posts` | Yes | List visible posts or create a post |
+| POST | `/community/posts/:id/comments` | Yes | Add a comment |
+| POST | `/community/posts/:id/reactions` | Yes | Toggle like/helpful/celebrate reaction |
+| DELETE | `/community/posts/:id` | Yes, author | Soft-delete a post |
+| GET/POST | `/community/events` | Yes | List upcoming events or create one |
+| POST | `/community/events/:id/rsvp` | Yes | Set RSVP and enforce capacity |
+| DELETE | `/community/events/:id` | Yes, organizer | Cancel an event |
 
-### `POST /listings/:id/save`
-Saves or unsaves a listing.
+Blocked-neighbor activity is excluded from results, and interaction endpoints enforce blocks in both directions.
 
-### `GET /listings/favorites`
-Returns saved listings.
+## Trust and safety
 
-## 4. Need requests and matching endpoints
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/safety/blocks` | Yes | List caller's blocked accounts |
+| POST/DELETE | `/safety/blocks/:userId` | Yes | Block or unblock an account |
+| POST | `/safety/reports` | Yes | Report a user, listing, request, or message |
+| GET | `/safety/reports` | Moderator/admin | Review reports, optionally filtered by status |
+| PATCH | `/safety/reports/:id` | Moderator/admin | Record an action and resolve/dismiss a report |
 
-### `POST /requests`
-Creates a need request.
+Blocking is enforced for direct conversations, request offers, community interactions, and event RSVPs. Duplicate open reports for the same target are rejected.
 
-Example:
-```json
-{
-  "title": "Looking for a standing desk under $500",
-  "description": "Need a compact desk for a home office in Midtown.",
-  "category": "Furniture",
-  "requirements": ["under $500", "pickup available", "like new"],
-  "location": {
-    "latitude": 33.7756,
-    "longitude": -84.3963,
-    "radiusMiles": 10
-  }
-}
-```
+## Planned, not implemented
 
-### `GET /requests/:id`
-Return request details and matching listings.
-
-### `GET /requests/:id/matches`
-Return nearby listing and service matches.
-
-### `POST /requests/:id/offers`
-Create an offer to fulfill a request.
-
-### `PATCH /offers/:id`
-Accept, reject, or counter an offer.
-
-Implemented in the first backend slice:
-
-- `GET /api/v1/requests`
-- `POST /api/v1/requests`
-- `POST /api/v1/requests/:id/offers`
-- `POST /api/v1/requests/offers/:id/counter`
-
-## 5. Messaging endpoints
-
-### `GET /conversations`
-Returns active conversation summaries for the user.
-
-### `GET /conversations/:id/messages`
-Returns messages for a thread.
-
-### `POST /conversations/:id/messages`
-Sends a message.
-
-### `POST /conversations/:id/read`
-Marks messages as read.
-
-### `POST /conversations/:id/typing`
-Publishes typing status to socket clients.
-
-Implemented in the first backend slice:
-
-- `GET /api/v1/conversations`
-- `GET /api/v1/conversations/:id/messages`
-- `POST /api/v1/conversations/:id/messages`
-- `PATCH /api/v1/conversations/:id/read`
-- Socket.IO namespace `/realtime` is reserved for authenticated conversation events.
-
-## 6. Transaction endpoints
-
-### `GET /transactions`
-Returns active and completed transactions for the authenticated user.
-
-### `POST /transactions/:id/appointments`
-Creates or updates a meetup/appointment.
-
-### `POST /transactions/:id/complete`
-Marks the exchange as complete.
-
-### `POST /transactions/:id/payments`
-Creates payment intent or local payment record.
-
-### `POST /transactions/:id/disputes`
-Starts a dispute or claim process.
-
-Implemented in the first backend slice:
-
-- `GET /api/v1/transactions`
-- `PATCH /api/v1/transactions/:id/status`
-
-The status endpoint enforces the server-side state machine and records every valid transition as a `TransactionMilestone`.
-
-## 7. Community endpoints
-
-### `GET /community/posts`
-Returns recent neighborhood posts and events.
-
-### `POST /community/posts`
-Creates a new community post.
-
-### `POST /community/posts/:id/comments`
-Adds a comment.
-
-### `POST /community/posts/:id/reactions`
-Adds or updates a reaction.
-
-### `GET /community/events`
-Returns event listings and RSVP state.
-
-## 8. Trust and moderation endpoints
-
-### `POST /reviews`
-Creates a review after a transaction is complete.
-
-### `GET /users/:id/reviews`
-Returns reviews for a user.
-
-### `POST /reports`
-Reports abuse, fraud, or dangerous behavior.
-
-### `POST /moderation/actions`
-Creates an admin moderation action.
-
-## 9. Notification endpoints
-
-### `GET /notifications`
-Returns notifications and badge counts.
-
-### `PATCH /notifications/:id/read`
-Marks a notification as read.
-
-## 10. Workflow example
-
-The primary request-first flow should work like this:
-
-1. User posts a `NeedRequest`
-2. Search service finds relevant `Listing`, `ServiceOffer`, `HousingListing`, or `JobListing`
-3. Other users create `RequestOffer` entries
-4. Requester opens thread conversation
-5. Offer accepted/rejected and `Transaction` created
-6. Appointment and payment milestones update
-7. Completion triggers `Review` and `TrustPassport` updates
-
-## 11. Validation and security requirements
-
-- All request bodies validated with Zod schemas
-- Authenticated user context enforced via guards
-- Users can only access their own messages, offers, and financial records unless explicitly authorized
-- Files uploaded via S3 presign flows never expose secret keys to frontend
-- Rate limit low-trust endpoints such as login and password reset
-- WebSocket events must require auth tokens and validate message identity
-
-## 12. OpenAPI overview
-
-The backend should expose Swagger/OpenAPI for:
-
-- Auth modules
-- User profiles and verification
-- Listings and search
-- Need requests and offers
-- Messaging and WebSockets
-- Transactions and payments
-- Trust, review, and reporting
-- Community features
-
-This will let the frontend team integrate against a versioned contract while the backend matures.
+The remaining planned contracts are password recovery/email verification, payment intents/payouts/refunds, saved-search match delivery, push/email notifications, message attachments, domain-specific housing applications/service bookings/job applications, geospatial radius search, disputes, and detailed operational audit history. Do not build clients against these until their routes appear in the generated OpenAPI document.

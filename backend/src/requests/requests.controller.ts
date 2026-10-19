@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
@@ -11,7 +11,9 @@ export class RequestsController {
   constructor(private readonly requests: RequestsService) {}
 
   @Get()
-  list() { return this.requests.list() }
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
+  list(@Req() req: AuthenticatedRequest) { return this.requests.list(req.user.id) }
 
   @Post()
   @ApiBearerAuth()
@@ -30,5 +32,19 @@ export class RequestsController {
   @UseGuards(AuthGuard)
   createOffer(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() input: CreateOfferDto) {
     return this.requests.createOffer(req.user.id, id, input)
+  }
+
+  @Patch('/offers/:id/accept')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
+  acceptOffer(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.requests.acceptOffer(req.user.id, id)
+  }
+
+  @Patch('/offers/:id/reject')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
+  rejectOffer(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.requests.rejectOffer(req.user.id, id)
   }
 }

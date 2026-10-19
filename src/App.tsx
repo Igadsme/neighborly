@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Navigation from "./components/Navigation"
 import Landing from "./pages/Landing"
 import Onboarding from "./pages/Onboarding"
@@ -16,21 +16,85 @@ import Housing from "./pages/Housing"
 import Services from "./pages/Services"
 import Jobs from "./pages/Jobs"
 import Community from "./pages/Community"
+import Requests from "./pages/Requests"
+import Notifications from "./pages/Notifications"
+import LiveListingDetail from "./pages/LiveListingDetail"
+import AuthAction from "./pages/AuthAction"
 import { api } from "./api/client"
+import type { ApiSavedSearch } from "./api/types"
 
-type Page = "landing" | "onboarding" | "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community"
+type Page = "landing" | "onboarding" | "forgot-password" | "reset-password" | "verify-email" | "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community" | "requests" | "notifications"
+
+const pagePaths: Record<Exclude<Page, "listing">, string> = {
+  landing: "/",
+  onboarding: "/onboarding",
+  "forgot-password": "/forgot-password",
+  "reset-password": "/reset-password",
+  "verify-email": "/verify-email",
+  home: "/home",
+  explore: "/explore",
+  categories: "/categories",
+  map: "/map",
+  create: "/listings/new",
+  messages: "/messages",
+  saved: "/saved",
+  profile: "/profile",
+  dashboard: "/dashboard",
+  housing: "/housing",
+  services: "/services",
+  jobs: "/jobs",
+  community: "/community",
+  requests: "/requests",
+  notifications: "/notifications",
+}
+
+function readRoute() {
+  const path = window.location.pathname.replace(/\/$/, "") || "/"
+  const listing = /^\/listings\/([0-9a-f-]+)$/i.exec(path)
+  if (listing) return { page: "listing" as Page, entityId: listing[1], conversationId: "" }
+  const conversation = /^\/messages\/([0-9a-f-]+)$/i.exec(path)
+  if (conversation) return { page: "messages" as Page, entityId: "", conversationId: conversation[1] }
+  const match = Object.entries(pagePaths).find(([, route]) => route === path)
+  return { page: (match?.[0] as Page | undefined) ?? "landing", entityId: "", conversationId: "" }
+}
+
+function routePath(page: Page, entityId?: string, conversationId?: string) {
+  if (page === "listing" && entityId) return `/listings/${entityId}`
+  if (page === "messages" && conversationId) return `/messages/${conversationId}`
+  return page === "listing" ? "/explore" : pagePaths[page]
+}
 
 export default function App() {
-  const [page, setPage] = useState<Page>("landing")
+  const initialRoute = readRoute()
+  const [page, setPage] = useState<Page>(initialRoute.page)
   const [isSignedIn, setIsSignedIn] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
+  const [selectedListingId, setSelectedListingId] = useState(initialRoute.entityId)
+  const [selectedConversationId, setSelectedConversationId] = useState(initialRoute.conversationId)
+  const [selectedExploreCategory, setSelectedExploreCategory] = useState("")
+  const [selectedExploreSearch, setSelectedExploreSearch] = useState<ApiSavedSearch | null>(null)
+  const [unreadNotifications, setUnreadNotifications] = useState<number | null>(null)
 
-  const navigate = (p: string) => {
+  const navigate = useCallback((p: string, entityId?: string, conversationId?: string) => {
     setPage(p as Page)
+    setSelectedListingId(p === "listing" ? entityId ?? "" : "")
+    setSelectedConversationId(p === "messages" ? conversationId ?? "" : "")
+    setSelectedExploreCategory(p === "explore" ? entityId ?? "" : "")
+    setSelectedExploreSearch(null)
+    window.history.pushState({}, "", routePath(p as Page, entityId, conversationId))
     window.scrollTo({ top: 0, behavior: "instant" })
+  }, [])
+
+  const runSavedSearch = (search: ApiSavedSearch) => {
+    navigate("explore")
+    setSelectedExploreSearch(search)
   }
 
   const signIn = () => {
+    if (!api.auth.hasSession()) {
+      navigate("landing")
+      return
+    }
     setIsSignedIn(true)
     navigate("home")
   }
@@ -42,16 +106,53 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!api.auth.hasSession()) {
-      setAuthLoading(false)
-      return
-    }
     api.auth
-      .me()
-      .then(() => setIsSignedIn(true))
+      .restore()
+      .then((user) => {
+        if (!user) return
+        setIsSignedIn(true)
+        if (["landing", "onboarding"].includes(readRoute().page)) navigate("home")
+      })
       .catch(() => api.auth.signOut())
       .finally(() => setAuthLoading(false))
+  }, [navigate])
+
+  useEffect(() => {
+    const onPopState = () => {
+      const route = readRoute()
+      setPage(route.page)
+      setSelectedListingId(route.entityId)
+      setSelectedConversationId(route.conversationId)
+      setSelectedExploreCategory("")
+      setSelectedExploreSearch(null)
+    }
+    window.addEventListener("popstate", onPopState)
+    return () => window.removeEventListener("popstate", onPopState)
   }, [])
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      setUnreadNotifications(null)
+      return
+    }
+    let active = true
+    const refreshCount = () => {
+      void api.notifications
+        .unreadCount()
+        .then(({ count }) => {
+          if (active) setUnreadNotifications(count)
+        })
+        .catch(() => {
+          if (active) setUnreadNotifications(null)
+        })
+    }
+    refreshCount()
+    const interval = window.setInterval(refreshCount, 30_000)
+    return () => {
+      active = false
+      window.clearInterval(interval)
+    }
+  }, [isSignedIn])
 
   const isMapPage = page === "map"
 
@@ -70,7 +171,7 @@ export default function App() {
         <Navigation
           currentPage={page as any}
           onNavigate={navigate as any}
-          unreadMessages={2}
+          unreadNotifications={unreadNotifications}
           onSignOut={signOut}
         />
       )}
@@ -85,12 +186,20 @@ export default function App() {
 
         {page === "onboarding" && <Onboarding onComplete={signIn} />}
 
+        {page === "forgot-password" && <AuthAction mode="forgot" onNavigate={navigate} />}
+        {page === "reset-password" && <AuthAction mode="reset" onNavigate={navigate} />}
+        {page === "verify-email" && <AuthAction mode="verify" onNavigate={navigate} />}
+
         {page === "home" && isSignedIn && (
           <HomeFeed onNavigate={navigate as any} />
         )}
 
         {page === "explore" && isSignedIn && (
-          <Explore onNavigate={navigate as any} />
+          <Explore
+            onNavigate={navigate as any}
+            initialCategory={selectedExploreCategory}
+            initialSearch={selectedExploreSearch}
+          />
         )}
 
         {page === "categories" && isSignedIn && (
@@ -101,18 +210,21 @@ export default function App() {
           <MapDiscovery onNavigate={navigate as any} />
         )}
 
-        {page === "listing" && isSignedIn && (
-          <ListingDetail onNavigate={navigate as any} />
-        )}
+        {page === "listing" && isSignedIn && (selectedListingId
+          ? <LiveListingDetail listingId={selectedListingId} onNavigate={navigate} />
+          : <ListingDetail onNavigate={navigate as any} />)}
 
         {page === "create" && isSignedIn && (
           <CreateListing onNavigate={navigate as any} />
         )}
 
-        {page === "messages" && isSignedIn && <Messages />}
+        {page === "messages" && isSignedIn && <Messages initialConversationId={selectedConversationId || undefined} />}
 
         {page === "saved" && isSignedIn && (
-          <SavedItems onNavigate={navigate as any} />
+          <SavedItems
+            onNavigate={navigate as any}
+            onRunSavedSearch={runSavedSearch}
+          />
         )}
 
         {page === "profile" && isSignedIn && (
@@ -131,12 +243,25 @@ export default function App() {
           <Services onNavigate={navigate as any} />
         )}
 
-        {page === "jobs" && isSignedIn && <Jobs />}
+        {page === "jobs" && isSignedIn && (
+          <Jobs onNavigate={navigate as any} />
+        )}
 
-        {page === "community" && isSignedIn && <Community />}
+        {page === "community" && isSignedIn && (
+          <Community onNavigate={navigate as any} />
+        )}
+
+        {page === "requests" && isSignedIn && <Requests />}
+
+        {page === "notifications" && isSignedIn && (
+          <Notifications
+            onNavigate={navigate}
+            onUnreadChange={setUnreadNotifications}
+          />
+        )}
 
         {/* Redirect to sign in if accessing signed-in pages without auth */}
-        {!isSignedIn && page !== "landing" && page !== "onboarding" && (
+        {!isSignedIn && !["landing", "onboarding", "forgot-password", "reset-password", "verify-email"].includes(page) && (
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">
               <div className="text-5xl mb-4">🏡</div>
@@ -165,40 +290,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Demo navigation bar — floats on landing page for easy prototype navigation */}
-      {page === "landing" && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
-          <div className="bg-[#1B2A4A]/95 backdrop-blur-sm text-white rounded-2xl px-4 py-2.5 flex items-center gap-2 shadow-xl border border-white/10 text-xs font-medium flex-wrap justify-center max-w-sm">
-            <span className="text-white/50">🔭 Preview:</span>
-            {[
-              { label: "Sign up", action: () => navigate("onboarding") },
-              { label: "Home feed", action: signIn },
-              {
-                label: "Explore",
-                action: () => {
-                  signIn()
-                  setTimeout(() => navigate("explore"), 10)
-                },
-              },
-              {
-                label: "Map",
-                action: () => {
-                  signIn()
-                  setTimeout(() => navigate("map"), 10)
-                },
-              },
-            ].map(({ label, action }) => (
-              <button
-                key={label}
-                onClick={action}
-                className="bg-white/10 hover:bg-white/20 transition-colors px-2.5 py-1 rounded-lg border border-white/10"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

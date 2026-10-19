@@ -1,8 +1,13 @@
 node_modules/
 dist/
 build/
+.DS_Store
+._*
+**/.DS_Store
+**/._*
 .cache/
 .env*
+!**/.env.example
 .vite/
 vite.config.*.timestamp-*
 *.tsbuildinfo

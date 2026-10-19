@@ -1,114 +1,107 @@
-import { useState } from "react"
-import { Button, Badge, StarRating, Avatar, Icon } from "../components/ui"
-import { listings } from "../data"
+import { useCallback, useEffect, useState } from "react"
+import { Button, Badge, Icon } from "../components/ui"
 import { api, ApiError } from "../api/client"
+import type { ApiListing } from "../api/types"
 
-type Page = "landing" | "onboarding" | "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community"
+type Page = "landing" | "onboarding" | "forgot-password" | "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community"
 
 interface LandingProps {
   onNavigate: (p: Page) => void
   onSignIn: () => void
 }
 
-const categories = [
-  { icon: "🛋️", label: "For Sale", color: "#D8F3DC", count: "2,847" },
-  { icon: "🏠", label: "Housing", color: "#DDEEFF", count: "634" },
-  { icon: "💼", label: "Jobs", color: "#FEF3C7", count: "412" },
-  { icon: "🔧", label: "Services", color: "#FDE8E0", count: "891" },
-  { icon: "🚗", label: "Vehicles", color: "#EEF0F5", count: "523" },
-  { icon: "🎁", label: "Free Items", color: "#D8F3DC", count: "203" },
-  { icon: "🐾", label: "Pets", color: "#FDE8E0", count: "89" },
-  { icon: "🎭", label: "Events", color: "#DDEEFF", count: "156" },
-]
-
-const testimonials = [
-  {
-    name: "Priya Patel",
-    neighborhood: "Inman Park",
-    avatar: "photo-1494790108755-2616b612b77c",
-    text: "I sold my old dining table within 2 hours and met the nicest neighbor. Neighborly actually feels safe — verified profiles make all the difference.",
-    rating: 5,
-    stat: "Sold $1,200 in items",
-  },
-  {
-    name: "Marcus Johnson",
-    neighborhood: "Decatur",
-    avatar: "photo-1472099645785-5658abf4ff4e",
-    text: "Found a part-time photography gig through the Jobs board. The community feel here is so much better than anything else I've tried.",
-    rating: 5,
-    stat: "Hired 3 local service providers",
-  },
-  {
-    name: "Aaliyah Williams",
-    neighborhood: "Buckhead",
-    avatar: "photo-1438761681033-6461ffad8d80",
-    text: "As a seller, the listing tools are a game-changer. The AI suggestions helped me price my furniture correctly and I got offers the same day.",
-    rating: 5,
-    stat: "78 successful transactions",
-  },
-]
-
 const howItWorks = [
   {
     step: "01",
     icon: "🔍",
     title: "Discover something nearby",
-    desc: "Search and browse thousands of listings in your neighborhood. Filter by distance, category, price, and more. Real listings from real neighbors.",
+    desc: "Browse published listings and filter by available categories, price, condition, and delivery options.",
   },
   {
     step: "02",
     icon: "🤝",
     title: "Connect with confidence",
-    desc: "Every user has a verified profile, transaction history, and community reviews. Message sellers securely through the app — no need to share personal contact info.",
+    desc: "Start a participant-only conversation with a listing owner without exposing private contact details in public listings.",
   },
   {
     step: "03",
     icon: "✅",
-    title: "Meet, exchange, or book safely",
-    desc: "Choose from safe meetup spots, arrange delivery, or book services directly. Transactions are logged, reviewed, and protected.",
+    title: "Complete your exchange",
+    desc: "Make an offer on a need request, schedule an exchange, and leave a review after completion. Payments and safe-meetup verification are not built yet.",
   },
 ]
 
-const trustPoints = [
+const currentFeatures = [
   {
-    icon: "🪪",
-    title: "ID Verification",
-    desc: "Optional identity verification builds trust and accountability between neighbors.",
-  },
-  {
-    icon: "⭐",
-    title: "Two-Way Reviews",
-    desc: "Buyers and sellers both rate each transaction, building a genuine reputation over time.",
+    icon: "🔐",
+    title: "Email and password accounts",
+    desc: "Account registration and login use the Neighborly authentication API.",
   },
   {
     icon: "💬",
-    title: "Secure Messaging",
-    desc: "All communication stays in-app. We'll alert you if something looks suspicious.",
+    title: "Participant-checked messaging",
+    desc: "REST and real-time messages are restricted to conversation participants.",
   },
   {
-    icon: "📍",
-    title: "Safe Meetup Spots",
-    desc: "We suggest verified public locations for in-person exchanges in your area.",
+    icon: "🛍️",
+    title: "Persisted marketplace",
+    desc: "Listings, searches, and favorites are stored through the API.",
   },
   {
-    icon: "🛡️",
-    title: "Scam Detection",
-    desc: "AI-powered listing and message analysis catches suspicious patterns before they reach you.",
+    icon: "🤝",
+    title: "Request and offer flow",
+    desc: "Requests, offers, appointments, transaction status, and reviews use backend records.",
   },
   {
-    icon: "📞",
-    title: "24/7 Support",
-    desc: "Real people ready to help if anything goes wrong with a transaction.",
+    icon: "🪪",
+    title: "Verification",
+    desc: "Email verification and account recovery are available; identity and phone checks are not enabled.",
+  },
+  {
+    icon: "🖼️",
+    title: "Image uploads",
+    desc: "Listing images are validated and uploaded directly to S3-compatible storage.",
   },
 ]
 
 export default function Landing({ onNavigate, onSignIn }: LandingProps) {
-  const [searchQuery, setSearchQuery] = useState("")
+  const [previewListings, setPreviewListings] = useState<ApiListing[]>([])
+  const [categoryItems, setCategoryItems] = useState<
+    Array<{ id: string; name: string; slug: string }>
+  >([])
+  const [previewLoading, setPreviewLoading] = useState(true)
+  const [previewError, setPreviewError] = useState("")
+  const [retryToken, setRetryToken] = useState(0)
   const [signInOpen, setSignInOpen] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [signInError, setSignInError] = useState("")
   const [signingIn, setSigningIn] = useState(false)
+
+  const loadPreview = useCallback(async () => {
+    setPreviewLoading(true)
+    setPreviewError("")
+    try {
+      const [availableListings, availableCategories] = await Promise.all([
+        api.listings.list({ limit: 8, sort: "newest" }),
+        api.categories.list(),
+      ])
+      setPreviewListings(availableListings)
+      setCategoryItems(availableCategories)
+    } catch (cause: unknown) {
+      setPreviewError(
+        cause instanceof ApiError
+          ? cause.message
+          : "Marketplace preview could not be loaded.",
+      )
+    } finally {
+      setPreviewLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadPreview()
+  }, [loadPreview, retryToken])
 
   const handleSignIn = () => {
     setSignInError("")
@@ -215,7 +208,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           <div className="flex-1 text-white">
             <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm px-3 py-1.5 rounded-full text-sm font-medium mb-6 text-white border border-white/20">
               <span className="w-2 h-2 rounded-full bg-[#74C69D] animate-pulse" />
-              3,200+ active listings in Atlanta
+              Local marketplace · Early access
             </div>
 
             <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-semibold leading-[1.05] mb-6">
@@ -227,8 +220,9 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             </h1>
 
             <p className="text-lg md:text-xl text-white/80 mb-10 max-w-xl leading-relaxed">
-              Buy, sell, rent, hire, trade, donate, and connect — all within a
-              few miles of home. With real neighbors. Safely.
+              Browse local listings, publish a need request, and connect with
+              neighbors. Housing, services, payments, and other modules are
+              still in development.
             </p>
 
             {/* Search */}
@@ -241,23 +235,17 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 />
                 <input
                   type="text"
-                  placeholder="What are you looking for?"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="Sign in to search published listings"
+                  placeholder="Sign in to search published listings"
+                  readOnly
                   className="w-full h-13 pl-11 pr-4 bg-white text-[#1B2A4A] rounded-xl text-sm placeholder:text-[#C5CCDA] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/30 shadow-lg"
                 />
               </div>
               <div className="relative">
-                <Icon
-                  name="mapPin"
-                  size={15}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#E8694A] pointer-events-none"
-                />
-                <select className="h-13 pl-9 pr-8 bg-white text-[#1B2A4A] rounded-xl text-sm font-medium focus:outline-none appearance-none cursor-pointer shadow-lg border-0">
-                  <option>Atlanta, GA</option>
-                  <option>Decatur, GA</option>
-                  <option>Midtown, ATL</option>
-                </select>
+                <span className="flex h-13 items-center gap-2 rounded-xl bg-white/90 px-4 text-sm font-medium text-[#5C6E8A] shadow-lg">
+                  <Icon name="mapPin" size={15} className="text-[#E8694A]" />
+                  Location filters unavailable
+                </span>
               </div>
             </div>
 
@@ -268,14 +256,14 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 onClick={handleSignIn}
                 className="shadow-lg"
               >
-                Explore Neighborly
+                Sign in to explore
               </Button>
               <Button
                 size="lg"
-                onClick={() => onNavigate("create")}
+                onClick={() => onNavigate("onboarding")}
                 className="bg-white/15 text-white border border-white/30 hover:bg-white/25 rounded-full px-7 py-3 h-12 text-base font-semibold transition-colors"
               >
-                Post a Listing
+                Join to post
               </Button>
             </div>
 
@@ -285,69 +273,40 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 <span className="text-[#74C69D]">✓</span> Free to join
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="text-[#74C69D]">✓</span> Verified sellers
+                <span className="text-[#74C69D]">✓</span> In-app messaging
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="text-[#74C69D]">✓</span> Safe messaging
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="text-[#74C69D]">✓</span> No fees to buy
+                <span className="text-[#74C69D]">✓</span> Request-first exchanges
               </span>
             </div>
           </div>
 
-          {/* Listing preview card */}
+          {/* Persisted listing preview */}
           <div className="hidden lg:block w-80 flex-shrink-0">
-            <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
-              <img
-                src="https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=600&h=400&fit=crop&auto=format"
-                alt="Sofa listing"
-                className="w-full h-44 object-cover"
-              />
-              <div className="p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-semibold text-[#1B2A4A] text-sm leading-tight">
-                      West Elm Mid-Century Sofa
-                    </p>
-                    <p className="text-xs text-[#8A9AB5] mt-0.5">
-                      Decatur · 1.2 mi away
-                    </p>
-                  </div>
-                  <span className="text-lg font-bold text-[#1B2A4A]">$650</span>
-                </div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="blue" size="sm">
-                    Like New
-                  </Badge>
-                  <Badge variant="green" size="sm">
-                    ID Verified
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-2 pt-3 border-t border-[#F5F4EF]">
-                  <Avatar
-                    src="photo-1472099645785-5658abf4ff4e"
-                    name="Marcus Johnson"
-                    size="sm"
-                    verified
-                  />
-                  <div>
-                    <p className="text-xs font-semibold text-[#1B2A4A]">
-                      Marcus Johnson
-                    </p>
-                    <StarRating rating={4.9} count={47} size="xs" />
-                  </div>
-                  <button
-                    onClick={handleSignIn}
-                    className="ml-auto bg-[#2D6A4F] text-white text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-[#1B4332] transition-colors"
-                  >
-                    Message
-                  </button>
-                </div>
+            <div className="overflow-hidden rounded-3xl bg-white shadow-2xl">
+              <div className="flex h-44 items-center justify-center bg-[#F5F4EF] text-[#8A9AB5]">
+                {previewLoading ? "Loading marketplace…" : previewListings[0]?.title ?? "No published listings yet"}
               </div>
-              {/* Floating elements */}
-              <div className="absolute -top-3 -right-3 bg-[#FDE8E0] rounded-2xl px-3 py-2 text-xs font-semibold text-[#C4512D] shadow-md">
-                🔥 22 people saved this
+              <div className="p-4">
+                <p className="font-semibold text-sm text-[#1B2A4A]">
+                  {previewListings[0]?.title ?? "Marketplace preview"}
+                </p>
+                <p className="mt-1 text-xs text-[#8A9AB5]">
+                  {previewListings[0]?.neighborhood ?? "Location data is not available"}
+                </p>
+                <div className="mt-3 flex items-center justify-between border-t border-[#F5F4EF] pt-3">
+                  <span className="text-sm font-bold text-[#1B2A4A]">
+                    {previewListings[0]?.priceCents === 0
+                      ? "Free"
+                      : previewListings[0]?.priceCents == null
+                        ? "Price not set"
+                        : `$${(previewListings[0].priceCents / 100).toFixed(2)}`}
+                  </span>
+                  <span className="text-xs text-[#8A9AB5]">Published listing</span>
+                </div>
+                <Button variant="soft" size="xs" fullWidth className="mt-4" onClick={handleSignIn}>
+                  Sign in to browse
+                </Button>
               </div>
             </div>
           </div>
@@ -361,27 +320,31 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             Everything local. All in one place.
           </h2>
           <p className="text-[#5C6E8A] text-lg max-w-2xl mx-auto">
-            From furniture and electronics to jobs and home services — if it's
-            happening in your neighborhood, it's on Neighborly.
+            Browse categories currently available in the persisted marketplace catalog.
           </p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {categories.map((cat) => (
+          {categoryItems.map((category, index) => (
             <button
-              key={cat.label}
+              key={category.id}
               onClick={handleSignIn}
               className="group p-5 rounded-2xl border border-[#E8E6DF] bg-white hover:border-[#2D6A4F] hover:shadow-md transition-all text-left card-hover"
-              style={{ backgroundColor: cat.color + "30" }}
+              style={{ backgroundColor: ["#D8F3DC", "#DDEEFF", "#FEF3C7", "#FDE8E0"][index % 4] + "30" }}
             >
-              <span className="text-3xl mb-3 block">{cat.icon}</span>
+              <span className="text-3xl mb-3 block">{["🛋️", "📱", "🔧", "🎁"][index % 4]}</span>
               <p className="font-semibold text-[#1B2A4A] text-sm">
-                {cat.label}
+                {category.name}
               </p>
               <p className="text-xs text-[#8A9AB5] mt-0.5">
-                {cat.count} nearby
+                Browse published listings
               </p>
             </button>
           ))}
+          {!previewLoading && !categoryItems.length && (
+            <p className="col-span-full text-center text-sm text-[#8A9AB5]">
+              {previewError || "No marketplace categories are available yet."}
+            </p>
+          )}
         </div>
       </section>
 
@@ -390,10 +353,10 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-14">
             <Badge variant="green" className="mb-4">
-              How it works
+              Connected today
             </Badge>
             <h2 className="font-display text-4xl font-semibold text-white mb-3">
-              Simple. Safe. Local.
+              Simple. Local. Request-first.
             </h2>
             <p className="text-[#8A9AB5] text-lg">
               Three steps to find, connect, and exchange with neighbors.
@@ -424,7 +387,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
               <Badge variant="coral" className="mb-4">
-                Safety First
+                Trust & safety in progress
               </Badge>
               <h2 className="font-display text-4xl font-semibold text-[#1B2A4A] mb-5">
                 "Everything local.
@@ -432,10 +395,10 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 <span className="text-[#2D6A4F]">Everyone accountable.</span>"
               </h2>
               <p className="text-[#5C6E8A] text-lg leading-relaxed mb-8">
-                Neighborly was built on the belief that local commerce should be
-                safe, transparent, and human. Every feature is designed to
-                protect you while fostering genuine connections in your
-                community.
+                Neighborly is building a local marketplace with persisted
+                accounts, listings, requests, and conversations. Trust and
+                safety features are incomplete; use care and do not share
+                private contact or address details.
               </p>
               <Button
                 variant="primary"
@@ -446,7 +409,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
               </Button>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              {trustPoints.map((point) => (
+              {currentFeatures.map((point) => (
                 <div
                   key={point.title}
                   className="bg-white p-5 rounded-2xl border border-[#E8E6DF]"
@@ -465,97 +428,92 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
         </div>
       </section>
 
-      {/* Popular Near Atlanta */}
+      {/* Current listings */}
       <section className="py-20 max-w-7xl mx-auto px-6">
         <div className="flex items-end justify-between mb-8">
           <div>
             <h2 className="font-display text-3xl font-semibold text-[#1B2A4A]">
-              Popular near Atlanta
+              Recently published
             </h2>
             <p className="text-[#8A9AB5] mt-1">
-              Listings neighbors are looking at right now
+              Latest public marketplace records
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={handleSignIn}>
-            See all →
+            Sign in to browse →
           </Button>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-          {listings.slice(0, 4).map((listing) => (
-            <div
-              key={listing.id}
-              onClick={handleSignIn}
-              className="group cursor-pointer bg-white rounded-2xl border border-[#E8E6DF] overflow-hidden card-hover"
-            >
-              <div className="h-40 overflow-hidden bg-[#F5F4EF]">
-                <img
-                  src={`https://images.unsplash.com/${listing.images[0]}?w=400&h=300&fit=crop&auto=format`}
-                  alt={listing.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-              </div>
-              <div className="p-3">
-                <p className="text-sm font-semibold text-[#1B2A4A] line-clamp-1">
-                  {listing.title}
+        {previewError && (
+          <div role="alert" className="mb-4 flex items-center justify-between rounded-xl bg-[#FFF5F2] p-3 text-sm text-[#C4512D]">
+            <span>{previewError}</span>
+            <button onClick={() => setRetryToken((token) => token + 1)} className="font-semibold underline">Retry</button>
+          </div>
+        )}
+        {previewLoading ? (
+          <div className="grid grid-cols-2 gap-5 md:grid-cols-4" aria-label="Loading latest listings">
+            {[0, 1, 2, 3].map((item) => <div key={item} className="h-48 animate-pulse rounded-2xl bg-white" />)}
+          </div>
+        ) : previewListings.length ? (
+          <div className="grid grid-cols-2 gap-5 md:grid-cols-4">
+            {previewListings.slice(0, 4).map((listing) => (
+              <button
+                key={listing.id}
+                onClick={handleSignIn}
+                className="rounded-2xl border border-[#E8E6DF] bg-white p-4 text-left transition-all hover:border-[#2D6A4F]/40"
+              >
+                <p className="line-clamp-2 text-sm font-semibold text-[#1B2A4A]">{listing.title}</p>
+                <p className="mt-2 text-sm font-bold text-[#1B2A4A]">
+                  {listing.priceCents === 0 ? "Free" : listing.priceCents == null ? "Price not set" : `$${(listing.priceCents / 100).toFixed(2)}`}
                 </p>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-sm font-bold text-[#1B2A4A]">
-                    {listing.isFree ? (
-                      <span className="text-[#2D6A4F]">Free</span>
-                    ) : (
-                      `$${listing.price?.toLocaleString()}`
-                    )}
-                  </span>
-                  <span className="text-xs text-[#8A9AB5]">
-                    {listing.distance}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+                <p className="mt-1 text-xs text-[#8A9AB5]">{listing.category?.name ?? "Marketplace"}</p>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-8 text-center text-sm text-[#8A9AB5]">
+            No published listings yet.
+          </div>
+        )}
       </section>
 
-      {/* Testimonials */}
+      {/* Product status */}
       <section className="py-20 bg-gradient-to-br from-[#1B4332] to-[#2D6A4F]">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="font-display text-4xl font-semibold text-white mb-3">
-              Real neighbors. Real stories.
+              Built in working slices
             </h2>
             <p className="text-[#74C69D] text-lg">
-              What your Atlanta community is saying about Neighborly.
+              Neighborly is an early product build. Here is what is connected today.
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
-            {testimonials.map((t) => (
+            {[
+              {
+                title: "Persisted marketplace",
+                body: "Browse, publish, search, and save marketplace listings.",
+              },
+              {
+                title: "Request-first exchanges",
+                body: "Publish requests, receive offers, schedule exchanges, and submit reviews.",
+              },
+              {
+                title: "Messaging",
+                body: "Send persisted messages through participant-authorized conversations.",
+              },
+            ].map((feature) => (
               <div
-                key={t.name}
-                className="bg-white/10 backdrop-blur-sm border border-white/20 p-6 rounded-2xl"
+                key={feature.title}
+                className="rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-sm"
               >
-                <div className="flex mb-2">
-                  {[...Array(t.rating)].map((_, i) => (
-                    <span key={i} className="text-[#F59E0B] text-sm">
-                      ★
-                    </span>
-                  ))}
-                </div>
-                <p className="text-white/90 text-sm leading-relaxed mb-5">
-                  "{t.text}"
-                </p>
-                <div className="flex items-center gap-3 pt-4 border-t border-white/10">
-                  <Avatar src={t.avatar} name={t.name} size="sm" verified />
-                  <div className="flex-1">
-                    <p className="text-white font-semibold text-sm">{t.name}</p>
-                    <p className="text-[#74C69D] text-xs">{t.neighborhood}</p>
-                  </div>
-                  <Badge variant="green" size="sm">
-                    {t.stat}
-                  </Badge>
-                </div>
+                <h3 className="font-display text-xl font-semibold text-white">{feature.title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-white/80">{feature.body}</p>
               </div>
             ))}
           </div>
+          <p className="mx-auto mt-8 max-w-3xl text-center text-sm text-white/70">
+            Image uploads, payments, geospatial maps, identity verification, notifications, and community publishing remain in development. No testimonials or usage metrics are shown here.
+          </p>
         </div>
       </section>
 
@@ -563,13 +521,12 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
       <section className="py-24 max-w-7xl mx-auto px-6 text-center">
         <div className="max-w-2xl mx-auto">
           <h2 className="font-display text-5xl font-semibold text-[#1B2A4A] mb-5">
-            Your neighbors
+            Your neighborhood
             <br />
-            are already here.
+            starts here.
           </h2>
           <p className="text-[#5C6E8A] text-xl mb-10">
-            Join 47,000+ Atlantans buying, selling, and connecting locally every
-            day.
+            Join Neighborly as the local marketplace grows.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button
@@ -585,7 +542,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             </Button>
           </div>
           <p className="text-xs text-[#C5CCDA] mt-6">
-            No credit card required. Free to join and browse.
+            Accounts use email and password. In-app payments are not available.
           </p>
         </div>
       </section>
@@ -609,8 +566,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 </span>
               </div>
               <p className="text-sm text-[#8A9AB5] leading-relaxed max-w-xs">
-                Everything local. Everyone accountable. Atlanta's trusted
-                community marketplace.
+                A request-first local marketplace in active development.
               </p>
             </div>
             {[
@@ -639,12 +595,10 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 <ul className="space-y-2">
                   {col.links.map((link) => (
                     <li key={link}>
-                      <a
-                        href="#"
-                        className="text-sm text-[#8A9AB5] hover:text-[#2D6A4F] transition-colors"
-                      >
+                      <span className="text-sm text-[#8A9AB5]">
                         {link}
-                      </a>
+                        <span className="ml-1 text-xs">(coming soon)</span>
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -653,14 +607,12 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           </div>
           <div className="pt-8 border-t border-[#E8E6DF] flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-xs text-[#C5CCDA]">
-              © 2026 Neighborly, Inc. Atlanta, GA. All rights reserved.
+              © 2026 Neighborly prototype · Atlanta
             </p>
             <div className="flex items-center gap-4 text-xs text-[#C5CCDA]">
-              <span>🌎 Available in 12 US cities</span>
+              <span>Marketplace in development</span>
               <span>·</span>
-              <span>47,000+ neighbors</span>
-              <span>·</span>
-              <span>3,200+ active listings</span>
+              <span>Atlanta prototype</span>
             </div>
           </div>
         </div>
@@ -720,6 +672,15 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
               >
                 {signingIn ? "Signing in..." : "Sign in"}
               </Button>
+              <button
+                onClick={() => {
+                  setSignInOpen(false)
+                  onNavigate("forgot-password")
+                }}
+                className="w-full text-sm text-[#5C6E8A] font-medium hover:underline"
+              >
+                Forgot your password?
+              </button>
               <button
                 onClick={() => {
                   setSignInOpen(false)

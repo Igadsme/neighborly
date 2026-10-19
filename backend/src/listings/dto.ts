@@ -1,5 +1,33 @@
-import { Type } from 'class-transformer'
-import { IsBoolean, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator'
+import { Transform, Type } from 'class-transformer'
+import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength, Matches } from 'class-validator'
+
+const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp']
+
+export class CreateListingImageUploadDto {
+  @IsIn(allowedImageTypes)
+  contentType!: string
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10 * 1024 * 1024)
+  sizeBytes!: number
+}
+
+export class CompleteListingImageUploadDto {
+  @IsString()
+  @MaxLength(256)
+  @Matches(/^listings\/[0-9a-f-]+\/[0-9a-f-]+\/[0-9a-f-]+\.(jpg|png|webp)$/i)
+  key!: string
+}
+
+export class ReorderListingImagesDto {
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  imageIds!: string[]
+}
 
 export class CreateListingDto {
   @IsUUID()
@@ -11,7 +39,7 @@ export class CreateListingDto {
   title!: string
 
   @IsString()
-  @Min(10)
+  @MinLength(10)
   description!: string
 
   @IsOptional()
@@ -73,6 +101,36 @@ export class ListListingsQuery {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(0)
+  minPriceCents?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maxPriceCents?: number
+
+  @IsOptional()
+  @IsString()
+  condition?: string
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  freeOnly?: boolean
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  deliveryAvailable?: boolean
+
+  @IsOptional()
+  @IsIn(['newest', 'price_asc', 'price_desc'])
+  sort?: 'newest' | 'price_asc' | 'price_desc'
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
   @Min(1)
   @Max(100)
   limit = 24
@@ -121,7 +179,11 @@ export class UpdateListingDto {
 
 export class SaveSearchDto {
   @IsString()
+  @MinLength(1)
+  @MaxLength(200)
   query!: string
 
-  filters!: Record<string, unknown>
+  @IsOptional()
+  @IsObject()
+  filters?: Record<string, unknown>
 }

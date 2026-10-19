@@ -1,4 +1,5 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { JwtService } from '@nestjs/jwt'
 
 interface AccessTokenClaims {
@@ -8,7 +9,7 @@ interface AccessTokenClaims {
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly jwt: JwtService) {}
+  constructor(private readonly jwt: JwtService, private readonly config: ConfigService) {}
 
   canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<{
@@ -19,7 +20,7 @@ export class AuthGuard implements CanActivate {
     if (!token) throw new UnauthorizedException('Bearer token required')
 
     try {
-      const payload = this.jwt.verify<AccessTokenClaims>(token, { secret: process.env.JWT_SECRET })
+      const payload = this.jwt.verify<AccessTokenClaims>(token, { secret: this.config.getOrThrow<string>('JWT_SECRET') })
       if (!payload || typeof payload === 'string' || !payload.sub || !payload.email) {
         throw new UnauthorizedException('Invalid or expired access token')
       }

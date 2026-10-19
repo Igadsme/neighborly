@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
-import { TransitionTransactionDto } from './dto'
+import { CreateReviewDto, ScheduleAppointmentDto, TransitionTransactionDto } from './dto'
 import { TransactionsService } from './transactions.service'
 
 @ApiTags('transactions')
@@ -16,5 +16,13 @@ export class TransactionsController {
   @Patch(':id/status')
   transition(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() input: TransitionTransactionDto) {
     return this.transactions.transition(req.user.id, id, input)
+  }
+  @Post(':id/appointments')
+  schedule(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() input: ScheduleAppointmentDto) {
+    return this.transactions.schedule(req.user.id, id, input)
+  }
+  @Post(':id/reviews')
+  review(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() input: CreateReviewDto) {
+    return this.transactions.review(req.user.id, id, input)
   }
 }

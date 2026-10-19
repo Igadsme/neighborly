@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import {
   ListingCard,
-  SectionHeader,
   Badge,
   Button,
   Icon,
@@ -11,77 +10,54 @@ import {
 import type { Listing } from "../data"
 import { api, ApiError } from "../api/client"
 import type { ApiFavorite, ApiSavedSearch } from "../api/types"
+import { mapApiListing } from "../api/listing-mapper"
 
 type Page = "explore" | "listing"
 
 interface SavedItemsProps {
-  onNavigate: (p: Page) => void
+  onNavigate: (p: Page, entityId?: string) => void
+  onRunSavedSearch: (search: ApiSavedSearch) => void
 }
 
-const collections = [{ id: "all", label: "All saved" }]
-
-function toListing(favorite: ApiFavorite): Listing {
-  const listing = favorite.listing
-  const firstName = listing.seller?.profile?.firstName ?? "Neighbor"
-  const lastName = listing.seller?.profile?.lastName ?? ""
-  return {
-    id: listing.id,
-    title: listing.title,
-    price: listing.priceCents == null ? null : listing.priceCents / 100,
-    isFree: listing.priceCents === 0,
-    condition: listing.condition ?? "Good",
-    category: listing.category?.name ?? "Marketplace",
-    neighborhood: listing.neighborhood ?? "Nearby",
-    city: listing.city ?? "",
-    distance: "Nearby",
-    postedAt: listing.createdAt
-      ? new Date(listing.createdAt).toLocaleDateString()
-      : "Recently",
-    images:
-      listing.images?.map((image) => image.url ?? "").filter(Boolean) ?? [],
-    description: listing.description,
-    seller: {
-      id: listing.seller?.id ?? "unknown",
-      name: `${firstName} ${lastName}`.trim(),
-      avatar: "",
-      rating: 0,
-      reviews: 0,
-      verified: false,
-      idVerified: false,
-      responseTime: "Unknown",
-      transactions: 0,
-      memberSince: "Recently",
-      neighborhood:
-        listing.seller?.profile?.neighborhood ??
-        listing.neighborhood ??
-        "Nearby",
-    },
-    saved: true,
-    tags: [],
-    views: 0,
-    saves: 0,
-    pickupAvailable: listing.pickupAvailable ?? false,
-    deliveryAvailable: listing.deliveryAvailable ?? false,
-    shippingAvailable: listing.shippingAvailable ?? false,
-  }
-}
-
-export default function SavedItems({ onNavigate }: SavedItemsProps) {
-  const [activeCollection, setActiveCollection] = useState("all")
+export default function SavedItems({
+  onNavigate,
+  onRunSavedSearch,
+}: SavedItemsProps) {
   const [activeTab, setActiveTab] = useState("Saved Listings")
-  const [selectedItems, setSelectedItems] = useState<string[]>([])
-  const [comparingIds, setComparingIds] = useState<string[]>([])
   const [savedListings, setSavedListings] = useState<Listing[]>([])
   const [savedSearches, setSavedSearches] = useState<ApiSavedSearch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [retryToken, setRetryToken] = useState(0)
+  const [busySearchId, setBusySearchId] = useState("")
+
+  async function removeSavedSearch(search: ApiSavedSearch) {
+    setBusySearchId(search.id)
+    setError("")
+    try {
+      await api.listings.deleteSavedSearch(search.id)
+      setSavedSearches((current) =>
+        current.filter((item) => item.id !== search.id),
+      )
+    } catch (cause: unknown) {
+      setError(
+        cause instanceof ApiError
+          ? cause.message
+          : "Saved search could not be removed.",
+      )
+    } finally {
+      setBusySearchId("")
+    }
+  }
 
   useEffect(() => {
     let active = true
+    setLoading(true)
+    setError("")
     Promise.all([api.listings.favorites(), api.listings.savedSearches()])
       .then(([favorites, searches]) => {
         if (!active) return
-        setSavedListings(favorites.map(toListing))
+        setSavedListings(favorites.map((favorite) => mapApiListing(favorite.listing, true)))
         setSavedSearches(searches)
       })
       .catch((cause: unknown) => {
@@ -96,19 +72,7 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
     return () => {
       active = false
     }
-  }, [])
-
-  const priceDropListings = savedListings
-
-  const toggleCompare = (id: string) => {
-    setComparingIds((prev) =>
-      prev.includes(id)
-        ? prev.filter((i) => i !== id)
-        : prev.length < 3
-          ? [...prev, id]
-          : prev,
-    )
-  }
+  }, [retryToken])
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-24 md:pb-0">
@@ -146,69 +110,16 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
         {/* Saved Listings tab */}
         {activeTab === "Saved Listings" && (
           <>
-            {/* Collections */}
-            <div className="flex gap-2 mb-6 overflow-x-auto scrollbar-hide pb-1">
-              {collections.map((col) => (
-                <button
-                  key={col.id}
-                  onClick={() => setActiveCollection(col.id)}
-                  className={`flex items-center gap-2 flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium border transition-all ${
-                    activeCollection === col.id
-                      ? "bg-[#2D6A4F] text-white border-[#2D6A4F]"
-                      : "bg-white text-[#5C6E8A] border-[#E8E6DF] hover:border-[#2D6A4F]/30"
-                  }`}
-                >
-                  {col.label}
-                  <span
-                    className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
-                      activeCollection === col.id
-                        ? "bg-white/20 text-white"
-                        : "bg-[#F5F4EF] text-[#8A9AB5]"
-                    }`}
-                  >
-                    {savedListings.length}
-                  </span>
-                </button>
-              ))}
-              <button className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-dashed border-[#E8E6DF] text-[#C5CCDA] hover:border-[#2D6A4F]/30 hover:text-[#2D6A4F] transition-all bg-white">
-                <Icon name="plus" size={12} />
-                New collection
-              </button>
-            </div>
-
-            {/* Compare bar */}
-            {comparingIds.length > 0 && (
-              <div className="bg-[#1B2A4A] text-white rounded-2xl p-4 mb-6 flex items-center justify-between animate-fade-in">
-                <div>
-                  <p className="font-semibold text-sm">
-                    Comparing {comparingIds.length} item
-                    {comparingIds.length > 1 ? "s" : ""}
-                  </p>
-                  <p className="text-xs text-white/60">
-                    Select up to 3 items to compare side-by-side
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setComparingIds([])}
-                    className="text-xs text-white/60 hover:text-white"
-                  >
-                    Clear
-                  </button>
-                  <button className="bg-[#2D6A4F] text-white text-xs font-semibold px-4 py-2 rounded-xl hover:bg-[#40916C] transition-colors">
-                    Compare →
-                  </button>
-                </div>
-              </div>
-            )}
-
             {loading ? (
               <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
                 Loading saved items…
               </div>
             ) : error ? (
-              <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D]">
-                {error}
+              <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-[#E8694A]/20 bg-[#FFF5F2] p-5 text-sm text-[#C4512D]">
+                <span>{error}</span>
+                <button onClick={() => setRetryToken((token) => token + 1)} className="font-semibold underline">
+                  Retry
+                </button>
               </div>
             ) : savedListings.length > 0 ? (
               <div className="listing-grid">
@@ -216,37 +127,28 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
                   <div key={listing.id} className="relative">
                     <ListingCard
                       listing={listing}
-                      onClick={() => onNavigate("listing")}
-                      onSavedChange={(saved) => {
-                        api.listings
-                          .toggleFavorite(listing.id)
-                          .then(() => {
-                            if (!saved)
-                              setSavedListings((items) =>
-                                items.filter((item) => item.id !== listing.id),
-                              )
-                          })
-                          .catch((cause: unknown) => {
-                            setError(
-                              cause instanceof ApiError
-                                ? cause.message
-                                : "Could not update this saved item.",
+                      onClick={() => onNavigate("listing", listing.id)}
+                      onSavedChange={async (saved) => {
+                        try {
+                          const result = await api.listings.toggleFavorite(
+                            listing.id,
+                          )
+                          if (result.saved !== saved)
+                            throw new Error("Favorite state mismatch")
+                          if (!saved)
+                            setSavedListings((items) =>
+                              items.filter((item) => item.id !== listing.id),
                             )
-                          })
+                        } catch (cause: unknown) {
+                          setError(
+                            cause instanceof ApiError
+                              ? cause.message
+                              : "Could not update this saved item.",
+                          )
+                          throw cause
+                        }
                       }}
                     />
-                    <button
-                      onClick={() => toggleCompare(listing.id)}
-                      className={`absolute top-2 left-2 text-xs font-semibold px-2 py-1 rounded-lg border transition-all ${
-                        comparingIds.includes(listing.id)
-                          ? "bg-[#1B2A4A] text-white border-[#1B2A4A]"
-                          : "bg-white/90 text-[#8A9AB5] border-[#E8E6DF] hover:border-[#1B2A4A]"
-                      }`}
-                    >
-                      {comparingIds.includes(listing.id)
-                        ? "✓ Compare"
-                        : "Compare"}
-                    </button>
                   </div>
                 ))}
               </div>
@@ -269,10 +171,17 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
               <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
                 Loading saved searches…
               </div>
+            ) : error ? (
+              <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-[#E8694A]/20 bg-[#FFF5F2] p-5 text-sm text-[#C4512D]">
+                <span>{error}</span>
+                <button onClick={() => setRetryToken((token) => token + 1)} className="font-semibold underline">
+                  Retry
+                </button>
+              </div>
             ) : savedSearches.length === 0 ? (
               <EmptyState
                 title="No saved searches yet"
-                description="Save a search from Explore to receive matching listings."
+                description="Save search metadata from Explore. New-match notifications are not available yet."
                 action={() => onNavigate("explore")}
                 actionLabel="Browse listings"
                 icon={<Icon name="search" size={24} />}
@@ -280,7 +189,7 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
             ) : (
               savedSearches.map((search) => (
                 <div
-                  key={search.query}
+                  key={search.id}
                   className="bg-white rounded-2xl border border-[#E8E6DF] p-5"
                 >
                   <div className="flex items-start justify-between gap-4 mb-3">
@@ -298,9 +207,9 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
                       <div className="flex items-center gap-3 text-xs text-[#8A9AB5]">
                         <span className="flex items-center gap-1">
                           <Icon name="mapPin" size={10} />
-                          {typeof search.filters.neighborhood === "string"
-                            ? search.filters.neighborhood
-                            : "All neighborhoods"}
+                          {typeof search.filters.category === "string"
+                            ? search.filters.category
+                            : "All categories"}
                         </span>
                         <span>
                           Saved{" "}
@@ -309,19 +218,25 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <Badge variant="green" size="sm">
-                        <Icon name="bell" size={9} /> Saved
-                      </Badge>
+                      <Badge variant="green" size="sm">Saved search</Badge>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="primary"
-                      size="xs"
-                      onClick={() => onNavigate("explore")}
-                    >
-                      View results →
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button variant="primary" size="xs" onClick={() => onRunSavedSearch(search)}>
+                      Restore search
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      loading={busySearchId === search.id}
+                      disabled={Boolean(busySearchId)}
+                      onClick={() => void removeSavedSearch(search)}
+                    >
+                      Remove
+                    </Button>
+                    <span className="self-center text-xs text-[#8A9AB5]">
+                      New-match alerts are not available.
+                    </span>
                   </div>
                 </div>
               ))
@@ -343,75 +258,16 @@ export default function SavedItems({ onNavigate }: SavedItemsProps) {
         {/* Price Alerts tab */}
         {activeTab === "Price Alerts" && (
           <div>
-            <SectionHeader
-              title="Price drops"
-              subtitle="Saved items that recently dropped in price"
-            />
-            <div className="space-y-4">
-              {priceDropListings.length === 0 ? (
-                <EmptyState
-                  title="No price alerts yet"
-                  description="Price alerts will appear when a saved listing changes price."
-                  action={() => setActiveTab("Saved Listings")}
-                  actionLabel="View saved listings"
-                  icon={<Icon name="bell" size={24} />}
-                />
-              ) : (
-                priceDropListings.map((listing) => (
-                  <div
-                    key={listing.id}
-                    onClick={() => onNavigate("listing")}
-                    className="flex gap-4 bg-white rounded-2xl border border-[#E8E6DF] p-4 cursor-pointer card-hover"
-                  >
-                    <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF]">
-                      {listing.images[0] && (
-                        <img
-                          src={`${
-                            listing.images[0].startsWith("http")
-                              ? listing.images[0]
-                              : `https://images.unsplash.com/${listing.images[0]}`
-                          }?w=160&h=160&fit=crop&auto=format`}
-                          alt={listing.title}
-                          className="w-full h-full object-cover"
-                        />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-1">
-                        {listing.title}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-lg font-bold text-[#1B2A4A]">
-                          ${listing.price?.toLocaleString()}
-                        </span>
-                        <span className="text-sm text-[#C5CCDA] line-through">
-                          ${((listing.price || 0) + 100).toLocaleString()}
-                        </span>
-                        <Badge variant="coral" size="sm">
-                          ↓ $100 off
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-[#8A9AB5] mt-1">
-                        {listing.neighborhood} · {listing.distance}
-                      </p>
-                      <p className="text-xs text-[#E8694A] font-medium mt-1">
-                        Price dropped {listing.postedAt}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* New listings alerts */}
-            <SectionHeader
-              title="New listing alerts"
-              subtitle="New items matching your saved searches"
-              className="mt-8"
-            />
-            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 text-sm text-[#8A9AB5]">
-              New-match alerts will appear here once saved-search notifications
-              are enabled.
+            <div className="rounded-2xl border border-[#E8E6DF] bg-white p-8">
+              <h2 className="font-display text-xl font-semibold text-[#1B2A4A]">
+                Price and match alerts are unavailable
+              </h2>
+              <p className="mt-2 text-sm text-[#5C6E8A]">
+                Neighborly does not yet record price history or deliver saved-search notifications. Saved listings remain available in the Saved Listings tab.
+              </p>
+              <Button variant="soft" size="xs" className="mt-4" onClick={() => setActiveTab("Saved Listings")}>
+                View saved listings
+              </Button>
             </div>
           </div>
         )}

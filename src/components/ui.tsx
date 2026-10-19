@@ -439,7 +439,7 @@ interface ListingCardProps {
     views?: number
   }
   onClick?: () => void
-  onSavedChange?: (saved: boolean) => void
+  onSavedChange?: (saved: boolean) => void | Promise<void>
   compact?: boolean
 }
 
@@ -464,7 +464,7 @@ export function ListingCard({
           compact ? "h-36" : "h-48"
         }`}
       >
-        {!imgErr ? (
+        {!imgErr && listing.images[0] ? (
           <img
             src={`${
               listing.images[0].startsWith("http")
@@ -496,10 +496,19 @@ export function ListingCard({
           onClick={async (e) => {
             e.stopPropagation()
             const nextSaved = !saved
-            setSaved(nextSaved)
             setSaveError("")
             if (onSavedChange) {
-              onSavedChange(nextSaved)
+              try {
+                await onSavedChange(nextSaved)
+                setSaved(nextSaved)
+              } catch (cause: unknown) {
+                setSaved(saved)
+                setSaveError(
+                  cause instanceof ApiError
+                    ? cause.message
+                    : "Saving this listing is unavailable.",
+                )
+              }
               return
             }
             try {
@@ -514,7 +523,9 @@ export function ListingCard({
               )
             }
           }}
-          title={saveError || (saved ? "Remove from saved items" : "Save listing")}
+          title={
+            saveError || (saved ? "Remove from saved items" : "Save listing")
+          }
           className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
         >
           <svg
@@ -731,15 +742,25 @@ export function Toggle({
   checked,
   onChange,
   label,
+  disabled = false,
 }: {
   checked: boolean
   onChange: (v: boolean) => void
   label?: string
+  disabled?: boolean
 }) {
   return (
-    <label className="flex items-center gap-3 cursor-pointer">
+    <div
+      className={`flex items-center gap-3 ${
+        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+      }`}
+    >
       {label && <span className="text-sm text-[#1B2A4A]">{label}</span>}
-      <div
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
         className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
           checked ? "bg-[#2D6A4F]" : "bg-[#E8E6DF]"
@@ -750,8 +771,8 @@ export function Toggle({
             checked ? "translate-x-5" : "translate-x-0"
           }`}
         />
-      </div>
-    </label>
+      </button>
+    </div>
   )
 }
 
