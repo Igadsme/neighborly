@@ -70,11 +70,24 @@ const service = {
   quotes: [quote]
 }
 
+const serviceId = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1'
+const quoteId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1'
+
 function expectPublicService(body: unknown) {
-  const row = body as { image?: string; startingPriceCents?: number; quotes?: unknown; latitude?: unknown; rating?: number }
+  const row = body as {
+    image?: string
+    startingPriceCents?: number
+    quotes?: unknown
+    latitude?: unknown
+    rating?: number
+    backgroundCheck?: boolean
+    reviewCount?: number
+  }
   expect(row.image).toBe('photo-1527515545081-5db817172677')
   expect(row.startingPriceCents).toBe(8900)
-  expect(row.rating).toBe(4.9)
+  expect(row.rating).toBeUndefined()
+  expect(row.backgroundCheck).toBeUndefined()
+  expect(row.reviewCount).toBeUndefined()
   expect(row.quotes).toBeUndefined()
   expect(row.latitude).toBeUndefined()
   const serialized = JSON.stringify(body)
@@ -150,7 +163,7 @@ describe('Services HTTP', () => {
   })
 
   it('GET /api/v1/services/:id hides quote addresses and provider secrets', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/services/service-1`)
+    const response = await fetch(`${baseUrl}/api/v1/services/${serviceId}`)
     expect(response.status).toBe(200)
     expectPublicService(await response.json())
   })
@@ -162,7 +175,7 @@ describe('Services HTTP', () => {
   })
 
   it('POST /api/v1/services/:id/quotes without a token is 401', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/services/service-1/quotes`, {
+    const response = await fetch(`${baseUrl}/api/v1/services/${serviceId}/quotes`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ notes: 'Need a deep clean' })
@@ -173,7 +186,7 @@ describe('Services HTTP', () => {
 
   it('POST /api/v1/services/:id/quotes rejects the provider quoting themselves', async () => {
     serviceOwnerId = 'user-1'
-    const response = await fetch(`${baseUrl}/api/v1/services/service-1/quotes`, {
+    const response = await fetch(`${baseUrl}/api/v1/services/${serviceId}/quotes`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
       body: JSON.stringify({ notes: 'Need a deep clean', address: 'SECRET-ADDRESS-9' })
@@ -184,22 +197,29 @@ describe('Services HTTP', () => {
 
   it('keeps the street address off the provider quote list until the provider accepts', async () => {
     const provider = tokenFor('provider-1', 'provider@example.com')
-    const hidden = await fetch(`${baseUrl}/api/v1/services/service-1/quotes`, { headers: { authorization: `Bearer ${provider}` } })
+    const hidden = await fetch(`${baseUrl}/api/v1/services/${serviceId}/quotes`, { headers: { authorization: `Bearer ${provider}` } })
     expect(hidden.status).toBe(200)
     const hiddenBody = await hidden.json()
     expect(JSON.stringify(hiddenBody)).not.toContain('SECRET-ADDRESS-9')
     expect(JSON.stringify(hiddenBody)).not.toContain('secret-requester@example.com')
     expect(JSON.stringify(hiddenBody)).not.toContain('Hopper')
 
-    const outsider = await fetch(`${baseUrl}/api/v1/services/service-1/quotes`, { headers: { authorization: `Bearer ${token}` } })
+    const outsider = await fetch(`${baseUrl}/api/v1/services/${serviceId}/quotes`, { headers: { authorization: `Bearer ${token}` } })
     expect(outsider.status).toBe(403)
     expect(JSON.stringify(await outsider.json())).not.toContain('SECRET-ADDRESS-9')
 
-    const accepted = await fetch(`${baseUrl}/api/v1/services/quotes/quote-1/accept`, { method: 'POST', headers: { authorization: `Bearer ${provider}` } })
+    const accepted = await fetch(`${baseUrl}/api/v1/services/quotes/${quoteId}/accept`, { method: 'POST', headers: { authorization: `Bearer ${provider}` } })
     expect(accepted.status).toBe(201)
     const acceptedBody = (await accepted.json()) as { address?: string; requester?: { profile?: { lastName?: string } } }
     expect(acceptedBody.address).toBe('SECRET-ADDRESS-9')
     expect(acceptedBody.requester?.profile?.lastName).toBeUndefined()
     expect(JSON.stringify(acceptedBody)).not.toContain('secret-requester@example.com')
+  })
+
+  it('GET /api/v1/services/:id rejects a non-UUID with 400 before Prisma', async () => {
+    prisma.serviceListing.findFirst.mockClear()
+    const response = await fetch(`${baseUrl}/api/v1/services/not-a-uuid`)
+    expect(response.status).toBe(400)
+    expect(prisma.serviceListing.findFirst).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
@@ -32,12 +32,12 @@ export class JobsController {
   @Get(':id/applications')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  applicants(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  applicants(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.jobs.listApplicants(request.user.id, id)
   }
 
   @Get(':id')
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUUIDPipe) id: string) {
     return this.jobs.get(id)
   }
 
@@ -51,28 +51,28 @@ export class JobsController {
   @Post(':id/apply')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  apply(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: ApplyJobDto) {
+  apply(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: ApplyJobDto) {
     return this.jobs.apply(request.user.id, id, input)
   }
 
   @Post(':id/save')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  save(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  save(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.jobs.toggleSave(request.user.id, id)
   }
 
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  update(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() input: UpdateJobDto) {
+  update(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateJobDto) {
     return this.jobs.update(request.user.id, id, input)
   }
 
   @Delete(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  archive(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+  archive(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.jobs.archive(request.user.id, id)
   }
 }

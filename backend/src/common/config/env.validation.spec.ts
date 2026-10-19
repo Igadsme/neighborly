@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { envValidationSchema } from './env.validation'
 
 const bootEnv = {
@@ -13,6 +15,7 @@ describe('envValidationSchema', () => {
     expect(value.DATABASE_URL).toBe(bootEnv.DATABASE_URL)
     expect(value.JWT_SECRET).toBe(bootEnv.JWT_SECRET)
     expect(value.CORS_ORIGIN).toBe(bootEnv.CORS_ORIGIN)
+    expect(value.PUBLIC_WEB_ORIGIN).toBe('http://localhost:8443')
     expect(value.REDIS_URL).toBeUndefined()
     expect(value.JWT_REFRESH_SECRET).toBeUndefined()
     expect(value.S3_ENDPOINT).toBeUndefined()
@@ -62,6 +65,20 @@ describe('envValidationSchema', () => {
       { allowUnknown: true }
     )
     expect(error).toBeUndefined()
+  })
+})
+
+describe('local env template', () => {
+  const template = readFileSync(resolve(__dirname, '../../../../env.example'), 'utf8')
+  const apiTemplate = readFileSync(resolve(__dirname, '../../../.env.example'), 'utf8')
+
+  it('points PUBLIC_WEB_ORIGIN at the Vite dev origin and drops stale claims', () => {
+    expect(template).toContain('PUBLIC_WEB_ORIGIN=http://localhost:8443')
+    expect(template).not.toMatch(/refresh tokens are not issued/i)
+    expect(template).not.toMatch(/no upload route is mounted/i)
+    expect(template).toMatch(/production must set PUBLIC_WEB_ORIGIN or verification links point at the wrong host/i)
+    expect(apiTemplate).toContain('PUBLIC_WEB_ORIGIN=http://localhost:8443')
+    expect(apiTemplate).toMatch(/production must set PUBLIC_WEB_ORIGIN or verification links point at the wrong host/i)
   })
 })
 

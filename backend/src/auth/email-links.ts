@@ -10,7 +10,7 @@
 export const EMAIL_CHANGE_TTL_MS = 24 * 60 * 60 * 1000
 
 export function publicWebOrigin() {
-  return (process.env.PUBLIC_WEB_ORIGIN ?? 'http://localhost:5173').replace(/\/$/, '')
+  return (process.env.PUBLIC_WEB_ORIGIN ?? 'http://localhost:8443').replace(/\/$/, '')
 }
 
 export function verificationLink(token: string) {

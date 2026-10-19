@@ -72,7 +72,7 @@ deployment decision with a real dependency and cost.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `EMAIL_SENDER` | `outbox` | Adapter selection. `console` is rejected in production. |
-| `PUBLIC_WEB_ORIGIN` | `http://localhost:5173` | Origin prefixed to verification and reset links. Set this in production or links point at localhost. |
+| `PUBLIC_WEB_ORIGIN` | `http://localhost:8443` | Origin prefixed to verification and reset links. Production must set this or links point at the wrong host. |
 
 Both are validated in `backend/src/common/config/env.validation.ts`.
 

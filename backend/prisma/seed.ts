@@ -34,6 +34,15 @@ function at(iso: string) {
   return new Date(iso)
 }
 
+/**
+ * Housing, job, and service trust columns are not demo copy. A passing
+ * value has to come from a staff or passport record, so seed writes the
+ * unset defaults and a re-run clears any older fixture that had set them.
+ */
+const housingTrust = { verified: false }
+const jobTrust = { verified: false }
+const serviceTrust = { backgroundCheck: false, rating: null, reviewCount: 0 }
+
 async function seedUsers(passwordHash: string) {
   for (const user of Object.values(users)) {
     await prisma.user.upsert({
@@ -85,7 +94,6 @@ async function seedHousing() {
       pets: true,
       furnished: false,
       utilities: 'Water included',
-      verified: true,
       latitude: 33.761,
       longitude: -84.363,
       createdAt: at('2026-09-22T12:00:00.000Z'),
@@ -109,7 +117,6 @@ async function seedHousing() {
       pets: false,
       furnished: true,
       utilities: 'All utilities included',
-      verified: true,
       latitude: 33.781,
       longitude: -84.383,
       createdAt: at('2026-09-23T09:00:00.000Z'),
@@ -133,7 +140,6 @@ async function seedHousing() {
       pets: true,
       furnished: false,
       utilities: 'N/A',
-      verified: true,
       latitude: 33.737,
       longitude: -84.369,
       createdAt: at('2026-09-18T12:00:00.000Z'),
@@ -157,7 +163,6 @@ async function seedHousing() {
       pets: false,
       furnished: true,
       utilities: 'All included',
-      verified: false,
       latitude: 33.775,
       longitude: -84.296,
       createdAt: at('2026-09-21T12:00:00.000Z'),
@@ -181,7 +186,6 @@ async function seedHousing() {
       pets: true,
       furnished: false,
       utilities: 'Resident pays utilities',
-      verified: true,
       latitude: 33.839,
       longitude: -84.379,
       createdAt: at('2026-09-16T12:00:00.000Z'),
@@ -205,7 +209,6 @@ async function seedHousing() {
       pets: false,
       furnished: true,
       utilities: 'All included',
-      verified: false,
       latitude: 33.77,
       longitude: -84.42,
       createdAt: at('2026-09-19T12:00:00.000Z'),
@@ -217,8 +220,8 @@ async function seedHousing() {
     const { id, images, ...data } = row
     await prisma.housingListing.upsert({
       where: { id },
-      update: { ...data, city: 'Atlanta', status: 'PUBLISHED', deletedAt: null },
-      create: { id, ...data, city: 'Atlanta', status: 'PUBLISHED' }
+      update: { ...data, ...housingTrust, city: 'Atlanta', status: 'PUBLISHED', deletedAt: null },
+      create: { id, ...data, ...housingTrust, city: 'Atlanta', status: 'PUBLISHED' }
     })
     for (const [sortOrder, objectKey] of images.entries()) {
       const imageId = `21000000-0000-4000-8000-${(housingIndex * 10 + sortOrder + 1).toString(16).padStart(12, '0')}`
@@ -247,7 +250,6 @@ async function seedJobs() {
       location: 'Midtown Atlanta',
       remote: 'Hybrid',
       deadline: 'Rolling',
-      verified: true,
       tags: ['React', 'Node.js', 'PostgreSQL'],
       createdAt: at('2026-09-21T12:00:00.000Z')
     },
@@ -265,7 +267,6 @@ async function seedJobs() {
       location: 'Inman Park',
       remote: 'On-site',
       deadline: 'Oct 1, 2026',
-      verified: true,
       tags: ['Coffee', 'Customer Service', 'Food & Bev'],
       createdAt: at('2026-09-22T12:00:00.000Z')
     },
@@ -283,7 +284,6 @@ async function seedJobs() {
       location: 'Remote',
       remote: 'Remote',
       deadline: 'Rolling',
-      verified: false,
       tags: ['Figma', 'Branding', 'Print', 'Digital'],
       createdAt: at('2026-09-23T08:00:00.000Z')
     },
@@ -301,7 +301,6 @@ async function seedJobs() {
       location: 'Buckhead',
       remote: 'On-site',
       deadline: 'Rolling',
-      verified: true,
       tags: ['Electrical', 'Construction', 'Residential'],
       createdAt: at('2026-09-20T12:00:00.000Z')
     },
@@ -319,7 +318,6 @@ async function seedJobs() {
       location: 'West Midtown',
       remote: 'Hybrid',
       deadline: 'Sep 30, 2026',
-      verified: true,
       tags: ['Marketing', 'Social Media', 'Content'],
       createdAt: at('2026-09-16T12:00:00.000Z')
     }
@@ -329,8 +327,8 @@ async function seedJobs() {
     const { id, ...data } = row
     await prisma.jobListing.upsert({
       where: { id },
-      update: { ...data, status: 'PUBLISHED', deletedAt: null },
-      create: { id, ...data, status: 'PUBLISHED' }
+      update: { ...data, ...jobTrust, status: 'PUBLISHED', deletedAt: null },
+      create: { id, ...data, ...jobTrust, status: 'PUBLISHED' }
     })
   }
 
@@ -366,9 +364,6 @@ async function seedServices() {
       availability: 'Mon–Sat',
       tags: ['Deep Clean', 'Move-In/Out', 'Weekly'],
       imageKey: 'photo-1527515545081-5db817172677',
-      backgroundCheck: true,
-      rating: 4.9,
-      reviewCount: 142,
       createdAt: at('2026-09-20T12:00:00.000Z')
     },
     {
@@ -383,9 +378,6 @@ async function seedServices() {
       availability: 'Weekends',
       tags: ['Local Moves', 'Loading/Unloading', 'Packing'],
       imageKey: 'photo-1485965120184-e220f721d03e',
-      backgroundCheck: true,
-      rating: 4.8,
-      reviewCount: 98,
       createdAt: at('2026-09-19T12:00:00.000Z')
     },
     {
@@ -400,9 +392,6 @@ async function seedServices() {
       availability: 'Evenings & Weekends',
       tags: ['K-12', 'SAT Prep', 'Calculus', 'Physics'],
       imageKey: 'photo-1434030216411-0b793f4b4173',
-      backgroundCheck: false,
-      rating: 5,
-      reviewCount: 36,
       createdAt: at('2026-09-18T12:00:00.000Z')
     },
     {
@@ -417,9 +406,6 @@ async function seedServices() {
       availability: 'Flexible',
       tags: ['Portraits', 'Events', 'Real Estate'],
       imageKey: 'photo-1542038784456-1ea8e935640e',
-      backgroundCheck: false,
-      rating: 4.9,
-      reviewCount: 74,
       createdAt: at('2026-09-17T12:00:00.000Z')
     },
     {
@@ -434,9 +420,6 @@ async function seedServices() {
       availability: 'Tue–Sat',
       tags: ['Mowing', 'Mulching', 'Pruning', 'Cleanup'],
       imageKey: 'photo-1416879595882-3373a0480b5b',
-      backgroundCheck: true,
-      rating: 4.7,
-      reviewCount: 55,
       createdAt: at('2026-09-16T12:00:00.000Z')
     },
     {
@@ -451,9 +434,6 @@ async function seedServices() {
       availability: 'Mon–Fri',
       tags: ['Mac & PC', 'Virus Removal', 'Setup', 'Data Recovery'],
       imageKey: 'photo-1517336714731-489689fd1ca8',
-      backgroundCheck: false,
-      rating: 4.6,
-      reviewCount: 28,
       createdAt: at('2026-09-15T12:00:00.000Z')
     }
   ]
@@ -462,8 +442,8 @@ async function seedServices() {
     const { id, ...data } = row
     await prisma.serviceListing.upsert({
       where: { id },
-      update: { ...data, status: 'PUBLISHED', deletedAt: null },
-      create: { id, ...data, status: 'PUBLISHED' }
+      update: { ...data, ...serviceTrust, status: 'PUBLISHED', deletedAt: null },
+      create: { id, ...data, ...serviceTrust, status: 'PUBLISHED' }
     })
   }
 
