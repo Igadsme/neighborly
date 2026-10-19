@@ -1,0 +1,16 @@
+{"step":"health","method":"GET","path":"/health","status":200,"ok":true,"expectStatus":[200,201]}
+{"step":"ready","method":"GET","path":"/ready","status":200,"ok":true,"expectStatus":[200,201]}
+{"step":"login-requester","method":"POST","path":"/auth/login","status":201,"ok":true,"expectStatus":[200,201]}
+{"step":"login-offerer","method":"POST","path":"/auth/login","status":201,"ok":true,"expectStatus":[200,201]}
+{"step":"list-categories","method":"GET","path":"/categories","status":200,"ok":true,"expectStatus":[200,201]}
+{"step":"publish-request","method":"POST","path":"/requests","status":201,"ok":true,"expectStatus":[201,200]}
+{"step":"create-offer","method":"POST","path":"/requests/d07a345f-0a6f-4f90-a50e-e119e6e38bcd/offers","status":201,"ok":true,"expectStatus":[201,200]}
+{"step":"accept-offer","method":"POST","path":"/requests/d07a345f-0a6f-4f90-a50e-e119e6e38bcd/offers/33b68579-fd14-471e-bbae-577541648bec/accept","status":201,"ok":true,"expectStatus":[200,201]}
+{"step":"message-requester","method":"POST","path":"/conversations/2161ff5b-9dd1-4ecb-94cf-62b90599f059/messages","status":201,"ok":true,"expectStatus":[200,201]}
+{"step":"message-offerer","method":"POST","path":"/conversations/2161ff5b-9dd1-4ecb-94cf-62b90599f059/messages","status":201,"ok":true,"expectStatus":[200,201]}
+{"step":"reject-direct-completed","method":"PATCH","path":"/transactions/7badce0f-264e-4240-a8b9-ab78917629aa/status","status":400,"ok":true,"expectStatus":[400]}
+{"step":"status-scheduled","method":"PATCH","path":"/transactions/7badce0f-264e-4240-a8b9-ab78917629aa/status","status":200,"ok":true,"expectStatus":[200]}
+{"step":"status-in_progress","method":"PATCH","path":"/transactions/7badce0f-264e-4240-a8b9-ab78917629aa/status","status":200,"ok":true,"expectStatus":[200]}
+{"step":"status-completed","method":"PATCH","path":"/transactions/7badce0f-264e-4240-a8b9-ab78917629aa/status","status":200,"ok":true,"expectStatus":[200]}
+{"step":"submit-review","method":"POST","path":"/reviews","status":201,"ok":true,"expectStatus":[200,201]}
+report /Volumes/T7 Shield/Projects/neighborly/artifacts/docker-release-verification/e2e-report.json

@@ -13,40 +13,265 @@ enum UserStatus {
   DELETED
 }
 
-enum UserRole {
-  USER
-  MODERATOR
-  ADMIN
-}
-
-enum ReportStatus {
-  OPEN
-  REVIEWING
-  RESOLVED
-  DISMISSED
-}
-
-enum ReactionType {
-  LIKE
-  HELPFUL
-  CELEBRATE
-}
-
-enum EventStatus {
-  PUBLISHED
-  CANCELLED
+/// Lifecycle of one borrow request. Item-level availability lives on the
+/// listing and on BorrowReservation, never here.
+enum BorrowRequestStatus {
+  REQUESTED
+  APPROVED
+  DECLINED
+  PICKUP_SCHEDULED
+  CHECKED_OUT
+  RETURN_REQUESTED
+  RETURNED
   COMPLETED
+  OVERDUE
+  CANCELLED
+  DISPUTED
 }
 
-enum RsvpStatus {
-  GOING
-  INTERESTED
-  NOT_GOING
+enum BorrowReservationStatus {
+  ACTIVE
+  RELEASED
 }
 
-enum AuthTokenType {
-  EMAIL_VERIFICATION
-  PASSWORD_RESET
+enum BorrowHandoffKind {
+  PICKUP
+  RETURN
+}
+
+enum BorrowConditionPhase {
+  BEFORE
+  AFTER
+}
+
+enum BorrowExtensionStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+}
+
+enum BorrowDisputeReason {
+  DAMAGE
+  MISSING_ITEM
+  LATE_RETURN
+  OTHER
+}
+
+enum BorrowDisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum BorrowAvailabilityKind {
+  UNAVAILABLE
+  AVAILABLE
+}
+
+model BorrowRequest {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  listingId          String                  @db.Uuid
+  lenderId           String                  @db.Uuid
+  borrowerId         String                  @db.Uuid
+  status             BorrowRequestStatus     @default(REQUESTED)
+  /// Half-open interval [startAt, endAt). endAt is the moment it is due back.
+  startAt            DateTime
+  endAt              DateTime
+  message            String?
+  /// The due date as first agreed, so an extension never rewrites history.
+  originalEndAt      DateTime
+  depositCents       Int?
+  approvedAt         DateTime?
+  checkedOutAt       DateTime?
+  returnedAt         DateTime?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  /// Set when an overdue sweep first saw this request overdue, so the
+  /// notification fires exactly once no matter how often the sweep runs.
+  overdueNotifiedAt  DateTime?
+  pickupInstructions String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  listing            Listing                 @relation(fields: [listingId], references: [id])
+  lender             User                    @relation("BorrowLender", fields: [lenderId], references: [id])
+  borrower           User                    @relation("BorrowBorrower", fields: [borrowerId], references: [id])
+  reservation        BorrowReservation?
+  handoffs           BorrowHandoff[]
+  conditionReports   BorrowConditionReport[]
+  extensions         BorrowExtension[]
+  disputes           BorrowDispute[]
+  events             BorrowStatusEvent[]
+
+  @@index([listingId, status])
+  @@index([borrowerId, status, createdAt])
+  @@index([lenderId, status, createdAt])
+  // The overdue sweep walks only live requests whose due date has passed.
+  @@index([status, endAt])
+}
+
+/// A confirmed booking of one item for a half-open interval. A cancelled or
+/// expired request releases its reservation rather than deleting it, so the
+/// booking history stays auditable.
+model BorrowReservation {
+  id              String                  @id @default(uuid()) @db.Uuid
+  listingId       String                  @db.Uuid
+  borrowRequestId String                  @unique @db.Uuid
+  startAt         DateTime
+  endAt           DateTime
+  status          BorrowReservationStatus @default(ACTIVE)
+  /// Set when the booking stops blocking the item. NULL means it still blocks.
+  releasedAt      DateTime?
+  createdAt       DateTime                @default(now())
+  listing         Listing                 @relation(fields: [listingId], references: [id])
+  borrowRequest   BorrowRequest           @relation(fields: [borrowRequestId], references: [id])
+
+  @@index([listingId, status, startAt])
+}
+
+/// A period the lender has marked open or blocked. An UNAVAILABLE window
+/// overrides a reservation check; an AVAILABLE window is informational and
+/// never overrides an existing booking.
+model BorrowAvailabilityWindow {
+  id        String                 @id @default(uuid()) @db.Uuid
+  listingId String                 @db.Uuid
+  kind      BorrowAvailabilityKind
+  startsAt  DateTime
+  endsAt    DateTime
+  note      String?
+  createdAt DateTime               @default(now())
+  listing   Listing                @relation(fields: [listingId], references: [id])
+
+  @@index([listingId, startsAt])
+}
+
+/// A two-sided confirmation. A handoff is complete only when both parties
+/// have confirmed, so one side cannot unilaterally move the item.
+model BorrowHandoff {
+  id                  String                 @id @default(uuid()) @db.Uuid
+  borrowRequestId     String                 @db.Uuid
+  kind                BorrowHandoffKind
+  /// Where and when. Private to the two participants.
+  scheduledAt         DateTime?
+  locationNote        String?
+  borrowerConfirmedAt DateTime?
+  lenderConfirmedAt   DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  createdAt           DateTime               @default(now())
+  borrowRequest       BorrowRequest          @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+  conditionReport     BorrowConditionReport?
+
+  @@unique([borrowRequestId, kind])
+  @@index([kind, scheduledAt])
+}
+
+/// Condition recorded at handoff. Immutable once written: a report is a
+/// statement of what someone observed at a moment, not an editable field.
+model BorrowConditionReport {
+  id              String                  @id @default(uuid()) @db.Uuid
+  borrowRequestId String                  @db.Uuid
+  handoffId       String?                 @unique @db.Uuid
+  phase           BorrowConditionPhase
+  condition       String
+  notes           String?
+  reportedById    String                  @db.Uuid
+  createdAt       DateTime                @default(now())
+  borrowRequest   BorrowRequest           @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+  handoff         BorrowHandoff?          @relation(fields: [handoffId], references: [id])
+  reportedBy      User                    @relation(fields: [reportedById], references: [id])
+  photos          BorrowDisputeEvidence[]
+
+  @@index([borrowRequestId, phase])
+}
+
+model BorrowExtension {
+  id              String                @id @default(uuid()) @db.Uuid
+  borrowRequestId String                @db.Uuid
+  requestedById   String                @db.Uuid
+  status          BorrowExtensionStatus @default(REQUESTED)
+  /// The due date being asked for.
+  requestedEndAt  DateTime
+  /// The due date in force before this extension, kept for the audit trail.
+  previousEndAt   DateTime
+  decidedAt       DateTime?
+  decidedById     String?               @db.Uuid
+  reason          String?
+  createdAt       DateTime              @default(now())
+  borrowRequest   BorrowRequest         @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+  requestedBy     User                  @relation("BorrowExtensionRequester", fields: [requestedById], references: [id])
+  decidedBy       User?                 @relation("BorrowExtensionDecider", fields: [decidedById], references: [id])
+
+  @@index([borrowRequestId, status])
+}
+
+/// Append-only. A dispute must never be able to lose its own history.
+model BorrowDispute {
+  id              String                  @id @default(uuid()) @db.Uuid
+  borrowRequestId String                  @db.Uuid
+  openedById      String                  @db.Uuid
+  reason          BorrowDisputeReason
+  status          BorrowDisputeStatus     @default(OPEN)
+  summary         String
+  resolution      String?
+  resolvedAt      DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  borrowRequest   BorrowRequest           @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+  openedBy        User                    @relation(fields: [openedById], references: [id])
+  evidence        BorrowDisputeEvidence[]
+  events          BorrowDisputeEvent[]
+
+  @@index([borrowRequestId, status])
+  @@index([status, createdAt])
+}
+
+/// Evidence attached to a dispute or a condition report. Only a participant
+/// or a moderator can read it, and nothing here is deletable by one party.
+model BorrowDisputeEvidence {
+  id                String                 @id @default(uuid()) @db.Uuid
+  disputeId         String?                @db.Uuid
+  conditionReportId String?                @db.Uuid
+  listingId         String                 @db.Uuid
+  uploadedById      String                 @db.Uuid
+  objectKey         String
+  contentType       String
+  sizeBytes         Int
+  note              String?
+  createdAt         DateTime               @default(now())
+  dispute           BorrowDispute?         @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  conditionReport   BorrowConditionReport? @relation(fields: [conditionReportId], references: [id], onDelete: Cascade)
+  listing           Listing                @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  uploadedBy        User                   @relation(fields: [uploadedById], references: [id])
+
+  @@index([disputeId, createdAt])
+  @@index([conditionReportId])
+}
+
+model BorrowDisputeEvent {
+  id         String               @id @default(uuid()) @db.Uuid
+  disputeId  String               @db.Uuid
+  actorId    String?              @db.Uuid
+  fromStatus BorrowDisputeStatus?
+  toStatus   BorrowDisputeStatus
+  note       String?
+  createdAt  DateTime             @default(now())
+  dispute    BorrowDispute        @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+
+  @@index([disputeId, createdAt])
+}
+
+model BorrowStatusEvent {
+  id              String               @id @default(uuid()) @db.Uuid
+  borrowRequestId String               @db.Uuid
+  fromStatus      BorrowRequestStatus?
+  toStatus        BorrowRequestStatus
+  actorId         String?              @db.Uuid
+  note            String?
+  createdAt       DateTime             @default(now())
+  borrowRequest   BorrowRequest        @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+
+  @@index([borrowRequestId, createdAt])
 }
 
 enum ListingStatus {
@@ -60,6 +285,8 @@ enum ListingStatus {
 enum RequestStatus {
   DRAFT
   PUBLISHED
+  PAUSED
+  FULFILLED
   CLOSED
   EXPIRED
   CANCELLED
@@ -99,286 +326,467 @@ enum ExchangeMode {
   FREE
 }
 
+enum PublishStatus {
+  PUBLISHED
+  ARCHIVED
+}
+
+enum QuoteStatus {
+  PENDING
+  ACCEPTED
+}
+
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  HIDDEN
+}
+
+enum StaffRole {
+  MODERATOR
+  ADMIN
+}
+
+enum ReportTargetType {
+  LISTING
+  USER
+  MESSAGE
+  COMMUNITY_POST
+  /// Milestone 8: a reported review, so review moderation reuses the
+  /// existing Report and ModerationAction audit surface.
+  REVIEW
+  /// Milestone 9: a reported mission and a reported participant, so community
+  /// moderation reuses the same tables rather than inventing a queue.
+  MISSION
+  MISSION_PARTICIPANT
+}
+
+enum ReportReason {
+  SPAM
+  SCAM
+  HARASSMENT
+  INAPPROPRIATE
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum ModerationActionKind {
+  DISMISS
+  RESOLVE
+  HIDE
+  SUSPEND_USER
+  RESTORE_USER
+}
+
 model User {
-  id                 String               @id @default(uuid()) @db.Uuid
-  email              String               @unique
-  passwordHash       String
-  status             UserStatus           @default(ACTIVE)
-  role               UserRole             @default(USER)
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  deletedAt          DateTime?
-  profile            Profile?
-  listings           Listing[]
-  requests           NeedRequest[]
-  offers             RequestOffer[]       @relation("Offerer")
-  favorites          Favorite[]
-  savedSearches      SavedSearch[]
-  preference         UserPreference?
-  notificationPreference NotificationPreference?
-  notifications       Notification[]
-  conversations      ConversationParticipant[]
-  sentMessages       Message[]            @relation("MessageSender")
-  reviewsGiven       Review[]             @relation("ReviewAuthor")
-  reviewsReceived    Review[]             @relation("ReviewSubject")
-  transactionMembers TransactionParticipant[]
-  deviceSessions      DeviceSession[]
-  blocksInitiated     BlockedUser[]        @relation("Blocker")
-  blocksReceived      BlockedUser[]        @relation("Blocked")
-  reportsFiled        Report[]             @relation("ReportReporter")
-  moderationActions   ModerationAction[]   @relation("ModerationActor")
-  communityPosts      CommunityPost[]
-  communityComments   CommunityComment[]
-  postReactions       PostReaction[]
-  organizedEvents     CommunityEvent[]
-  eventRsvps          EventRsvp[]
-  authTokens          AuthToken[]
+  id                            String                    @id @default(uuid()) @db.Uuid
+  email                         String                    @unique
+  passwordHash                  String
+  status                        UserStatus                @default(ACTIVE)
+  createdAt                     DateTime                  @default(now())
+  updatedAt                     DateTime                  @updatedAt
+  deletedAt                     DateTime?
+  emailVerifiedAt               DateTime?
+  pendingEmail                  String?
+  pendingEmailAt                DateTime?
+  deletionRequestedAt           DateTime?
+  sessions                      RefreshSession[]
+  emailTokens                   EmailVerificationToken[]
+  passwordTokens                PasswordResetToken[]
+  profile                       Profile?
+  listings                      Listing[]
+  requests                      NeedRequest[]
+  offers                        RequestOffer[]            @relation("Offerer")
+  favorites                     Favorite[]
+  savedSearches                 SavedSearch[]
+  preference                    UserPreference?
+  notificationPreference        NotificationPreference?
+  conversations                 ConversationParticipant[]
+  sentMessages                  Message[]                 @relation("MessageSender")
+  reviewsGiven                  Review[]                  @relation("ReviewAuthor")
+  reviewsReceived               Review[]                  @relation("ReviewSubject")
+  transactionMembers            TransactionParticipant[]
+  housingListings               HousingListing[]
+  jobListings                   JobListing[]
+  jobApplications               JobApplication[]
+  jobSaves                      JobSave[]
+  serviceListings               ServiceListing[]
+  serviceQuotes                 ServiceQuote[]
+  communityPosts                CommunityPost[]
+  communityReactions            CommunityReaction[]
+  communityComments             CommunityComment[]
+  communityEvents               CommunityEvent[]
+  eventRsvps                    CommunityEventRsvp[]
+  lostFoundItems                LostFoundItem[]
+  giveaways                     Giveaway[]                @relation("GiveawayAuthor")
+  claimedGiveaways              Giveaway[]                @relation("GiveawayClaimer")
+  staffRoles                    StaffRoleAssignment[]
+  blocksGiven                   BlockedUser[]             @relation("BlocksGiven")
+  blocksReceived                BlockedUser[]             @relation("BlocksReceived")
+  reportsFiled                  Report[]                  @relation("ReportsFiled")
+  moderationActions             ModerationAction[]
+  notifications                 Notification[]
+  savedSearchAlerts             SavedSearchAlert[]
+  // Milestone 7 borrowing relations. Named where one model points at the
+  // same table twice.
+  borrowedItems                 BorrowRequest[]           @relation("BorrowBorrower")
+  lentItems                     BorrowRequest[]           @relation("BorrowLender")
+  borrowExtensionsRequested     BorrowExtension[]         @relation("BorrowExtensionRequester")
+  borrowExtensionsDecided       BorrowExtension[]         @relation("BorrowExtensionDecider")
+  borrowConditionReports        BorrowConditionReport[]
+  borrowDisputesOpened          BorrowDispute[]
+  borrowEvidenceUploaded        BorrowDisputeEvidence[]
+  // Milestone 8 passport and trust.
+  passportPrivacy               PassportPrivacySettings?  @relation("PassportPrivacy")
+  verifications                 VerificationRecord[]      @relation("VerificationOwner")
+  verificationsReviewed         VerificationRecord[]      @relation("VerificationReviewer")
+  trustAuditEvents              TrustAuditEvent[]         @relation("TrustAuditOwner")
+  trustAuditActored             TrustAuditEvent[]         @relation("TrustAuditActor")
+  appealsFiled                  ModerationAppeal[]        @relation("AppealsFiled")
+  appealsHandled                ModerationAppeal[]        @relation("AppealsHandled")
+  // Milestone 9 neighborhood missions.
+  missionsOrganized             NeighborhoodMission[]     @relation("MissionOrganizer")
+  missionParticipations         MissionParticipant[]      @relation("MissionParticipantUser")
+  missionAttendanceMarked       MissionParticipant[]      @relation("MissionAttendanceMarker")
+  missionParticipationsVerified MissionParticipant[]      @relation("MissionParticipationVerifier")
+  memberBadges                  MemberBadge[]
+  missionStatusEvents           MissionStatusEvent[]
+  missionModerationEvents       MissionModerationEvent[]
 }
 
-model AuthToken {
-  id        String        @id @default(uuid()) @db.Uuid
-  userId    String        @db.Uuid
-  type      AuthTokenType
-  tokenHash String        @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime      @default(now())
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, type, usedAt, expiresAt])
+/// What kind of local activity a mission is. A small closed set beats a
+/// free-text category: it keeps discovery filterable and stops "misc" from
+/// becoming a dumping ground.
+enum MissionCategory {
+  CLEANUP
+  GARDENING
+  DONATION
+  VOLUNTEER
+  ASSISTANCE
+  IMPROVEMENT
 }
 
-model DeviceSession {
-  id           String    @id @default(uuid()) @db.Uuid
-  userId       String    @db.Uuid
-  tokenHash    String    @unique
-  userAgent    String?
-  ipAddress    String?
-  expiresAt    DateTime
-  lastUsedAt   DateTime  @default(now())
-  revokedAt    DateTime?
-  createdAt    DateTime  @default(now())
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, revokedAt, expiresAt])
+enum MissionStatus {
+  /// Only the organizer can see it. Never appears in discovery.
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+  ARCHIVED
 }
 
-model BlockedUser {
-  blockerId String   @db.Uuid
-  blockedId String   @db.Uuid
-  createdAt DateTime @default(now())
-  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
-  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
-
-  @@id([blockerId, blockedId])
-  @@index([blockedId])
+enum MissionParticipantStatus {
+  /// Joined and waiting for a slot or for organizer approval.
+  WAITLISTED
+  /// Holds a confirmed slot. Counts against capacity.
+  CONFIRMED
+  /// The participant marked themselves present at the mission.
+  CHECKED_IN
+  /// The organizer confirmed this person was really there.
+  ATTENDED
+  /// Attendance and completion are both established. The only status that
+  /// can earn a badge, because clicking Join is not participation.
+  VERIFIED
+  /// Left on their own accord.
+  WITHDRAWN
+  /// Removed by the organizer or a moderator.
+  REMOVED
 }
 
-model Report {
-  id         String       @id @default(uuid()) @db.Uuid
-  reporterId String       @db.Uuid
-  targetType String
-  targetId   String
-  reason     String
-  details    String?
-  status     ReportStatus @default(OPEN)
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
-  reporter   User         @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
-  actions    ModerationAction[]
-
-  @@index([status, createdAt])
-  @@index([targetType, targetId])
-  @@index([reporterId, createdAt])
+enum MissionModerationKind {
+  HIDDEN
+  RESTORED
+  PARTICIPANT_REMOVED
+  REPORT_RESOLVED
 }
 
-model ModerationAction {
-  id          String   @id @default(uuid()) @db.Uuid
-  reportId    String   @db.Uuid
-  actorId     String   @db.Uuid
-  action      String
-  note        String?
-  createdAt   DateTime @default(now())
-  report      Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  actor       User     @relation("ModerationActor", fields: [actorId], references: [id])
+/// A real, scheduled, local activity. A mission exists to be attended, not to
+/// be browsed, which is why attendance and completion are first-class fields
+/// rather than a comment thread.
+model NeighborhoodMission {
+  id                        String                   @id @default(uuid()) @db.Uuid
+  organizerId               String                   @db.Uuid
+  title                     String
+  description               String
+  category                  MissionCategory
+  status                    MissionStatus            @default(DRAFT)
+  /// Neighborhood and city only. There is no latitude or longitude on a
+  /// mission: a meeting point is participant-only text, never a public map pin.
+  neighborhood              String?
+  city                      String?
+  /// How to find the meeting point. Shown to confirmed participants only.
+  meetingPoint              String?
+  startAt                   DateTime
+  endAt                     DateTime
+  /// How many people can be confirmed at once. Always at least one.
+  capacity                  Int                      @default(10)
+  /// The confirmed headcount, maintained by one atomic guarded UPDATE and
+  /// bounded by capacity in the database. This is the overbooking guard.
+  confirmedCount            Int                      @default(0)
+  /// Organizer must approve each participant before they hold a slot.
+  requiresApproval          Boolean                  @default(false)
+  /// Staff must confirm attendance before participation becomes verified.
+  /// Set when an organizer is not trusted to mark their own event.
+  requiresStaffVerification Boolean                  @default(false)
+  publishedAt               DateTime?
+  completedAt               DateTime?
+  cancelledAt               DateTime?
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+  organizer                 User                     @relation("MissionOrganizer", fields: [organizerId], references: [id], onDelete: Restrict)
+  participants              MissionParticipant[]
+  statusEvents              MissionStatusEvent[]
+  moderationEvents          MissionModerationEvent[]
 
-  @@index([reportId, createdAt])
+  @@index([status, startAt])
+  @@index([organizerId, status])
+  @@index([category, status, startAt])
 }
 
-model CommunityPost {
-  id           String             @id @default(uuid()) @db.Uuid
-  authorId     String             @db.Uuid
-  neighborhood String?
-  body         String
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  deletedAt    DateTime?
-  author       User               @relation(fields: [authorId], references: [id])
-  comments     CommunityComment[]
-  reactions    PostReaction[]
+/// One person on one mission.
+///
+/// The unique (missionId, userId) index is what stops the same neighbor from
+/// joining repeatedly to farm participation, and it is enforced by the
+/// database rather than by a read-then-write in the service.
+model MissionParticipant {
+  id                   String                   @id @default(uuid()) @db.Uuid
+  missionId            String                   @db.Uuid
+  userId               String                   @db.Uuid
+  status               MissionParticipantStatus @default(WAITLISTED)
+  /// Position in the waitlist, or null once confirmed. Promotions reuse the
+  /// slot they free, so ordering is explicit rather than inferred from time.
+  waitlistPosition     Int?
+  /// The participant agreed to be recorded as having taken part. Without it
+  /// the organizer cannot mark attendance.
+  consentedAt          DateTime?
+  checkedInAt          DateTime?
+  /// Who confirmed attendance. Staff when the mission requires it.
+  attendanceMarkedById String?                  @db.Uuid
+  attendanceMarkedAt   DateTime?
+  /// When verified participation was established. Only reachable after the
+  /// organizer completed the mission, so joining is never enough.
+  verifiedAt           DateTime?
+  verifiedById         String?                  @db.Uuid
+  withdrawnAt          DateTime?
+  removedAt            DateTime?
+  removalReason        String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  mission              NeighborhoodMission      @relation(fields: [missionId], references: [id], onDelete: Restrict)
+  user                 User                     @relation("MissionParticipantUser", fields: [userId], references: [id], onDelete: Restrict)
+  attendanceMarkedBy   User?                    @relation("MissionAttendanceMarker", fields: [attendanceMarkedById], references: [id], onDelete: SetNull)
+  verifiedBy           User?                    @relation("MissionParticipationVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  badges               MemberBadge[]
 
-  @@index([neighborhood, createdAt])
-  @@index([authorId, createdAt])
-}
-
-model CommunityComment {
-  id        String        @id @default(uuid()) @db.Uuid
-  postId    String        @db.Uuid
-  authorId  String        @db.Uuid
-  body      String
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  deletedAt DateTime?
-  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author    User          @relation(fields: [authorId], references: [id])
-
-  @@index([postId, createdAt])
-  @@index([authorId, createdAt])
-}
-
-model PostReaction {
-  postId    String       @db.Uuid
-  userId    String       @db.Uuid
-  type      ReactionType
-  createdAt DateTime     @default(now())
-  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([postId, userId, type])
-  @@index([userId, createdAt])
-}
-
-model CommunityEvent {
-  id           String       @id @default(uuid()) @db.Uuid
-  organizerId  String       @db.Uuid
-  title        String
-  description  String
-  neighborhood String?
-  location     String
-  startsAt     DateTime
-  endsAt       DateTime?
-  capacity     Int?
-  status       EventStatus  @default(PUBLISHED)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  organizer    User         @relation(fields: [organizerId], references: [id])
-  rsvps        EventRsvp[]
-
-  @@index([status, startsAt])
-  @@index([neighborhood, startsAt])
-  @@index([organizerId, startsAt])
-}
-
-model EventRsvp {
-  eventId   String         @db.Uuid
-  userId    String         @db.Uuid
-  status    RsvpStatus
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  event     CommunityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([eventId, userId])
+  @@unique([missionId, userId])
+  @@index([missionId, status])
   @@index([userId, status])
+  @@index([missionId, waitlistPosition])
+}
+
+/// Append-only history of a mission's lifecycle. Archived and cancelled
+/// missions keep their story instead of disappearing.
+model MissionStatusEvent {
+  id         String              @id @default(uuid()) @db.Uuid
+  missionId  String              @db.Uuid
+  actorId    String?             @db.Uuid
+  fromStatus MissionStatus?
+  toStatus   MissionStatus
+  note       String?
+  createdAt  DateTime            @default(now())
+  mission    NeighborhoodMission @relation(fields: [missionId], references: [id], onDelete: Restrict)
+  actor      User?               @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([missionId, createdAt])
+}
+
+/// What a badge actually claims, written once and shown to everyone who holds
+/// it. A badge whose explanation is written per-award can drift into meaning
+/// something it never proved.
+model CommunityBadge {
+  code        String        @id
+  label       String
+  description String
+  /// The plain-language sentence a member sees when they ask what they hold.
+  explanation String
+  /// Order shown on a passport. Purely presentational.
+  sortOrder   Int           @default(100)
+  createdAt   DateTime      @default(now())
+  holders     MemberBadge[]
+}
+
+/// One badge held by one member.
+///
+/// Awarded at most once per (member, badge): the unique index makes the award
+/// idempotent, so a retried event cannot hand out a second copy. Revocation
+/// sets revokedAt instead of deleting, which keeps the reversal auditable and
+/// lets the badge be earned again honestly if the credit was restored.
+model MemberBadge {
+  id               String              @id @default(uuid()) @db.Uuid
+  userId           String              @db.Uuid
+  code             String
+  /// The verified participation that triggered the award, when there was a
+  /// single one. Null for a threshold reached across several missions.
+  missionId        String?             @db.Uuid
+  awardedAt        DateTime            @default(now())
+  revokedAt        DateTime?
+  revocationReason String?
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge            CommunityBadge      @relation(fields: [code], references: [code], onDelete: Restrict)
+  mission          MissionParticipant? @relation(fields: [missionId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, code])
+  @@index([userId, revokedAt])
+}
+
+/// Moderation history for a mission. Nothing here is ever deleted: a hidden
+/// mission stays on record with the reason it was hidden.
+model MissionModerationEvent {
+  id        String                @id @default(uuid()) @db.Uuid
+  missionId String                @db.Uuid
+  actorId   String?               @db.Uuid
+  kind      MissionModerationKind
+  note      String?
+  createdAt DateTime              @default(now())
+  mission   NeighborhoodMission   @relation(fields: [missionId], references: [id], onDelete: Restrict)
+  actor     User?                 @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([missionId, createdAt])
+  @@index([kind, createdAt])
 }
 
 model Profile {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @unique @db.Uuid
-  firstName    String
-  lastName     String
-  displayName  String?
-  bio          String?
-  neighborhood String?
-  city         String?
-  state        String?
-  latitude     Decimal? @db.Decimal(9, 6)
-  longitude    Decimal? @db.Decimal(9, 6)
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @unique @db.Uuid
+  firstName     String
+  lastName      String
+  displayName   String?
+  bio           String?
+  neighborhood  String?
+  city          String?
+  state         String?
+  avatarUrl     String?
+  latitude      Decimal? @db.Decimal(9, 6)
+  longitude     Decimal? @db.Decimal(9, 6)
   phoneVerified Boolean  @default(false)
   emailVerified Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UserPreference {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @unique @db.Uuid
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @unique @db.Uuid
   interests    Json
   capabilities Json
   completedAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model NotificationPreference {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @unique @db.Uuid
-  newListings Boolean  @default(true)
-  priceDrops  Boolean  @default(true)
-  messages    Boolean  @default(true)
-  events      Boolean  @default(false)
-  community   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model Notification {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @db.Uuid
-  type        String
-  title       String
-  body        String
-  data        Json?
-  readAt      DateTime?
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, readAt, createdAt])
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  newListings    Boolean  @default(true)
+  priceDrops     Boolean  @default(true)
+  messages       Boolean  @default(true)
+  events         Boolean  @default(false)
+  community      Boolean  @default(false)
+  // Milestone 6 categories. Defaults keep an existing row behaving the way
+  // its owner already expects.
+  offers         Boolean  @default(true)
+  matches        Boolean  @default(true)
+  savedSearches  Boolean  @default(true)
+  requestUpdates Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Category {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String   @unique
-  slug      String   @unique
-  createdAt DateTime @default(now())
+  id        String        @id @default(uuid()) @db.Uuid
+  name      String        @unique
+  slug      String        @unique
+  createdAt DateTime      @default(now())
   listings  Listing[]
   requests  NeedRequest[]
 }
 
 model Listing {
-  id                 String          @id @default(uuid()) @db.Uuid
-  sellerId           String          @db.Uuid
-  categoryId         String          @db.Uuid
-  title              String
-  description        String
-  priceCents         Int?
-  condition          String?
-  status             ListingStatus   @default(DRAFT)
-  neighborhood       String?
-  city               String?
-  latitude           Decimal?        @db.Decimal(9, 6)
-  longitude          Decimal?        @db.Decimal(9, 6)
-  radiusMiles        Int?
-  pickupAvailable    Boolean         @default(true)
-  deliveryAvailable  Boolean         @default(false)
-  shippingAvailable  Boolean         @default(false)
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  deletedAt          DateTime?
-  seller             User            @relation(fields: [sellerId], references: [id])
-  category           Category        @relation(fields: [categoryId], references: [id])
-  images             ListingImage[]
-  favorites          Favorite[]
-  offerItems         OfferItem[]
-  matches            RequestMatch[]
-  priceHistory       PriceHistory[]
+  id                  String                     @id @default(uuid()) @db.Uuid
+  sellerId            String                     @db.Uuid
+  categoryId          String                     @db.Uuid
+  title               String
+  description         String
+  priceCents          Int?
+  condition           String?
+  status              ListingStatus              @default(DRAFT)
+  neighborhood        String?
+  city                String?
+  latitude            Decimal?                   @db.Decimal(9, 6)
+  longitude           Decimal?                   @db.Decimal(9, 6)
+  /// Kept in sync with latitude/longitude by neighborly_sync_location. Not read by Prisma Client.
+  geog                Unsupported("geography(Point,4326)")?
+  radiusMiles         Int?
+  pickupAvailable     Boolean                    @default(true)
+  deliveryAvailable   Boolean                    @default(false)
+  shippingAvailable   Boolean                    @default(false)
+  // Milestone 7 borrowing. A listing is a marketplace item first and a
+  // borrowable item second; the flag keeps both without a second model.
+  borrowable          Boolean                    @default(false)
+  /// Hard ceiling on how long this item may be out, enforced server side.
+  maxBorrowDays       Int?
+  /// Hours of notice the lender wants before a pickup.
+  minNoticeHours      Int                        @default(12)
+  /// Handed to the borrower with the item. Never contains an address.
+  usageInstructions   String?
+  /// Stated for transparency only. No payment is ever processed here.
+  depositCents        Int?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  deletedAt           DateTime?
+  seller              User                       @relation(fields: [sellerId], references: [id])
+  category            Category                   @relation(fields: [categoryId], references: [id])
+  images              ListingImage[]
+  favorites           Favorite[]
+  offerItems          OfferItem[]
+  matches             RequestMatch[]
+  priceHistory        PriceHistory[]
+  savedSearchAlerts   SavedSearchAlert[]
+  borrowRequests      BorrowRequest[]
+  borrowReservations  BorrowReservation[]
+  availabilityWindows BorrowAvailabilityWindow[]
+  disputeEvidence     BorrowDisputeEvidence[]
 
   @@index([status, categoryId, createdAt])
+  @@index([status, createdAt])
   @@index([sellerId, status])
   @@index([city, neighborhood])
+  // Milestone 4 discovery indexes. Each matches a query the listing
+  // controller actually issues, so the planner has a range scan available.
+  @@index([status, createdAt, id])
+  @@index([status, categoryId, createdAt, id])
+  @@index([latitude, longitude])
+  @@index([geog], type: Gist)
+  @@index([city, status])
+  @@index([neighborhood, status])
+  @@index([priceCents])
+  // Trigram indexes make `contains` substring search an index lookup
+  // instead of a sequential scan. See migration 0008.
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([neighborhood(ops: raw("gin_trgm_ops"))], type: Gin)
+  // The borrow marketplace searches only borrowable, published items.
+  @@index([borrowable, status, categoryId, createdAt])
+  @@index([borrowable, sellerId, status])
 }
 
 model ListingImage {
@@ -386,8 +794,14 @@ model ListingImage {
   listingId String   @db.Uuid
   objectKey String
   sortOrder Int      @default(0)
+  // Recorded at upload time so the client can reserve layout space before
+  // the image loads. Nullable: rows written before Milestone 4 have no value.
+  width     Int?
+  height    Int?
   createdAt DateTime @default(now())
   listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, sortOrder])
 }
 
 model Favorite {
@@ -402,53 +816,94 @@ model Favorite {
 }
 
 model SavedSearch {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  query     String
-  filters   Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String             @id @default(uuid()) @db.Uuid
+  userId            String             @db.Uuid
+  query             String
+  filters           Json
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  savedSearchAlerts SavedSearchAlert[]
+
+  @@index([userId, updatedAt])
 }
 
 model NeedRequest {
-  id          String        @id @default(uuid()) @db.Uuid
-  requesterId String        @db.Uuid
-  categoryId  String        @db.Uuid
-  title       String
-  description String
-  budgetCents Int?
-  latitude    Decimal?      @db.Decimal(9, 6)
-  longitude   Decimal?      @db.Decimal(9, 6)
-  radiusMiles Int           @default(10)
-  deadline    DateTime?
-  urgency     String?
-  mode        ExchangeMode
-  status      RequestStatus  @default(DRAFT)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  deletedAt   DateTime?
-  requester   User           @relation(fields: [requesterId], references: [id])
-  category    Category       @relation(fields: [categoryId], references: [id])
-  offers      RequestOffer[]
-  matches     RequestMatch[]
+  id              String               @id @default(uuid()) @db.Uuid
+  requesterId     String               @db.Uuid
+  categoryId      String               @db.Uuid
+  title           String
+  description     String
+  /// Single budget figure kept for compatibility with the existing UI. When
+  /// budgetFlexible is true the engine also accepts minBudgetCents.
+  budgetCents     Int?
+  minBudgetCents  Int?
+  budgetFlexible  Boolean              @default(true)
+  /// Structured requirements (dimensions, quantity, condition floor, ...)
+  /// stored as JSON so a new field does not need a migration.
+  requirements    Json?
+  latitude        Decimal?             @db.Decimal(9, 6)
+  longitude       Decimal?             @db.Decimal(9, 6)
+  /// Kept in sync with latitude/longitude by neighborly_sync_location. Not read by Prisma Client.
+  geog            Unsupported("geography(Point,4326)")?
+  neighborhood    String?
+  city            String?
+  radiusMiles     Int                  @default(10)
+  deadline        DateTime?
+  urgency         String?
+  mode            ExchangeMode
+  status          RequestStatus        @default(DRAFT)
+  statusChangedAt DateTime             @default(now())
+  fulfilledAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  deletedAt       DateTime?
+  requester       User                 @relation(fields: [requesterId], references: [id])
+  category        Category             @relation(fields: [categoryId], references: [id])
+  offers          RequestOffer[]
+  matches         RequestMatch[]
+  statusEvents    RequestStatusEvent[]
 
   @@index([requesterId, status, createdAt])
   @@index([categoryId, status])
+  @@index([status, createdAt])
+  // Milestone 5 public discovery feeds: deadline ordering, budget filter,
+  // coordinate radius, and keyword search.
+  @@index([status, deadline])
+  @@index([status, budgetCents])
+  @@index([latitude, longitude])
+  @@index([geog], type: Gist)
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+/// Append-only status history, so an audit can see how a request reached
+/// its current state and who moved it.
+model RequestStatusEvent {
+  id         String         @id @default(uuid()) @db.Uuid
+  requestId  String         @db.Uuid
+  fromStatus RequestStatus?
+  toStatus   RequestStatus
+  actorId    String?        @db.Uuid
+  note       String?
+  createdAt  DateTime       @default(now())
+  request    NeedRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
 }
 
 model RequestOffer {
-  id          String          @id @default(uuid()) @db.Uuid
-  requestId   String          @db.Uuid
-  offererId   String          @db.Uuid
-  amountCents Int?
-  message     String
-  status      OfferStatus     @default(PENDING)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  request     NeedRequest     @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  offerer     User            @relation("Offerer", fields: [offererId], references: [id])
-  items       OfferItem[]
+  id            String         @id @default(uuid()) @db.Uuid
+  requestId     String         @db.Uuid
+  offererId     String         @db.Uuid
+  amountCents   Int?
+  message       String
+  status        OfferStatus    @default(PENDING)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  request       NeedRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  offerer       User           @relation("Offerer", fields: [offererId], references: [id])
+  items         OfferItem[]
   counterOffers CounterOffer[]
 
   @@index([requestId, status, createdAt])
@@ -473,28 +928,97 @@ model CounterOffer {
   message     String
   createdAt   DateTime     @default(now())
   offer       RequestOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@index([offerId, createdAt])
 }
 
 model RequestMatch {
-  id        String       @id @default(uuid()) @db.Uuid
-  requestId String       @db.Uuid
-  listingId String       @db.Uuid
-  score     Decimal      @db.Decimal(5, 2)
-  createdAt DateTime     @default(now())
-  request   NeedRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  listing   Listing      @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  id         String      @id @default(uuid()) @db.Uuid
+  requestId  String      @db.Uuid
+  listingId  String      @db.Uuid
+  score      Decimal     @db.Decimal(5, 2)
+  /// Why this listing matched, as human-readable reasons. Stored so the UI
+  /// can explain a ranking instead of showing a bare number. The empty
+  /// default only exists so the migration is applicable to a database that
+  /// already has rows; every writer supplies real reasons.
+  reasons    Json        @default("{}")
+  rank       Int?
+  computedAt DateTime    @default(now())
+  createdAt  DateTime    @default(now())
+  request    NeedRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  listing    Listing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@unique([requestId, listingId])
+  @@index([requestId, score])
+  @@index([requestId, rank])
+}
+
+/// A persisted, in-app notification. `dedupeKey` makes redelivery of the
+/// same domain event idempotent.
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  type      String
+  title     String
+  body      String?
+  link      String?
+  dedupeKey String    @unique
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+/// One alert per (saved search, listing). The unique dedupeKey is what
+/// stops a re-processed listing from alerting the same member twice.
+model SavedSearchAlert {
+  id            String      @id @default(uuid()) @db.Uuid
+  savedSearchId String      @db.Uuid
+  userId        String      @db.Uuid
+  listingId     String      @db.Uuid
+  dedupeKey     String      @unique
+  readAt        DateTime?
+  createdAt     DateTime    @default(now())
+  savedSearch   SavedSearch @relation(fields: [savedSearchId], references: [id], onDelete: Cascade)
+  listing       Listing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([savedSearchId])
+}
+
+/// Transactional outbox for domain events. Rows are written in the same
+/// transaction as the state change, so an event can never be lost by a
+/// crash between the commit and a publish attempt. `dedupeKey` makes
+/// consumer retries idempotent.
+model DomainEventOutbox {
+  id          String    @id @default(uuid()) @db.Uuid
+  type        String
+  payload     Json
+  actorId     String?   @db.Uuid
+  dedupeKey   String?   @unique
+  status      String    @default("PENDING")
+  attempts    Int       @default(0)
+  availableAt DateTime  @default(now())
+  processedAt DateTime?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([status, availableAt])
+  @@index([createdAt])
 }
 
 model Conversation {
   id           String                    @id @default(uuid()) @db.Uuid
-  directKey    String?                   @unique
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
   participants ConversationParticipant[]
   messages     Message[]
   transactions Transaction[]
+
+  @@index([updatedAt])
 }
 
 model ConversationParticipant {
@@ -502,10 +1026,14 @@ model ConversationParticipant {
   userId         String       @db.Uuid
   joinedAt       DateTime     @default(now())
   lastReadAt     DateTime?
+  /// Denormalized unread count. Maintained on send and reset on read, so
+  /// the badge costs one indexed column read instead of a message scan.
+  unreadCount    Int          @default(0)
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([conversationId, userId])
+  @@index([userId])
 }
 
 model Message {
@@ -513,6 +1041,7 @@ model Message {
   conversationId String       @db.Uuid
   senderId       String       @db.Uuid
   body           String
+  hiddenAt       DateTime?
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender         User         @relation("MessageSender", fields: [senderId], references: [id])
@@ -521,36 +1050,45 @@ model Message {
 }
 
 model Transaction {
-  id             String                    @id @default(uuid()) @db.Uuid
-  conversationId String?                   @db.Uuid
-  offerId        String?                   @db.Uuid
-  status         TransactionStatus         @default(DRAFT)
-  createdAt      DateTime                  @default(now())
-  updatedAt      DateTime                  @updatedAt
-  conversation   Conversation?             @relation(fields: [conversationId], references: [id])
+  id             String                   @id @default(uuid()) @db.Uuid
+  conversationId String?                  @db.Uuid
+  offerId        String?                  @db.Uuid
+  status         TransactionStatus        @default(DRAFT)
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  conversation   Conversation?            @relation(fields: [conversationId], references: [id])
   participants   TransactionParticipant[]
   milestones     TransactionMilestone[]
   appointments   Appointment[]
   reviews        Review[]
+
+  @@unique([offerId])
+  @@index([updatedAt])
 }
 
 model TransactionParticipant {
   transactionId String      @db.Uuid
   userId        String      @db.Uuid
   role          String
+  /// Set when this participant confirms the exchange is complete. The
+  /// transaction stays IN_PROGRESS until every participant has a timestamp.
+  completionConfirmedAt DateTime?
   transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   user          User        @relation(fields: [userId], references: [id])
 
   @@id([transactionId, userId])
+  @@index([userId])
 }
 
 model TransactionMilestone {
-  id            String      @id @default(uuid()) @db.Uuid
-  transactionId String      @db.Uuid
+  id            String             @id @default(uuid()) @db.Uuid
+  transactionId String             @db.Uuid
   fromStatus    TransactionStatus?
   toStatus      TransactionStatus
-  createdAt     DateTime    @default(now())
-  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime           @default(now())
+  transaction   Transaction        @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId, createdAt])
 }
 
 model Appointment {
@@ -562,25 +1100,566 @@ model Appointment {
   transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 }
 
+/// One member's review of another, after a qualifying completed exchange.
+///
+/// Publication is deliberately not immediate: a review stays pending until
+/// the other party has also reviewed or the review window closes, so a
+/// one-sided review cannot be used to pressure anyone.
 model Review {
-  id            String      @id @default(uuid()) @db.Uuid
-  transactionId String      @db.Uuid
-  authorId      String      @db.Uuid
-  subjectId     String      @db.Uuid
-  rating        Int
-  body          String
-  createdAt     DateTime    @default(now())
-  transaction   Transaction @relation(fields: [transactionId], references: [id])
-  author        User        @relation("ReviewAuthor", fields: [authorId], references: [id])
-  subject       User        @relation("ReviewSubject", fields: [subjectId], references: [id])
+  id             String       @id @default(uuid()) @db.Uuid
+  transactionId  String       @db.Uuid
+  authorId       String       @db.Uuid
+  subjectId      String       @db.Uuid
+  /// The author's role in the exchange, recorded so a public summary can say
+  /// "lenders" rather than making the reader infer it.
+  authorRole     String?
+  rating         Int
+  body           String
+  status         ReviewStatus @default(PENDING)
+  publishedAt    DateTime?
+  /// When an automatic publication becomes due. Set once, at submission.
+  windowClosesAt DateTime?
+  editedAt       DateTime?
+  /// A moderator hid this review. The row is kept; nothing is deleted.
+  hiddenAt       DateTime?
+  hiddenReason   String?
+  /// Rolling window after which edits are refused, so a review cannot be
+  /// rewritten to answer a later dispute.
+  editableUntil  DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  transaction    Transaction  @relation(fields: [transactionId], references: [id])
+  author         User         @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  subject        User         @relation("ReviewSubject", fields: [subjectId], references: [id], onDelete: Cascade)
 
-  @@unique([transactionId, authorId, subjectId])
+  /// One review per author per transaction, enforced by the database rather
+  /// than only by the service.
+  @@unique([transactionId, authorId])
+  @@index([subjectId, status, createdAt])
+  @@index([status, windowClosesAt])
+}
+
+/// What a member chooses to show on their passport. Everything defaults to
+/// visible except exact location, which is never available.
+model PassportPrivacySettings {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @unique @db.Uuid
+  showRatings       Boolean  @default(true)
+  showTenure        Boolean  @default(true)
+  showNeighborhood  Boolean  @default(true)
+  showCity          Boolean  @default(true)
+  showTrustSignals  Boolean  @default(true)
+  showContributions Boolean  @default(true)
+  /// Public leaderboards are opt-in, never opt-out.
+  leaderboardOptIn  Boolean  @default(false)
+  /// Days a member has to leave a review before it auto-publishes.
+  reviewWindowDays  Int      @default(14)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation("PassportPrivacy", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum VerificationMethod {
+  EMAIL
+  /// Awarded by the system from verified activity records. Not a claim the
+  /// member can make about themselves.
+  VERIFIED_ACTIVITY
+  /// A staff-reviewed method that exists in this product. No government ID,
+  /// selfie, or biometric data is collected anywhere in this milestone.
+  COMMUNITY_REFERENCE
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+}
+
+/// A verification claim and its decision. Only methods the product actually
+/// supports are represented; nothing here implies a third-party check.
+model VerificationRecord {
+  id           String             @id @default(uuid()) @db.Uuid
+  userId       String             @db.Uuid
+  method       VerificationMethod
+  status       VerificationStatus @default(PENDING)
+  /// Why it was submitted, in the member's own words.
+  statement    String?
+  /// Staff decision note. Never shown to the member's public profile.
+  reviewNote   String?
+  reviewedById String?            @db.Uuid
+  decidedAt    DateTime?
+  revokedAt    DateTime?
+  /// Set when the member has been told why a pending request was refused.
+  respondedAt  DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  user         User               @relation("VerificationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy   User?              @relation("VerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([userId, method])
+  @@index([status, createdAt])
+}
+
+/// Append-only. Every trust-affecting decision leaves a record, so a member can
+/// be told why their passport changed.
+model TrustAuditEvent {
+  id        String         @id @default(uuid()) @db.Uuid
+  userId    String         @db.Uuid
+  kind      TrustAuditKind
+  /// What changed, in words. Deliberately human-readable so the audit trail
+  /// is useful without a join.
+  detail    String
+  /// The review or verification record that caused this, when there was one.
+  refId     String?        @db.Uuid
+  actorId   String?        @db.Uuid
+  createdAt DateTime       @default(now())
+  user      User           @relation("TrustAuditOwner", fields: [userId], references: [id], onDelete: Cascade)
+  actor     User?          @relation("TrustAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([kind, createdAt])
+}
+
+enum TrustAuditKind {
+  REVIEW_PUBLISHED
+  REVIEW_HIDDEN
+  REVIEW_RESTORED
+  VERIFICATION_APPROVED
+  VERIFICATION_REJECTED
+  VERIFICATION_REVOKED
+  TRUST_RECALCULATED
+  APPEAL_RESOLVED
+}
+
+/// A member's challenge to a moderation decision.
+model ModerationAppeal {
+  id          String            @id @default(uuid()) @db.Uuid
+  userId      String            @db.Uuid
+  subjectType AppealSubjectType
+  subjectId   String            @db.Uuid
+  reason      String
+  status      AppealStatus      @default(SUBMITTED)
+  resolution  String?
+  handledById String?           @db.Uuid
+  resolvedAt  DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  user        User              @relation("AppealsFiled", fields: [userId], references: [id], onDelete: Cascade)
+  handledBy   User?             @relation("AppealsHandled", fields: [handledById], references: [id], onDelete: SetNull)
+
+  /// One open appeal per subject per member: re-submitting refreshes nothing,
+  /// it collides, which stops an appeal queue from being flooded.
+  @@unique([userId, subjectType, subjectId])
+  @@index([status, createdAt])
+}
+
+enum AppealSubjectType {
+  REVIEW
+  VERIFICATION
+  REPORT
+}
+
+enum AppealStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  RESOLVED
+  REJECTED
 }
 
 model PriceHistory {
-  id        String   @id @default(uuid()) @db.Uuid
-  listingId String   @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
+  listingId  String   @db.Uuid
   priceCents Int?
+  createdAt  DateTime @default(now())
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+}
+
+model HousingListing {
+  id           String         @id @default(uuid()) @db.Uuid
+  ownerId      String         @db.Uuid
+  title        String
+  description  String
+  propertyType String
+  listingType  String
+  priceCents   Int
+  priceUnit    String?
+  beds         Int
+  baths        Int
+  sqft         Int            @default(0)
+  neighborhood String?
+  city         String?
+  available    String?
+  lease        String?
+  pets         Boolean        @default(false)
+  furnished    Boolean        @default(false)
+  utilities    String?
+  verified     Boolean        @default(false)
+  status       PublishStatus  @default(PUBLISHED)
+  latitude     Decimal?       @db.Decimal(9, 6)
+  longitude    Decimal?       @db.Decimal(9, 6)
+  /// Kept in sync with latitude/longitude by neighborly_sync_location. Not read by Prisma Client.
+  geog         Unsupported("geography(Point,4326)")?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  deletedAt    DateTime?
+  owner        User           @relation(fields: [ownerId], references: [id])
+  images       HousingImage[]
+
+  @@index([status, listingType, createdAt])
+  @@index([geog], type: Gist)
+  @@index([ownerId, status])
+  @@index([city, neighborhood])
+}
+
+model HousingImage {
+  id        String         @id @default(uuid()) @db.Uuid
+  housingId String         @db.Uuid
+  objectKey String
+  sortOrder Int            @default(0)
+  createdAt DateTime       @default(now())
+  housing   HousingListing @relation(fields: [housingId], references: [id], onDelete: Cascade)
+
+  @@index([housingId, sortOrder])
+}
+
+model JobListing {
+  id               String           @id @default(uuid()) @db.Uuid
+  ownerId          String           @db.Uuid
+  title            String
+  company          String
+  logoKey          String?
+  description      String
+  responsibilities String[]         @default([])
+  employmentType   String
+  level            String
+  salary           String
+  location         String
+  remote           String
+  deadline         String?
+  tags             String[]         @default([])
+  verified         Boolean          @default(false)
+  status           PublishStatus    @default(PUBLISHED)
+  latitude         Decimal?         @db.Decimal(9, 6)
+  longitude        Decimal?         @db.Decimal(9, 6)
+  /// Kept in sync with latitude/longitude by neighborly_sync_location. Not read by Prisma Client.
+  geog             Unsupported("geography(Point,4326)")?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  deletedAt        DateTime?
+  owner            User             @relation(fields: [ownerId], references: [id])
+  applications     JobApplication[]
+  saves            JobSave[]
+
+  @@index([status, employmentType, createdAt])
+  @@index([geog], type: Gist)
+  @@index([ownerId, status])
+}
+
+model JobApplication {
+  id          String     @id @default(uuid()) @db.Uuid
+  jobId       String     @db.Uuid
+  applicantId String     @db.Uuid
+  message     String?
+  createdAt   DateTime   @default(now())
+  job         JobListing @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applicant   User       @relation(fields: [applicantId], references: [id])
+
+  @@unique([jobId, applicantId])
+  @@index([applicantId, createdAt])
+}
+
+model JobSave {
+  userId    String     @db.Uuid
+  jobId     String     @db.Uuid
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job       JobListing @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([userId, jobId])
+  @@index([jobId])
+}
+
+model ServiceListing {
+  id                 String         @id @default(uuid()) @db.Uuid
+  ownerId            String         @db.Uuid
+  title              String
+  businessName       String
+  description        String
+  category           String
+  startingPriceCents Int
+  location           String
+  availability       String
+  tags               String[]       @default([])
+  imageKey           String?
+  backgroundCheck    Boolean        @default(false)
+  rating             Decimal?       @db.Decimal(2, 1)
+  reviewCount        Int            @default(0)
+  status             PublishStatus  @default(PUBLISHED)
+  latitude           Decimal?       @db.Decimal(9, 6)
+  longitude          Decimal?       @db.Decimal(9, 6)
+  /// Kept in sync with latitude/longitude by neighborly_sync_location. Not read by Prisma Client.
+  geog               Unsupported("geography(Point,4326)")?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  deletedAt          DateTime?
+  owner              User           @relation(fields: [ownerId], references: [id])
+  quotes             ServiceQuote[]
+
+  @@index([status, category, createdAt])
+  @@index([geog], type: Gist)
+  @@index([ownerId, status])
+}
+
+model ServiceQuote {
+  id            String         @id @default(uuid()) @db.Uuid
+  serviceId     String         @db.Uuid
+  requesterId   String         @db.Uuid
+  preferredDate String?
+  preferredTime String?
+  notes         String
+  address       String?
+  status        QuoteStatus    @default(PENDING)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  service       ServiceListing @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  requester     User           @relation(fields: [requesterId], references: [id])
+
+  @@index([serviceId, status, createdAt])
+  @@index([requesterId, createdAt])
+}
+
+model CommunityPost {
+  id           String              @id @default(uuid()) @db.Uuid
+  authorId     String              @db.Uuid
+  type         String
+  title        String
+  body         String
+  neighborhood String?
+  city         String?
+  status       PublishStatus       @default(PUBLISHED)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  deletedAt    DateTime?
+  author       User                @relation(fields: [authorId], references: [id])
+  reactions    CommunityReaction[]
+  comments     CommunityComment[]
+
+  @@index([status, type, createdAt])
+  @@index([authorId, status])
+  @@index([neighborhood])
+}
+
+model CommunityReaction {
+  postId    String        @db.Uuid
+  userId    String        @db.Uuid
+  emoji     String
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+}
+
+model CommunityComment {
+  id        String        @id @default(uuid()) @db.Uuid
+  postId    String        @db.Uuid
+  authorId  String        @db.Uuid
+  body      String
+  createdAt DateTime      @default(now())
+  deletedAt DateTime?
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User          @relation(fields: [authorId], references: [id])
+
+  @@index([postId, createdAt])
+}
+
+model CommunityEvent {
+  id           String               @id @default(uuid()) @db.Uuid
+  organizerId  String               @db.Uuid
+  title        String
+  description  String?
+  neighborhood String?
+  city         String?
+  dateLabel    String
+  timeLabel    String
+  imageKey     String?
+  status       PublishStatus        @default(PUBLISHED)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  deletedAt    DateTime?
+  organizer    User                 @relation(fields: [organizerId], references: [id])
+  rsvps        CommunityEventRsvp[]
+
+  @@index([status, createdAt])
+  @@index([organizerId, status])
+}
+
+model CommunityEventRsvp {
+  eventId   String         @db.Uuid
+  userId    String         @db.Uuid
+  createdAt DateTime       @default(now())
+  event     CommunityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+}
+
+model LostFoundItem {
+  id           String        @id @default(uuid()) @db.Uuid
+  authorId     String        @db.Uuid
+  kind         String
+  item         String
+  neighborhood String?
+  city         String?
+  imageKey     String?
+  status       PublishStatus @default(PUBLISHED)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  author       User          @relation(fields: [authorId], references: [id])
+
+  @@index([status, kind, createdAt])
+  @@index([authorId, status])
+}
+
+model Giveaway {
+  id           String        @id @default(uuid()) @db.Uuid
+  authorId     String        @db.Uuid
+  item         String
+  neighborhood String?
+  city         String?
+  claimed      Boolean       @default(false)
+  claimedById  String?       @db.Uuid
+  status       PublishStatus @default(PUBLISHED)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  author       User          @relation("GiveawayAuthor", fields: [authorId], references: [id])
+  claimedBy    User?         @relation("GiveawayClaimer", fields: [claimedById], references: [id])
+
+  @@index([status, claimed, createdAt])
+  @@index([authorId, status])
+}
+
+model StaffRoleAssignment {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  role      StaffRole
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([role])
+}
+
+model BlockedUser {
+  id        String   @id @default(uuid()) @db.Uuid
+  blockerId String   @db.Uuid
+  blockedId String   @db.Uuid
   createdAt DateTime @default(now())
-  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  blocker   User     @relation("BlocksGiven", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("BlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+model Report {
+  id         String             @id @default(uuid()) @db.Uuid
+  reporterId String             @db.Uuid
+  targetType ReportTargetType
+  targetId   String             @db.Uuid
+  reason     ReportReason
+  details    String?
+  status     ReportStatus       @default(OPEN)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  reporter   User               @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: Cascade)
+  actions    ModerationAction[]
+
+  @@unique([reporterId, targetType, targetId])
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+  @@index([reporterId, createdAt])
+}
+
+model ModerationAction {
+  id        String               @id @default(uuid()) @db.Uuid
+  reportId  String               @db.Uuid
+  actorId   String               @db.Uuid
+  kind      ModerationActionKind
+  note      String?
+  createdAt DateTime             @default(now())
+  report    Report               @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  actor     User                 @relation(fields: [actorId], references: [id])
+
+  @@index([reportId, createdAt])
+  @@index([actorId])
+}
+
+/// Milestone 3 account security. Additive only: existing rows are untouched.
+///
+/// A single-use email-verification token. Only the SHA-256 hash of the
+/// token is stored, so a database leak cannot be replayed. `consumedAt`
+/// makes consumption one-time even under a concurrent double submit.
+model EmailVerificationToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @unique
+  email      String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consumedAt])
+  @@index([expiresAt])
+}
+
+/// A single-use password-reset token, stored hashed and time limited.
+model PasswordResetToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consumedAt])
+  @@index([expiresAt])
+}
+
+/// One browser session. `familyId` groups a rotation chain: presenting an
+/// already-rotated token revokes every remaining session in that family.
+model RefreshSession {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  familyId      String    @db.Uuid
+  tokenHash     String    @unique
+  userAgent     String?
+  ipAddress     String?
+  createdAt     DateTime  @default(now())
+  lastUsedAt    DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason String?
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([familyId])
+  @@index([expiresAt])
+}
+
+/// Provider-neutral outbound email. Nothing here is ever logged; the
+/// outbox row is the integration point for a real delivery provider.
+model EmailOutbox {
+  id        String   @id @default(uuid()) @db.Uuid
+  toEmail   String
+  subject   String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([toEmail, createdAt])
 }

@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: neighborly
       POSTGRES_PASSWORD: neighborly
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - neighborly-postgres:/var/lib/postgresql/data
     healthcheck:
@@ -17,37 +17,223 @@ services:
       start_period: 10s
   redis:
     image: redis:7-alpine
+    # Rate-limit counters are not source-of-truth data. AOF keeps them across a local restart.
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - neighborly-redis:/data
-  minio:
-    # MinIO stopped publishing its community Docker images in 2026. RustFS
-    # provides the same S3-compatible API and ports for local development.
-    image: rustfs/rustfs:latest
-    environment:
-      RUSTFS_VOLUMES: /data
-      RUSTFS_ADDRESS: 0.0.0.0:9000
-      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
-      RUSTFS_CONSOLE_ENABLE: "true"
-      # Local-only defaults keep `docker compose up` self-contained. Override
-      # them through the shell or root .env for shared development hosts.
-      RUSTFS_ACCESS_KEY: ${MINIO_ROOT_USER:-neighborly}
-      RUSTFS_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-neighborly-local-storage-secret}
-      RUSTFS_UNSAFE_BYPASS_DISK_CHECK: "true"
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - neighborly-minio:/data
     healthcheck:
-      test: ["CMD", "sh", "-c", "curl -fsS http://127.0.0.1:9000/health"]
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # Staging profile. Does not replace the dev Postgres and Redis services above.
+  # Start with: scripts/staging-up.sh
+  # Local fixture passwords in this profile are not production secrets.
+  staging-postgres:
+    profiles: ["staging"]
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: neighborly
+      POSTGRES_USER: neighborly
+      POSTGRES_PASSWORD: neighborly
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - neighborly-staging-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neighborly -d neighborly"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+  staging-redis:
+    profiles: ["staging"]
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - neighborly-staging-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+  # Staging object store. Same image and S3 API shape as the storage CI job
+  # and scripts/run-storage-tests.sh: rustfs/rustfs:1.0.1, port 9000, path-style
+  # calls, and GET /minio/health/live. Do not set a command. The image
+  # entrypoint reads RUSTFS_ACCESS_KEY / RUSTFS_SECRET_KEY; a MinIO
+  # `server /data` argument never listens.
+  # The Compose service name stays `minio` so S3_ENDPOINT=http://minio:9000
+  # in env.staging.example keeps resolving. The access keys and bucket name
+  # stay the staging fixtures, not the disposable CI test keys.
+  # Data is on rustfs-staging-data, a new volume. neighborly-staging-minio
+  # is the retired MinIO volume: still declared below, not mounted, and must
+  # not be deleted (`down -v` or `docker volume rm`). RustFS cannot read a
+  # MinIO on-disk layout. The new volume is still root-owned, and the image
+  # user is 10001, so this process runs as root.
+  # The healthcheck calls curl inside the container. Tag 1.0.1 ships it.
+  # linux/amd64 manifest
+  # sha256:7465b31993156ca5cc0eb4b3c59a01ff69651961be62bcfeb6ce569f22034a56
+  # history runs `apk add --no-cache ca-certificates coreutils curl tzdata`,
+  # and layer
+  # sha256:6a4ac81fe189f8ad06b56d60236c80f721f3e213206474082887f032710b9945
+  # contains /usr/bin/curl (and libcurl). That layer has no wget. See
+  # docs/STORAGE.md.
+  minio:
+    profiles: ["staging"]
+    image: rustfs/rustfs:1.0.1
+    user: "0:0"
+    environment:
+      RUSTFS_ACCESS_KEY: neighborly-staging
+      RUSTFS_SECRET_KEY: neighborly-staging-local-only
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - rustfs-staging-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
       interval: 5s
       timeout: 5s
       retries: 20
       start_period: 10s
+  minio-init:
+    profiles: ["staging"]
+    image: neighborly-api:staging
+    build:
+      context: .
+      dockerfile: deploy/staging/api.Dockerfile
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_BUCKET_NAME: neighborly-media
+      S3_ACCESS_KEY_ID: neighborly-staging
+      S3_SECRET_ACCESS_KEY: neighborly-staging-local-only
+    entrypoint: ["node"]
+    command:
+      - "-e"
+      - |
+        const { S3Client, CreateBucketCommand } = require("@aws-sdk/client-s3")
+        const client = new S3Client({
+          region: "us-east-1",
+          endpoint: process.env.S3_ENDPOINT_URL,
+          forcePathStyle: true,
+          credentials: {
+            accessKeyId: process.env.S3_ACCESS_KEY_ID,
+            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY
+          }
+        })
+        client.send(new CreateBucketCommand({ Bucket: process.env.S3_BUCKET_NAME }))
+          .then(() => process.stdout.write("bucket ready\n"))
+          .catch(error => {
+            if (error.name === "BucketAlreadyOwnedByYou" || error.name === "BucketAlreadyExists") {
+              process.stdout.write("bucket ready\n")
+            } else {
+              process.stderr.write(String(error) + "\n")
+              process.exit(1)
+            }
+          })
+    restart: "no"
+  staging-migrate:
+    profiles: ["staging"]
+    image: neighborly-api:staging
+    build:
+      context: .
+      dockerfile: deploy/staging/api.Dockerfile
+    env_file:
+      - .env.staging
+    command: ["/app/db-setup.sh"]
+    depends_on:
+      staging-postgres:
+        condition: service_healthy
+    restart: "no"
+  api:
+    profiles: ["staging"]
+    image: neighborly-api:staging
+    build:
+      context: .
+      dockerfile: deploy/staging/api.Dockerfile
+    env_file:
+      - .env.staging
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      staging-migrate:
+        condition: service_completed_successfully
+      staging-redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/v1/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+  web:
+    profiles: ["staging"]
+    image: neighborly-web:staging
+    build:
+      context: .
+      dockerfile: deploy/staging/web.Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://staging.neighborly.localhost:8444/api/v1}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+  caddy:
+    profiles: ["staging"]
+    image: neighborly-caddy:staging
+    build:
+      context: .
+      dockerfile: deploy/staging/proxy.Dockerfile
+    ports:
+      - "127.0.0.1:8444:8444"
+    volumes:
+      - neighborly-staging-caddy:/data
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-kfsS",
+          "--resolve",
+          "staging.neighborly.localhost:8444:127.0.0.1",
+          "https://staging.neighborly.localhost:8444/api/v1/health",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
 
 volumes:
   neighborly-postgres:
   neighborly-redis:
-  neighborly-minio:
+  neighborly-staging-postgres:
+  neighborly-staging-redis:
+  # Retired MinIO on-disk data from before the rustfs pin. Unused. Do not
+  # delete this volume. RustFS mounts rustfs-staging-data instead.
+  neighborly-staging-minio:
+  rustfs-staging-data:
+  neighborly-staging-caddy:

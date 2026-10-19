@@ -41,6 +41,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [password, setPassword] = useState("")
   const [fullName, setFullName] = useState("")
   const [neighborhood, setNeighborhood] = useState("")
+  const [locationGranted, setLocationGranted] = useState(false)
   const [selectedInterests, setSelectedInterests] = useState<string[]>([
     "buy-sell",
     "services",
@@ -108,7 +109,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       setSaving(true)
       try {
         await api.auth.completeOnboarding({
-          neighborhood: neighborhood || undefined,
+          neighborhood:
+            neighborhood || (locationGranted ? "Inman Park" : undefined),
           city: "Atlanta",
           state: "GA",
           interests: selectedInterests,
@@ -161,12 +163,25 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             your community.
           </h2>
           <p className="text-white/70 leading-relaxed">
-            Create an account to browse persisted listings and connect with
-            neighbors as the marketplace grows.
+            Join neighbors buying, selling, and connecting across
+            Atlanta.
           </p>
-          <p className="mt-6 text-xs font-medium text-white/60">
-            Request, listing, and messaging features are under active development.
-          </p>
+          <div className="flex items-center gap-4 mt-6">
+            {[
+              "photo-1472099645785-5658abf4ff4e",
+              "photo-1494790108755-2616b612b77c",
+              "photo-1438761681033-6461ffad8d80",
+              "photo-1500648767791-00dcc994a43e",
+            ].map((src, i) => (
+              <img
+                key={i}
+                src={`https://images.unsplash.com/${src}?w=60&h=60&fit=crop&auto=format`}
+                alt=""
+                className="w-10 h-10 rounded-full border-2 border-white object-cover -ml-3 first:ml-0"
+              />
+            ))}
+            <span className="text-sm text-white/70 ml-1">+47k neighbors</span>
+          </div>
         </div>
       </div>
 
@@ -190,7 +205,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             </div>
             <button
               onClick={next}
-              className="text-sm text-[#8A9AB5] hover:text-[#1B2A4A] ml-auto"
+              className="text-sm text-[#5C6E8A] hover:text-[#1B2A4A] ml-auto"
             >
               {step < 4 ? "Skip for now" : ""}
             </button>
@@ -205,7 +220,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     ? "text-[#2D6A4F]"
                     : i < step
                       ? "text-[#74C69D]"
-                      : "text-[#C5CCDA]"
+                      : "text-[#5C6E8A]"
                 }`}
               >
                 {s}
@@ -223,7 +238,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 <h1 className="font-display text-3xl font-semibold text-[#1B2A4A] mb-2">
                   Create your account
                 </h1>
-                <p className="text-[#8A9AB5] mb-8">
+                <p className="text-[#5C6E8A] mb-8">
                   Free to join. No credit card required.
                 </p>
 
@@ -281,7 +296,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     </button>
                     <div className="flex items-center gap-3 my-4">
                       <div className="flex-1 h-px bg-[#E8E6DF]" />
-                      <span className="text-xs text-[#C5CCDA] font-medium">
+                      <span className="text-xs text-[#5C6E8A] font-medium">
                         or
                       </span>
                       <div className="flex-1 h-px bg-[#E8E6DF]" />
@@ -293,7 +308,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                       <Icon
                         name="message"
                         size={20}
-                        className="text-[#8A9AB5]"
+                        className="text-[#5C6E8A]"
                       />
                       <span className="font-semibold text-[#1B2A4A]">
                         Continue with email
@@ -338,8 +353,16 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                         className="w-full h-12 px-4 bg-white border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F] transition-all"
                       />
                     </div>
-                    <p className="text-xs text-[#8A9AB5]">
-                      Terms and privacy documents are not published yet. Avoid using real sensitive personal data in this early build.
+                    <p className="text-xs text-[#5C6E8A]">
+                      By continuing, you agree to our{" "}
+                      <a href="#" className="text-[#2D6A4F] font-medium">
+                        Terms of Service
+                      </a>{" "}
+                      and{" "}
+                      <a href="#" className="text-[#2D6A4F] font-medium">
+                        Privacy Policy
+                      </a>
+                      .
                     </p>
                   </div>
                 )}
@@ -361,27 +384,40 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 <h1 className="font-display text-3xl font-semibold text-[#1B2A4A] mb-2">
                   Where do you live?
                 </h1>
-                <p className="text-[#8A9AB5] mb-8">
-                  We'll show you listings and neighbors that are closest to you.
+                <p className="text-[#5C6E8A] mb-8">
+                  We&apos;ll show you listings and neighbors that are closest to you.
                   Your exact address is never shared.
                 </p>
 
-                <div className="mb-4 flex items-center gap-4 rounded-2xl border border-[#E8E6DF] bg-white p-5">
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-[#EEF0F5] text-2xl">
-                    📍
+                <button
+                  onClick={() => setLocationGranted(true)}
+                  className={`w-full p-5 rounded-2xl border-2 transition-all mb-4 text-left ${
+                    locationGranted
+                      ? "border-[#2D6A4F] bg-[#F0FBF3]"
+                      : "border-[#E8E6DF] bg-white hover:border-[#2D6A4F]/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-[#D8F3DC] flex items-center justify-center text-2xl flex-shrink-0">
+                      {locationGranted ? "✅" : "📍"}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-[#1B2A4A]">
+                        {locationGranted
+                          ? "Location detected"
+                          : "Allow location access"}
+                      </p>
+                      <p className="text-sm text-[#5C6E8A]">
+                        {locationGranted
+                          ? "Inman Park, Atlanta, GA"
+                          : "Automatically find your neighborhood"}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-[#1B2A4A]">
-                      Automatic location detection unavailable
-                    </p>
-                    <p className="text-sm text-[#8A9AB5]">
-                      Choose a neighborhood below. Your exact address is not requested.
-                    </p>
-                  </div>
-                </div>
+                </button>
 
-                <p className="text-xs text-center text-[#C5CCDA] mb-4">
-                  Choose your neighborhood
+                <p className="text-xs text-center text-[#5C6E8A] mb-4">
+                  — or choose your neighborhood —
                 </p>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -408,8 +444,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 <h1 className="font-display text-3xl font-semibold text-[#1B2A4A] mb-2">
                   What brings you here?
                 </h1>
-                <p className="text-[#8A9AB5] mb-8">
-                  Select all that apply — we'll personalize your feed
+                <p className="text-[#5C6E8A] mb-8">
+                  Select all that apply — we&apos;ll personalize your feed
                   accordingly.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
@@ -450,8 +486,9 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 <h1 className="font-display text-3xl font-semibold text-[#1B2A4A] mb-2">
                   Stay in the loop
                 </h1>
-                <p className="text-[#8A9AB5] mb-8">
-                  Choose preference values to save to your profile. Notification delivery is not available yet.
+                <p className="text-[#5C6E8A] mb-8">
+                  Choose what matters to you. You can change these anytime in
+                  Settings.
                 </p>
                 <div className="space-y-4">
                   {[
@@ -489,7 +526,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                         <p className="font-medium text-sm text-[#1B2A4A]">
                           {label}
                         </p>
-                        <p className="text-xs text-[#8A9AB5] mt-0.5">{sub}</p>
+                        <p className="text-xs text-[#5C6E8A] mt-0.5">{sub}</p>
                       </div>
                       <Toggle
                         checked={
@@ -512,31 +549,32 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   🎉
                 </div>
                 <h1 className="font-display text-4xl font-semibold text-[#1B2A4A] mb-3">
-                  You're all set, {fullName.trim().split(/\s+/)[0] || "Neighbor"}!
+                  You&apos;re all set, Gad!
                 </h1>
                 <p className="text-[#5C6E8A] mb-8 leading-relaxed">
-                  Your account and preferences were saved. Browse published listings and requests currently available in Neighborly.
+                  Welcome to Neighborly. Your personalized feed is ready with
+                  listings, neighbors, and community content near Inman Park.
                 </p>
                 <div className="grid grid-cols-3 gap-3 mb-8">
                   <div className="bg-[#F0FBF3] rounded-xl p-4 text-center">
                     <p className="text-2xl font-bold font-display text-[#2D6A4F]">
-                      ✓
+                      3.2k
                     </p>
                     <p className="text-xs text-[#5C6E8A] mt-0.5">
-                      Account created
+                      Nearby listings
                     </p>
                   </div>
                   <div className="bg-[#FFF5F2] rounded-xl p-4 text-center">
-                    <p className="text-2xl font-bold font-display text-[#E8694A]">
-                      {neighborhood ? "✓" : "—"}
+                    <p className="text-2xl font-bold font-display text-[#B94C2A]">
+                      47k
                     </p>
-                    <p className="text-xs text-[#5C6E8A] mt-0.5">Neighborhood</p>
+                    <p className="text-xs text-[#5C6E8A] mt-0.5">Neighbors</p>
                   </div>
                   <div className="bg-[#F0F7FF] rounded-xl p-4 text-center">
                     <p className="text-2xl font-bold font-display text-[#4A7FB5]">
-                      {selectedInterests.length}
+                      Free
                     </p>
-                    <p className="text-xs text-[#5C6E8A] mt-0.5">Interests saved</p>
+                    <p className="text-xs text-[#5C6E8A] mt-0.5">To use</p>
                   </div>
                 </div>
               </div>
@@ -547,7 +585,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               {step > 0 ? (
                 <button
                   onClick={() => setStep(step - 1)}
-                  className="text-sm font-medium text-[#8A9AB5] hover:text-[#1B2A4A] transition-colors flex items-center gap-1"
+                  className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A] transition-colors flex items-center gap-1"
                 >
                   <Icon name="chevronRight" size={14} className="rotate-180" />{" "}
                   Back

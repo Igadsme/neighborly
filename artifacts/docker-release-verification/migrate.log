@@ -1,0 +1,29 @@
+
+> neighborly-api@1.0.0 prisma:deploy /Volumes/T7 Shield/Projects/neighborly/backend
+> prisma migrate deploy
+
+warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).
+For more information, see: https://pris.ly/prisma-config
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "neighborly", schema "public" at "localhost:5432"
+
+3 migrations found in prisma/migrations
+
+Applying migration `0001_init`
+Applying migration `0002_onboarding`
+Applying migration `0003_verticals`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 0001_init/
+    └─ migration.sql
+  └─ 0002_onboarding/
+    └─ migration.sql
+  └─ 0003_verticals/
+    └─ migration.sql
+      
+All migrations have been successfully applied.
+migrate_exit:0

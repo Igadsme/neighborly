@@ -1,204 +1,433 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
+import { assertNotBlocked } from '../common/blocks'
+import { activeAccountWhere } from '../common/active-account'
+import { publicUserSelect } from '../common/public-user.select'
+import { cleanText, sanitizeText } from '../common/text'
+import { reactionEmojis } from '../common/vertical-values'
 import { PrismaService } from '../prisma/prisma.service'
-import { CommunityQueryDto, CreateCommentDto, CreateEventDto, CreatePostDto, ReactToPostDto, RsvpDto } from './dto'
+import {
+  CreateCommentDto,
+  CreateEventDto,
+  CreateGiveawayDto,
+  CreateLostFoundDto,
+  CreatePostDto,
+  ListLimitQuery,
+  ListPostsQuery,
+  ReactionDto,
+  UpdateEventDto,
+  UpdateGiveawayDto,
+  UpdateLostFoundDto,
+  UpdatePostDto
+} from './dto'
+
+const published = { status: 'PUBLISHED' as const, deletedAt: null }
+
+const postSelect = {
+  id: true,
+  type: true,
+  title: true,
+  body: true,
+  neighborhood: true,
+  city: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  author: { select: publicUserSelect },
+  reactions: { select: { emoji: true } },
+  comments: { where: { deletedAt: null }, select: { id: true } }
+} satisfies Prisma.CommunityPostSelect
+
+const commentSelect = {
+  id: true,
+  postId: true,
+  body: true,
+  createdAt: true,
+  author: { select: publicUserSelect }
+} satisfies Prisma.CommunityCommentSelect
+
+const eventSelect = {
+  id: true,
+  title: true,
+  description: true,
+  neighborhood: true,
+  city: true,
+  dateLabel: true,
+  timeLabel: true,
+  imageKey: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  organizer: { select: publicUserSelect },
+  _count: { select: { rsvps: true } }
+} satisfies Prisma.CommunityEventSelect
+
+const lostSelect = {
+  id: true,
+  kind: true,
+  item: true,
+  neighborhood: true,
+  city: true,
+  imageKey: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  author: { select: publicUserSelect }
+} satisfies Prisma.LostFoundItemSelect
+
+const giveawaySelect = {
+  id: true,
+  item: true,
+  neighborhood: true,
+  city: true,
+  claimed: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  author: { select: publicUserSelect }
+} satisfies Prisma.GiveawaySelect
+
+function reactionCounts(reactions: { emoji: string }[]) {
+  return {
+    like: reactions.filter(reaction => reaction.emoji === reactionEmojis[0]).length,
+    love: reactions.filter(reaction => reaction.emoji === reactionEmojis[1]).length,
+    wow: reactions.filter(reaction => reaction.emoji === reactionEmojis[2]).length
+  }
+}
+
+function presentPost<T extends { reactions: { emoji: string }[]; comments: { id: string }[] }>(row: T) {
+  const { reactions, comments, ...rest } = row
+  return { ...rest, reactions: reactionCounts(reactions), replies: comments.length }
+}
+
+function presentEvent<T extends { imageKey: string | null; _count: { rsvps: number } }>(row: T) {
+  const { imageKey, _count, ...rest } = row
+  return { ...rest, image: imageKey, attending: _count.rsvps }
+}
+
+function presentLost<T extends { kind: string; imageKey: string | null }>(row: T) {
+  const { kind, imageKey, ...rest } = row
+  return { ...rest, type: kind, image: imageKey }
+}
+
+function presentGiveaway<T extends { author: unknown }>(row: T) {
+  return row
+}
 
 @Injectable()
 export class CommunityService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listPosts(userId: string, query: CommunityQueryDto) {
-    const blockedIds = await this.blockedIds(userId)
-    const posts = await this.prisma.communityPost.findMany({
-      where: {
-        deletedAt: null,
-        neighborhood: query.neighborhood || undefined,
-        authorId: blockedIds.length ? { notIn: blockedIds } : undefined,
-      },
-      select: {
-        id: true,
-        body: true,
-        neighborhood: true,
-        createdAt: true,
-        updatedAt: true,
-        author: {
-          select: {
-            id: true,
-            profile: { select: { firstName: true, displayName: true, neighborhood: true } },
-          },
-        },
-        reactions: { select: { userId: true, type: true } },
-        comments: {
-          where: { deletedAt: null, authorId: blockedIds.length ? { notIn: blockedIds } : undefined },
-          select: {
-            id: true,
-            body: true,
-            createdAt: true,
-            author: { select: { id: true, profile: { select: { firstName: true, displayName: true } } } },
-          },
-          orderBy: { createdAt: 'asc' },
-          take: 50,
-        },
-      },
+  async summary() {
+    const [neighbors, posts, events] = await Promise.all([
+      this.prisma.user.count({ where: activeAccountWhere }),
+      this.prisma.communityPost.count({ where: { ...published, author: activeAccountWhere } }),
+      this.prisma.communityEvent.count({ where: { ...published, organizer: activeAccountWhere } })
+    ])
+    return { neighbors, posts, events }
+  }
+
+  async listPosts(query: ListPostsQuery) {
+    const rows = await this.prisma.communityPost.findMany({
+      where: { ...published, author: activeAccountWhere, ...(query.type ? { type: query.type } : {}) },
+      select: postSelect,
       orderBy: { createdAt: 'desc' },
       take: query.limit,
-      skip: query.offset,
+      skip: query.offset
     })
-    return posts.map((post) => ({
-      ...post,
-      reactionCounts: post.reactions.reduce<Record<string, number>>((counts, reaction) => {
-        counts[reaction.type] = (counts[reaction.type] ?? 0) + 1
-        return counts
-      }, {}),
-      viewerReactions: post.reactions.filter((reaction) => reaction.userId === userId).map((reaction) => reaction.type),
-      reactions: undefined,
-    }))
+    return rows.map(presentPost)
   }
 
-  async createPost(userId: string, input: CreatePostDto) {
-    const neighborhood = input.neighborhood?.trim() || await this.userNeighborhood(userId)
-    return this.prisma.communityPost.create({
-      data: { authorId: userId, body: input.body.trim(), neighborhood },
+  async getPost(id: string) {
+    const row = await this.prisma.communityPost.findFirst({
+      where: { id, ...published, author: activeAccountWhere },
+      select: postSelect
     })
+    if (!row) throw new NotFoundException('Community post not found')
+    return presentPost(row)
   }
 
-  async comment(userId: string, postId: string, input: CreateCommentDto) {
-    const post = await this.prisma.communityPost.findFirst({
-      where: { id: postId, deletedAt: null },
-      select: { authorId: true },
-    })
-    if (!post) throw new NotFoundException('Community post not found')
-    await this.assertNotBlocked(userId, post.authorId)
-    return this.prisma.communityComment.create({
-      data: { postId, authorId: userId, body: input.body.trim() },
-      include: { author: { select: { id: true, profile: true } } },
-    })
-  }
-
-  async react(userId: string, postId: string, input: ReactToPostDto) {
-    const post = await this.prisma.communityPost.findFirst({
-      where: { id: postId, deletedAt: null },
-      select: { authorId: true },
-    })
-    if (!post) throw new NotFoundException('Community post not found')
-    await this.assertNotBlocked(userId, post.authorId)
-    const key = { postId_userId_type: { postId, userId, type: input.type } }
-    const existing = await this.prisma.postReaction.findUnique({ where: key })
-    if (existing) {
-      await this.prisma.postReaction.delete({ where: key })
-      return { active: false, type: input.type }
-    }
-    await this.prisma.postReaction.create({ data: { postId, userId, type: input.type } })
-    return { active: true, type: input.type }
-  }
-
-  async deletePost(userId: string, postId: string) {
-    const post = await this.prisma.communityPost.findUnique({ where: { id: postId } })
-    if (!post || post.deletedAt) throw new NotFoundException('Community post not found')
-    if (post.authorId !== userId) throw new ForbiddenException()
-    await this.prisma.communityPost.update({ where: { id: postId }, data: { deletedAt: new Date() } })
-    return { deleted: true }
-  }
-
-  async listEvents(userId: string, query: CommunityQueryDto) {
-    const blockedIds = await this.blockedIds(userId)
-    const events = await this.prisma.communityEvent.findMany({
-      where: {
-        status: 'PUBLISHED',
-        startsAt: { gte: new Date() },
-        neighborhood: query.neighborhood || undefined,
-        organizerId: blockedIds.length ? { notIn: blockedIds } : undefined,
-      },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        neighborhood: true,
-        location: true,
-        startsAt: true,
-        endsAt: true,
-        capacity: true,
-        status: true,
-        organizer: { select: { id: true, profile: { select: { firstName: true, displayName: true } } } },
-        rsvps: { select: { userId: true, status: true } },
-      },
-      orderBy: { startsAt: 'asc' },
-      take: query.limit,
-      skip: query.offset,
-    })
-    return events.map((event) => ({
-      ...event,
-      goingCount: event.rsvps.filter((rsvp) => rsvp.status === 'GOING').length,
-      viewerRsvp: event.rsvps.find((rsvp) => rsvp.userId === userId)?.status ?? null,
-      rsvps: undefined,
-    }))
-  }
-
-  async createEvent(userId: string, input: CreateEventDto) {
-    const startsAt = new Date(input.startsAt)
-    const endsAt = input.endsAt ? new Date(input.endsAt) : undefined
-    if (startsAt <= new Date()) throw new BadRequestException('Event must start in the future')
-    if (endsAt && endsAt <= startsAt) throw new BadRequestException('Event end must be after its start')
-    return this.prisma.communityEvent.create({
+  async createPost(authorId: string, input: CreatePostDto) {
+    const created = await this.prisma.communityPost.create({
       data: {
-        organizerId: userId,
-        title: input.title.trim(),
-        description: input.description.trim(),
-        neighborhood: input.neighborhood?.trim() || await this.userNeighborhood(userId),
-        location: input.location.trim(),
-        startsAt,
-        endsAt,
-        capacity: input.capacity,
+        authorId,
+        type: input.type,
+        title: sanitizeText(input.title, 200),
+        body: sanitizeText(input.body),
+        neighborhood: input.neighborhood.trim(),
+        city: cleanText(input.city),
+        status: 'PUBLISHED'
       },
+      select: postSelect
+    })
+    return presentPost(created)
+  }
+
+  async updatePost(userId: string, id: string, input: UpdatePostDto) {
+    await this.requireAuthor(this.prisma.communityPost, id, userId, 'Community post not found', 'You can only change your own post')
+    await this.prisma.communityPost.update({
+      where: { id },
+      data: {
+        type: input.type,
+        title: input.title?.trim(),
+        body: input.body?.trim(),
+        neighborhood: input.neighborhood?.trim(),
+        city: cleanText(input.city)
+      }
+    })
+    return this.getPost(id)
+  }
+
+  async archivePost(userId: string, id: string) {
+    await this.requireAuthor(this.prisma.communityPost, id, userId, 'Community post not found', 'You can only change your own post')
+    await this.prisma.communityPost.update({ where: { id }, data: { status: 'ARCHIVED', deletedAt: new Date() } })
+    return { id, status: 'ARCHIVED' as const }
+  }
+
+  async react(userId: string, postId: string, input: ReactionDto) {
+    const post = await this.getPost(postId)
+    await assertNotBlocked(this.prisma, userId, post.author.id)
+    const where = { postId_userId: { postId, userId } }
+    const existing = await this.prisma.communityReaction.findUnique({ where })
+    if (existing?.emoji === input.emoji) await this.prisma.communityReaction.delete({ where })
+    else if (existing) await this.prisma.communityReaction.update({ where, data: { emoji: input.emoji } })
+    else await this.prisma.communityReaction.create({ data: { postId, userId, emoji: input.emoji } })
+    return this.getPost(postId)
+  }
+
+  listComments(postId: string) {
+    return this.prisma.communityComment.findMany({
+      where: { postId, deletedAt: null, author: activeAccountWhere, post: { ...published, author: activeAccountWhere } },
+      select: commentSelect,
+      orderBy: { createdAt: 'asc' }
     })
   }
 
-  async rsvp(userId: string, eventId: string, input: RsvpDto) {
-    const event = await this.prisma.communityEvent.findFirst({
-      where: { id: eventId, status: 'PUBLISHED', startsAt: { gt: new Date() } },
-      include: { rsvps: { where: { status: 'GOING' }, select: { userId: true } } },
+  async createComment(userId: string, postId: string, input: CreateCommentDto) {
+    const post = await this.getPost(postId)
+    await assertNotBlocked(this.prisma, userId, post.author.id)
+    const body = sanitizeText(input.body, 4000)
+    if (!body) throw new BadRequestException('Comment body is required')
+    return this.prisma.communityComment.create({
+      data: { postId, authorId: userId, body },
+      select: commentSelect
     })
-    if (!event) throw new NotFoundException('Upcoming event not found')
-    await this.assertNotBlocked(userId, event.organizerId)
-    const alreadyGoing = event.rsvps.some((rsvp) => rsvp.userId === userId)
-    if (input.status === 'GOING' && !alreadyGoing && event.capacity && event.rsvps.length >= event.capacity) {
-      throw new BadRequestException('This event is full')
+  }
+
+  async listEvents(query: ListLimitQuery) {
+    const rows = await this.prisma.communityEvent.findMany({
+      where: { ...published, organizer: activeAccountWhere },
+      select: eventSelect,
+      orderBy: { createdAt: 'asc' },
+      take: query.limit,
+      skip: query.offset
+    })
+    return rows.map(presentEvent)
+  }
+
+  async getEvent(id: string) {
+    const row = await this.prisma.communityEvent.findFirst({
+      where: { id, ...published, organizer: activeAccountWhere },
+      select: eventSelect
+    })
+    if (!row) throw new NotFoundException('Event not found')
+    return presentEvent(row)
+  }
+
+  async createEvent(organizerId: string, input: CreateEventDto) {
+    const created = await this.prisma.communityEvent.create({
+      data: {
+        organizerId,
+        title: input.title.trim(),
+        description: cleanText(input.description),
+        neighborhood: input.neighborhood.trim(),
+        city: cleanText(input.city),
+        dateLabel: input.dateLabel.trim(),
+        timeLabel: input.timeLabel.trim(),
+        imageKey: cleanText(input.imageKey),
+        status: 'PUBLISHED'
+      },
+      select: eventSelect
+    })
+    return presentEvent(created)
+  }
+
+  async updateEvent(userId: string, id: string, input: UpdateEventDto) {
+    await this.requireOrganizer(id, userId)
+    await this.prisma.communityEvent.update({
+      where: { id },
+      data: {
+        title: input.title?.trim(),
+        description: cleanText(input.description),
+        neighborhood: input.neighborhood?.trim(),
+        city: cleanText(input.city),
+        dateLabel: input.dateLabel?.trim(),
+        timeLabel: input.timeLabel?.trim(),
+        imageKey: cleanText(input.imageKey)
+      }
+    })
+    return this.getEvent(id)
+  }
+
+  async archiveEvent(userId: string, id: string) {
+    await this.requireOrganizer(id, userId)
+    await this.prisma.communityEvent.update({ where: { id }, data: { status: 'ARCHIVED', deletedAt: new Date() } })
+    return { id, status: 'ARCHIVED' as const }
+  }
+
+  async toggleRsvp(userId: string, eventId: string) {
+    await this.getEvent(eventId)
+    const where = { eventId_userId: { eventId, userId } }
+    const existing = await this.prisma.communityEventRsvp.findUnique({ where })
+    if (existing) await this.prisma.communityEventRsvp.delete({ where })
+    else await this.prisma.communityEventRsvp.create({ data: { eventId, userId } })
+    const event = await this.getEvent(eventId)
+    return { attending: !existing, attendingCount: event.attending }
+  }
+
+  async listLostFound(query: ListLimitQuery) {
+    const rows = await this.prisma.lostFoundItem.findMany({
+      where: { ...published, author: activeAccountWhere },
+      select: lostSelect,
+      orderBy: { createdAt: 'desc' },
+      take: query.limit,
+      skip: query.offset
+    })
+    return rows.map(presentLost)
+  }
+
+  async getLostFound(id: string) {
+    const row = await this.prisma.lostFoundItem.findFirst({
+      where: { id, ...published, author: activeAccountWhere },
+      select: lostSelect
+    })
+    if (!row) throw new NotFoundException('Lost and found item not found')
+    return presentLost(row)
+  }
+
+  async createLostFound(authorId: string, input: CreateLostFoundDto) {
+    const created = await this.prisma.lostFoundItem.create({
+      data: {
+        authorId,
+        kind: input.type,
+        item: input.item.trim(),
+        neighborhood: input.neighborhood.trim(),
+        city: cleanText(input.city),
+        imageKey: cleanText(input.imageKey),
+        status: 'PUBLISHED'
+      },
+      select: lostSelect
+    })
+    return presentLost(created)
+  }
+
+  async updateLostFound(userId: string, id: string, input: UpdateLostFoundDto) {
+    await this.requireAuthor(this.prisma.lostFoundItem, id, userId, 'Lost and found item not found', 'You can only change your own lost and found post')
+    await this.prisma.lostFoundItem.update({
+      where: { id },
+      data: {
+        kind: input.type,
+        item: input.item?.trim(),
+        neighborhood: input.neighborhood?.trim(),
+        city: cleanText(input.city),
+        imageKey: cleanText(input.imageKey)
+      }
+    })
+    return this.getLostFound(id)
+  }
+
+  async archiveLostFound(userId: string, id: string) {
+    await this.requireAuthor(this.prisma.lostFoundItem, id, userId, 'Lost and found item not found', 'You can only change your own lost and found post')
+    await this.prisma.lostFoundItem.update({ where: { id }, data: { status: 'ARCHIVED', deletedAt: new Date() } })
+    return { id, status: 'ARCHIVED' as const }
+  }
+
+  async listGiveaways(query: ListLimitQuery) {
+    const rows = await this.prisma.giveaway.findMany({
+      where: { ...published, author: activeAccountWhere },
+      select: giveawaySelect,
+      orderBy: { createdAt: 'desc' },
+      take: query.limit,
+      skip: query.offset
+    })
+    return rows.map(presentGiveaway)
+  }
+
+  async getGiveaway(id: string) {
+    const row = await this.prisma.giveaway.findFirst({
+      where: { id, ...published, author: activeAccountWhere },
+      select: giveawaySelect
+    })
+    if (!row) throw new NotFoundException('Giveaway not found')
+    return presentGiveaway(row)
+  }
+
+  async createGiveaway(authorId: string, input: CreateGiveawayDto) {
+    const created = await this.prisma.giveaway.create({
+      data: {
+        authorId,
+        item: input.item.trim(),
+        neighborhood: input.neighborhood.trim(),
+        city: cleanText(input.city),
+        status: 'PUBLISHED'
+      },
+      select: giveawaySelect
+    })
+    return presentGiveaway(created)
+  }
+
+  async updateGiveaway(userId: string, id: string, input: UpdateGiveawayDto) {
+    await this.requireAuthor(this.prisma.giveaway, id, userId, 'Giveaway not found', 'You can only change your own giveaway')
+    await this.prisma.giveaway.update({
+      where: { id },
+      data: {
+        item: input.item?.trim(),
+        neighborhood: input.neighborhood?.trim(),
+        city: cleanText(input.city)
+      }
+    })
+    return this.getGiveaway(id)
+  }
+
+  async archiveGiveaway(userId: string, id: string) {
+    await this.requireAuthor(this.prisma.giveaway, id, userId, 'Giveaway not found', 'You can only change your own giveaway')
+    await this.prisma.giveaway.update({ where: { id }, data: { status: 'ARCHIVED', deletedAt: new Date() } })
+    return { id, status: 'ARCHIVED' as const }
+  }
+
+  async claimGiveaway(userId: string, id: string) {
+    const updated = await this.prisma.giveaway.updateMany({
+      where: { id, claimed: false, ...published, author: activeAccountWhere },
+      data: { claimed: true, claimedById: userId }
+    })
+    if (updated.count === 0) {
+      const existing = await this.prisma.giveaway.findUnique({
+        where: { id },
+        select: { claimed: true, claimedById: true, deletedAt: true, status: true }
+      })
+      if (!existing || existing.deletedAt || existing.status !== 'PUBLISHED') throw new NotFoundException('Giveaway not found')
+      if (existing.claimed && existing.claimedById === userId) return { claimed: true, giveaway: await this.getGiveaway(id) }
+      if (existing.claimed) throw new ConflictException('This giveaway has already been claimed')
+      throw new NotFoundException('Giveaway not found')
     }
-    return this.prisma.eventRsvp.upsert({
-      where: { eventId_userId: { eventId, userId } },
-      create: { eventId, userId, status: input.status },
-      update: { status: input.status },
-    })
+    return { claimed: true, giveaway: await this.getGiveaway(id) }
   }
 
-  async cancelEvent(userId: string, eventId: string) {
-    const event = await this.prisma.communityEvent.findUnique({ where: { id: eventId } })
-    if (!event) throw new NotFoundException('Event not found')
-    if (event.organizerId !== userId) throw new ForbiddenException()
-    await this.prisma.communityEvent.update({ where: { id: eventId }, data: { status: 'CANCELLED' } })
-    return { cancelled: true }
+  private async requireOrganizer(id: string, userId: string) {
+    const row = await this.prisma.communityEvent.findUnique({ where: { id }, select: { organizerId: true, deletedAt: true } })
+    if (!row || row.deletedAt) throw new NotFoundException('Event not found')
+    if (row.organizerId !== userId) throw new ForbiddenException('You can only change your own event')
   }
 
-  private async userNeighborhood(userId: string) {
-    const profile = await this.prisma.profile.findUnique({ where: { userId }, select: { neighborhood: true } })
-    return profile?.neighborhood ?? undefined
-  }
-
-  private async blockedIds(userId: string) {
-    const blocks = await this.prisma.blockedUser.findMany({
-      where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
-      select: { blockerId: true, blockedId: true },
-    })
-    return blocks.map((block) => block.blockerId === userId ? block.blockedId : block.blockerId)
-  }
-
-  private async assertNotBlocked(firstUserId: string, secondUserId: string) {
-    if (firstUserId === secondUserId) return
-    const block = await this.prisma.blockedUser.findFirst({
-      where: { OR: [
-        { blockerId: firstUserId, blockedId: secondUserId },
-        { blockerId: secondUserId, blockedId: firstUserId },
-      ] },
-    })
-    if (block) throw new ForbiddenException('This interaction is unavailable')
+  private async requireAuthor(
+    model: { findUnique: (args: { where: { id: string }; select: { authorId: true; deletedAt: true } }) => Promise<{ authorId: string; deletedAt: Date | null } | null> },
+    id: string,
+    userId: string,
+    missing: string,
+    forbidden: string
+  ) {
+    const row = await model.findUnique({ where: { id }, select: { authorId: true, deletedAt: true } })
+    if (!row || row.deletedAt) throw new NotFoundException(missing)
+    if (row.authorId !== userId) throw new ForbiddenException(forbidden)
   }
 }

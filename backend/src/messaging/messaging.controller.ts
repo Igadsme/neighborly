@@ -1,10 +1,9 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
-import { SendMessageDto } from './dto'
-import { CreateConversationDto } from './create-conversation.dto'
-import { MessagingGateway } from './messaging.gateway'
+import { enforceRateLimit } from '../common/rate-limit'
+import { CreateConversationDto, SendMessageDto } from './dto'
 import { MessagingService } from './messaging.service'
 
 @ApiTags('messaging')
@@ -12,30 +11,52 @@ import { MessagingService } from './messaging.service'
 @UseGuards(AuthGuard)
 @Controller('conversations')
 export class MessagingController {
-  constructor(private readonly messaging: MessagingService, private readonly gateway: MessagingGateway) {}
+  constructor(private readonly messaging: MessagingService) {}
 
   @Get()
   list(@Req() req: AuthenticatedRequest) { return this.messaging.listConversations(req.user.id) }
 
+  /** Global unread badge: messages plus notification count. */
+  @Get('unread')
+  async unread(@Req() req: AuthenticatedRequest) {
+    const messages = await this.messaging.unreadTotals(req.user.id)
+    return { messages: messages.messages, notifications: 0 }
+  }
+
   @Post()
-  create(@Req() req: AuthenticatedRequest, @Body() input: CreateConversationDto) {
-    return this.messaging.createConversation(req.user.id, input.participantId)
+  async create(@Req() req: AuthenticatedRequest, @Body() input: CreateConversationDto) {
+    await enforceRateLimit('messaging', req.user.id)
+    return this.messaging.createConversation(req.user.id, input)
   }
 
   @Get(':id/messages')
-  messages(@Req() req: AuthenticatedRequest, @Param('id') id: string) { return this.messaging.listMessages(req.user.id, id) }
+  messages(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string
+  ) {
+    return this.messaging.listMessages(req.user.id, id, {
+      limit: limit ? Number(limit) : undefined,
+      before
+    })
+  }
+
+  @Get(':id/messages/more')
+  async moreMessages(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('before') before?: string
+  ) {
+    return { hasMore: await this.messaging.hasMoreMessages(req.user.id, id, before) }
+  }
 
   @Post(':id/messages')
-  async send(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() input: SendMessageDto) {
-    const message = await this.messaging.sendMessage(req.user.id, id, input.body)
-    this.gateway.publishMessage(id, message)
-    return message
+  async send(@Req() req: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: SendMessageDto) {
+    await enforceRateLimit('messaging', req.user.id)
+    return this.messaging.sendMessage(req.user.id, id, input.body)
   }
 
   @Patch(':id/read')
-  async read(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
-    const participant = await this.messaging.markRead(req.user.id, id)
-    this.gateway.publishReadReceipt(id, req.user.id, participant.lastReadAt ?? new Date())
-    return participant
-  }
+  read(@Req() req: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) { return this.messaging.markRead(req.user.id, id) }
 }

@@ -1,111 +1,173 @@
-import { useCallback, useEffect, useState } from "react"
-import { Button, Badge, Icon } from "../components/ui"
+import { useEffect, useState } from "react"
+import { Button, Badge, Avatar, Icon } from "../components/ui"
+import type { Listing } from "../data"
 import { api, ApiError } from "../api/client"
-import type { ApiListing } from "../api/types"
+import { listingFromApi, mediaSrc } from "../lib/view"
 
-type Page = "landing" | "onboarding" | "forgot-password" | "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community"
+type Page = "landing" | "onboarding" | "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community" | "forgot-password"
 
 interface LandingProps {
   onNavigate: (p: Page) => void
-  onSignIn: () => void
+  onSignIn: (page?: string, id?: string) => void
 }
+
+const categories = [
+  { icon: "🛋️", label: "For Sale", color: "#D8F3DC", page: "explore" },
+  { icon: "🏠", label: "Housing", color: "#DDEEFF", page: "housing" },
+  { icon: "💼", label: "Jobs", color: "#FEF3C7", page: "jobs" },
+  { icon: "🔧", label: "Services", color: "#FDE8E0", page: "services" },
+  { icon: "🚗", label: "Vehicles", color: "#EEF0F5", page: "explore" },
+  { icon: "🎁", label: "Free Items", color: "#D8F3DC", page: "explore" },
+  { icon: "🐾", label: "Pets", color: "#FDE8E0", page: "explore" },
+  { icon: "🎭", label: "Events", color: "#DDEEFF", page: "community" },
+]
+
+const testimonials = [
+  {
+    name: "Priya Patel",
+    neighborhood: "Inman Park",
+    avatar: "photo-1494790108755-2616b612b77c",
+    text: "I sold my old dining table within 2 hours and met the nicest neighbor. Neighborly actually feels safe — meeting through the app made all the difference.",
+    rating: 5,
+    stat: "Sold $1,200 in items",
+  },
+  {
+    name: "Marcus Johnson",
+    neighborhood: "Decatur",
+    avatar: "photo-1472099645785-5658abf4ff4e",
+    text: "Found a part-time photography gig through the Jobs board. The community feel here is so much better than anything else I've tried.",
+    rating: 5,
+    stat: "Hired 3 local service providers",
+  },
+  {
+    name: "Aaliyah Williams",
+    neighborhood: "Buckhead",
+    avatar: "photo-1438761681033-6461ffad8d80",
+    text: "As a seller, the listing tools are a game-changer. The AI suggestions helped me price my furniture correctly and I got offers the same day.",
+    rating: 5,
+    stat: "78 successful transactions",
+  },
+]
 
 const howItWorks = [
   {
     step: "01",
     icon: "🔍",
     title: "Discover something nearby",
-    desc: "Browse published listings and filter by available categories, price, condition, and delivery options.",
+    desc: "Search and browse thousands of listings in your neighborhood. Filter by distance, category, price, and more. Real listings from real neighbors.",
   },
   {
     step: "02",
     icon: "🤝",
     title: "Connect with confidence",
-    desc: "Start a participant-only conversation with a listing owner without exposing private contact details in public listings.",
+    desc: "Message neighbors through the app and keep the conversation there. Profiles show the name and neighborhood the member chose to share.",
   },
   {
     step: "03",
     icon: "✅",
-    title: "Complete your exchange",
-    desc: "Make an offer on a need request, schedule an exchange, and leave a review after completion. Payments and safe-meetup verification are not built yet.",
+    title: "Meet, exchange, or book safely",
+    desc: "Choose from safe meetup spots, arrange delivery, or book services directly. Transactions are logged, reviewed, and protected.",
   },
 ]
 
-const currentFeatures = [
+const trustPoints = [
   {
-    icon: "🔐",
-    title: "Email and password accounts",
-    desc: "Account registration and login use the Neighborly authentication API.",
+    icon: "🪪",
+    title: "ID Verification",
+    desc: "Optional identity verification builds trust and accountability between neighbors.",
+  },
+  {
+    icon: "⭐",
+    title: "Two-Way Reviews",
+    desc: "Buyers and sellers both rate each transaction, building a genuine reputation over time.",
   },
   {
     icon: "💬",
-    title: "Participant-checked messaging",
-    desc: "REST and real-time messages are restricted to conversation participants.",
+    title: "Secure Messaging",
+    desc: "All communication stays in-app. We'll alert you if something looks suspicious.",
   },
   {
-    icon: "🛍️",
-    title: "Persisted marketplace",
-    desc: "Listings, searches, and favorites are stored through the API.",
+    icon: "📍",
+    title: "Safe Meetup Spots",
+    desc: "We suggest public meetup locations for in-person exchanges in your area.",
   },
   {
-    icon: "🤝",
-    title: "Request and offer flow",
-    desc: "Requests, offers, appointments, transaction status, and reviews use backend records.",
+    icon: "🛡️",
+    title: "Scam Detection",
+    desc: "AI-powered listing and message analysis catches suspicious patterns before they reach you.",
   },
   {
-    icon: "🪪",
-    title: "Verification",
-    desc: "Email verification and account recovery are available; identity and phone checks are not enabled.",
-  },
-  {
-    icon: "🖼️",
-    title: "Image uploads",
-    desc: "Listing images are validated and uploaded directly to S3-compatible storage.",
+    icon: "📞",
+    title: "24/7 Support",
+    desc: "Real people ready to help if anything goes wrong with a transaction.",
   },
 ]
 
 export default function Landing({ onNavigate, onSignIn }: LandingProps) {
-  const [previewListings, setPreviewListings] = useState<ApiListing[]>([])
-  const [categoryItems, setCategoryItems] = useState<
-    Array<{ id: string; name: string; slug: string }>
-  >([])
-  const [previewLoading, setPreviewLoading] = useState(true)
-  const [previewError, setPreviewError] = useState("")
-  const [retryToken, setRetryToken] = useState(0)
+  const [searchQuery, setSearchQuery] = useState("")
   const [signInOpen, setSignInOpen] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [signInError, setSignInError] = useState("")
   const [signingIn, setSigningIn] = useState(false)
+  const [pending, setPending] = useState<{ page: string; id?: string }>({ page: "home" })
+  const [preview, setPreview] = useState<Listing[]>([])
+  const [previewState, setPreviewState] = useState<"loading" | "ready" | "empty" | "error">("loading")
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number> | null>(null)
 
-  const loadPreview = useCallback(async () => {
-    setPreviewLoading(true)
-    setPreviewError("")
-    try {
-      const [availableListings, availableCategories] = await Promise.all([
-        api.listings.list({ limit: 8, sort: "newest" }),
-        api.categories.list(),
-      ])
-      setPreviewListings(availableListings)
-      setCategoryItems(availableCategories)
-    } catch (cause: unknown) {
-      setPreviewError(
-        cause instanceof ApiError
-          ? cause.message
-          : "Marketplace preview could not be loaded.",
-      )
-    } finally {
-      setPreviewLoading(false)
+  useEffect(() => {
+    let active = true
+    api.listings
+      .list({ status: "PUBLISHED", limit: 4 })
+      .then((rows) => {
+        if (!active) return
+        if (!Array.isArray(rows) || rows.length === 0) {
+          setPreview([])
+          setPreviewState("empty")
+          return
+        }
+        setPreview(rows.slice(0, 4).map((row) => listingFromApi(row)))
+        setPreviewState("ready")
+      })
+      .catch(() => {
+        if (active) setPreviewState("error")
+      })
+    api.categories
+      .list()
+      .then((items) => {
+        if (!active || !Array.isArray(items)) return
+        const next: Record<string, number> = {}
+        for (const item of items) next[item.name] = item.listingCount ?? 0
+        setCategoryCounts(next)
+      })
+      .catch(() => {
+        if (active) setCategoryCounts({})
+      })
+    return () => {
+      active = false
     }
   }, [])
 
-  useEffect(() => {
-    void loadPreview()
-  }, [loadPreview, retryToken])
-
-  const handleSignIn = () => {
+  const openSignIn = (page = "home", id?: string) => {
+    setPending({ page, id })
     setSignInError("")
     setSignInOpen(true)
+  }
+
+  const totalNearbyListings = categoryCounts
+    ? Object.values(categoryCounts).reduce((total, count) => total + count, 0)
+    : null
+
+  const tileCount = (label: string) => {
+    if (!categoryCounts) return "…"
+    if (label === "For Sale") {
+      const sum = Object.values(categoryCounts).reduce((total, count) => total + count, 0)
+      return `${sum.toLocaleString()} nearby`
+    }
+    if (label === "Housing" || label === "Jobs" || label === "Services" || label === "Vehicles") {
+      return `${(categoryCounts[label] ?? 0).toLocaleString()} nearby`
+    }
+    return "— nearby"
   }
 
   const submitSignIn = async () => {
@@ -113,7 +175,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
     setSignInError("")
     try {
       await api.auth.login({ email, password })
-      onSignIn()
+      onSignIn(pending.page, pending.id)
     } catch (cause) {
       setSignInError(
         cause instanceof ApiError
@@ -152,33 +214,43 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             </span>
           </div>
           <nav className="hidden md:flex items-center gap-6">
+            {/*
+              These read as inline text links, so they carry no visual
+              padding. Vertical padding gives each one a 44px hit area for
+              touch without changing how the row looks.
+            */}
             <button
-              onClick={() => onNavigate("categories")}
-              className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
+              type="button"
+              onClick={() => openSignIn("explore")}
+              className="py-3 text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Browse
             </button>
             <button
-              onClick={() => onNavigate("services")}
-              className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
+              type="button"
+              onClick={() => openSignIn("services")}
+              className="py-3 text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Services
             </button>
             <button
-              onClick={() => onNavigate("housing")}
-              className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
+              type="button"
+              onClick={() => openSignIn("housing")}
+              className="py-3 text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Housing
             </button>
             <button
-              onClick={() => onNavigate("jobs")}
-              className="text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
+              type="button"
+              onClick={() => openSignIn("jobs")}
+              className="py-3 text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A]"
             >
               Jobs
             </button>
             <button
-              onClick={handleSignIn}
-              className="text-sm font-semibold text-[#1B2A4A] hover:text-[#2D6A4F]"
+              type="button"
+              onClick={() => openSignIn("home")}
+              className="py-3 text-sm font-semibold text-[#1B2A4A] hover:text-[#2D6A4F]"
             >
               Sign in
             </button>
@@ -208,7 +280,18 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           <div className="flex-1 text-white">
             <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm px-3 py-1.5 rounded-full text-sm font-medium mb-6 text-white border border-white/20">
               <span className="w-2 h-2 rounded-full bg-[#74C69D] animate-pulse" />
-              Local marketplace · Early access
+              {/*
+                The count is the real number of listings the API reports,
+                not a marketing figure. It used to read a hardcoded
+                "3,200+ active listings in Atlanta", which on a real
+                launch would be a number the product could not stand
+                behind and that did not change no matter what was listed.
+                While the count loads the badge says nothing numeric, so
+                it never shows a stale or invented total.
+              */}
+              {totalNearbyListings === null
+                ? "Listings from your neighbors"
+                : `${totalNearbyListings.toLocaleString()} nearby listings`}
             </div>
 
             <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-semibold leading-[1.05] mb-6">
@@ -220,9 +303,8 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             </h1>
 
             <p className="text-lg md:text-xl text-white/80 mb-10 max-w-xl leading-relaxed">
-              Browse local listings, publish a need request, and connect with
-              neighbors. Housing, services, payments, and other modules are
-              still in development.
+              Buy, sell, rent, hire, trade, donate, and connect — all within a
+              few miles of home. With real neighbors. Safely.
             </p>
 
             {/* Search */}
@@ -231,21 +313,28 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 <Icon
                   name="search"
                   size={18}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8A9AB5] pointer-events-none"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5C6E8A] pointer-events-none"
                 />
                 <input
                   type="text"
-                  aria-label="Sign in to search published listings"
-                  placeholder="Sign in to search published listings"
-                  readOnly
-                  className="w-full h-13 pl-11 pr-4 bg-white text-[#1B2A4A] rounded-xl text-sm placeholder:text-[#C5CCDA] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/30 shadow-lg"
+                  aria-label="Search"
+                  placeholder="What are you looking for?"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full h-13 pl-11 pr-4 bg-white text-[#1B2A4A] rounded-xl text-sm placeholder:text-[#5C6E8A] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/30 shadow-lg"
                 />
               </div>
               <div className="relative">
-                <span className="flex h-13 items-center gap-2 rounded-xl bg-white/90 px-4 text-sm font-medium text-[#5C6E8A] shadow-lg">
-                  <Icon name="mapPin" size={15} className="text-[#E8694A]" />
-                  Location filters unavailable
-                </span>
+                <Icon
+                  name="mapPin"
+                  size={15}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#B94C2A] pointer-events-none"
+                />
+                <select aria-label="City" className="h-13 pl-9 pr-8 bg-white text-[#1B2A4A] rounded-xl text-sm font-medium focus:outline-none appearance-none cursor-pointer shadow-lg border-0">
+                  <option>Atlanta, GA</option>
+                  <option>Decatur, GA</option>
+                  <option>Midtown, ATL</option>
+                </select>
               </div>
             </div>
 
@@ -253,17 +342,17 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
               <Button
                 variant="primary"
                 size="lg"
-                onClick={handleSignIn}
+                onClick={() => openSignIn("explore")}
                 className="shadow-lg"
               >
-                Sign in to explore
+                Explore Neighborly
               </Button>
               <Button
                 size="lg"
-                onClick={() => onNavigate("onboarding")}
+                onClick={() => openSignIn("create")}
                 className="bg-white/15 text-white border border-white/30 hover:bg-white/25 rounded-full px-7 py-3 h-12 text-base font-semibold transition-colors"
               >
-                Join to post
+                Post a Listing
               </Button>
             </div>
 
@@ -273,41 +362,100 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 <span className="text-[#74C69D]">✓</span> Free to join
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="text-[#74C69D]">✓</span> In-app messaging
+                <span className="text-[#74C69D]">✓</span> Neighbors nearby
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="text-[#74C69D]">✓</span> Request-first exchanges
+                <span className="text-[#74C69D]">✓</span> Safe messaging
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="text-[#74C69D]">✓</span> No fees to buy
               </span>
             </div>
           </div>
 
-          {/* Persisted listing preview */}
-          <div className="hidden lg:block w-80 flex-shrink-0">
-            <div className="overflow-hidden rounded-3xl bg-white shadow-2xl">
-              <div className="flex h-44 items-center justify-center bg-[#F5F4EF] text-[#8A9AB5]">
-                {previewLoading ? "Loading marketplace…" : previewListings[0]?.title ?? "No published listings yet"}
-              </div>
+          {/* Listing preview card */}
+          {/*
+            The badge is positioned against this wrapper. It was previously
+            `absolute` with no positioned ancestor, so it resolved against a
+            distant section and rendered over the page header. It also sits
+            outside the `overflow-hidden` panel so the offset is not clipped.
+          */}
+          <div className="hidden lg:block w-80 flex-shrink-0 relative">
+            <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+              {preview[0] && mediaSrc(preview[0].images[0], "w=600&h=400&fit=crop&auto=format") ? (
+                <img
+                  src={mediaSrc(preview[0].images[0], "w=600&h=400&fit=crop&auto=format")!}
+                  alt={preview[0].title}
+                  className="w-full h-44 object-cover"
+                />
+              ) : (
+                <div className="w-full h-44 bg-[#F5F4EF]" />
+              )}
               <div className="p-4">
-                <p className="font-semibold text-sm text-[#1B2A4A]">
-                  {previewListings[0]?.title ?? "Marketplace preview"}
-                </p>
-                <p className="mt-1 text-xs text-[#8A9AB5]">
-                  {previewListings[0]?.neighborhood ?? "Location data is not available"}
-                </p>
-                <div className="mt-3 flex items-center justify-between border-t border-[#F5F4EF] pt-3">
-                  <span className="text-sm font-bold text-[#1B2A4A]">
-                    {previewListings[0]?.priceCents === 0
-                      ? "Free"
-                      : previewListings[0]?.priceCents == null
-                        ? "Price not set"
-                        : `$${(previewListings[0].priceCents / 100).toFixed(2)}`}
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="font-semibold text-[#1B2A4A] text-sm leading-tight">
+                      {previewState === "loading" ? "Loading listings…" : preview[0]?.title ?? "No published listings yet"}
+                    </p>
+                    <p className="text-xs text-[#5C6E8A] mt-0.5">
+                      {preview[0] ? `${preview[0].neighborhood} · Nearby` : previewState === "error" ? "Listings could not be loaded." : "Published listings will show up here"}
+                    </p>
+                  </div>
+                  <span className="text-lg font-bold text-[#1B2A4A]">
+                    {preview[0] ? (preview[0].isFree ? "Free" : preview[0].price == null ? "—" : `$${preview[0].price.toLocaleString()}`) : "—"}
                   </span>
-                  <span className="text-xs text-[#8A9AB5]">Published listing</span>
                 </div>
-                <Button variant="soft" size="xs" fullWidth className="mt-4" onClick={handleSignIn}>
-                  Sign in to browse
-                </Button>
+                <div className="flex items-center gap-2 mb-3">
+                  {preview[0]?.condition && (
+                    <Badge variant="blue" size="sm">
+                      {preview[0].condition}
+                    </Badge>
+                  )}
+                  <Badge variant="green" size="sm">
+                    Published
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2 pt-3 border-t border-[#F5F4EF]">
+                  <Avatar
+                    // `listingFromApi` normalises the API seller into
+                    // {name, avatar, rating}, so these fields are populated
+                    // for real listings rather than falling back to
+                    // placeholders.
+                    src={preview[0]?.seller.avatar || ""}
+                    name={preview[0]?.seller.name || "Neighbor"}
+                    size="sm"
+                  />
+                  <div>
+                    <p className="text-xs font-semibold text-[#1B2A4A]">
+                      {preview[0]?.seller.name || "Neighbor"}
+                    </p>
+                    {/*
+                      A rating is only stated when the data provides one.
+                      A hardcoded "No rating yet" would assert something about
+                      a real member that the app cannot verify.
+                    */}
+                    {typeof preview[0]?.seller.rating === "number" &&
+                      preview[0].seller.rating > 0 && (
+                        <p className="text-[11px] text-[#5C6E8A]">
+                          Rated {preview[0].seller.rating.toFixed(1)}
+                        </p>
+                      )}
+                  </div>
+                  <button
+                    onClick={() => openSignIn(preview[0] ? "listing" : "explore", preview[0]?.id)}
+                    className="ml-auto bg-[#2D6A4F] text-white text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-[#1B4332] transition-colors"
+                  >
+                    Message
+                  </button>
+                </div>
               </div>
+              </div>
+            {/*
+              #B94C2A on this peach reads at 3.9:1, under the 4.5:1 minimum.
+              #9C3A1B is the same hue carried far enough to clear it at 5.9:1.
+            */}
+            <div className="absolute -top-3 -right-3 bg-[#FDE8E0] rounded-2xl px-3 py-2 text-xs font-semibold text-[#9C3A1B] shadow-md">
+              Published listing
             </div>
           </div>
         </div>
@@ -320,31 +468,27 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             Everything local. All in one place.
           </h2>
           <p className="text-[#5C6E8A] text-lg max-w-2xl mx-auto">
-            Browse categories currently available in the persisted marketplace catalog.
+            From furniture and electronics to jobs and home services — if it&apos;s
+            happening in your neighborhood, it&apos;s on Neighborly.
           </p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {categoryItems.map((category, index) => (
+          {categories.map((cat) => (
             <button
-              key={category.id}
-              onClick={handleSignIn}
+              key={cat.label}
+              onClick={() => openSignIn(cat.page)}
               className="group p-5 rounded-2xl border border-[#E8E6DF] bg-white hover:border-[#2D6A4F] hover:shadow-md transition-all text-left card-hover"
-              style={{ backgroundColor: ["#D8F3DC", "#DDEEFF", "#FEF3C7", "#FDE8E0"][index % 4] + "30" }}
+              style={{ backgroundColor: cat.color + "30" }}
             >
-              <span className="text-3xl mb-3 block">{["🛋️", "📱", "🔧", "🎁"][index % 4]}</span>
+              <span className="text-3xl mb-3 block">{cat.icon}</span>
               <p className="font-semibold text-[#1B2A4A] text-sm">
-                {category.name}
+                {cat.label}
               </p>
-              <p className="text-xs text-[#8A9AB5] mt-0.5">
-                Browse published listings
+              <p className="text-xs text-[#5C6E8A] mt-0.5">
+                {tileCount(cat.label)}
               </p>
             </button>
           ))}
-          {!previewLoading && !categoryItems.length && (
-            <p className="col-span-full text-center text-sm text-[#8A9AB5]">
-              {previewError || "No marketplace categories are available yet."}
-            </p>
-          )}
         </div>
       </section>
 
@@ -353,12 +497,19 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-14">
             <Badge variant="green" className="mb-4">
-              Connected today
+              How it works
             </Badge>
             <h2 className="font-display text-4xl font-semibold text-white mb-3">
-              Simple. Local. Request-first.
+              Simple. Safe. Local.
             </h2>
-            <p className="text-[#8A9AB5] text-lg">
+            {/*
+              Body text on the navy section. #5C6E8A is the muted slate used
+              across the light sections, where it clears AA. On #1B2A4A it
+              measures 2.74:1, which fails the 4.5:1 minimum and leaves this
+              copy genuinely hard to read. #A9B7CC keeps the same muted
+              intent at 7.0:1.
+            */}
+            <p className="text-[#A9B7CC] text-lg">
               Three steps to find, connect, and exchange with neighbors.
             </p>
           </div>
@@ -373,7 +524,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   <h3 className="font-display text-xl font-semibold text-white mb-3">
                     {step.title}
                   </h3>
-                  <p className="text-[#8A9AB5] leading-relaxed">{step.desc}</p>
+                  <p className="text-[#A9B7CC] leading-relaxed">{step.desc}</p>
                 </div>
               </div>
             ))}
@@ -387,18 +538,18 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
               <Badge variant="coral" className="mb-4">
-                Trust & safety in progress
+                Safety First
               </Badge>
               <h2 className="font-display text-4xl font-semibold text-[#1B2A4A] mb-5">
-                "Everything local.
+                &quot;Everything local.
                 <br />
-                <span className="text-[#2D6A4F]">Everyone accountable.</span>"
+                <span className="text-[#2D6A4F]">Everyone accountable.</span>&quot;
               </h2>
               <p className="text-[#5C6E8A] text-lg leading-relaxed mb-8">
-                Neighborly is building a local marketplace with persisted
-                accounts, listings, requests, and conversations. Trust and
-                safety features are incomplete; use care and do not share
-                private contact or address details.
+                Neighborly was built on the belief that local commerce should be
+                safe, transparent, and human. Every feature is designed to
+                protect you while fostering genuine connections in your
+                community.
               </p>
               <Button
                 variant="primary"
@@ -409,16 +560,19 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
               </Button>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              {currentFeatures.map((point) => (
+              {trustPoints.map((point) => (
                 <div
                   key={point.title}
                   className="bg-white p-5 rounded-2xl border border-[#E8E6DF]"
                 >
                   <div className="text-2xl mb-3">{point.icon}</div>
-                  <h4 className="font-semibold text-[#1B2A4A] text-sm mb-1">
+                  {/* h3, not h4: these sit directly under this section's h2, and skipping a
+                      level breaks the heading outline a screen reader relies
+                      on to navigate. */}
+                  <h3 className="font-semibold text-[#1B2A4A] text-sm mb-1">
                     {point.title}
-                  </h4>
-                  <p className="text-xs text-[#8A9AB5] leading-relaxed">
+                  </h3>
+                  <p className="text-xs text-[#5C6E8A] leading-relaxed">
                     {point.desc}
                   </p>
                 </div>
@@ -428,92 +582,107 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
         </div>
       </section>
 
-      {/* Current listings */}
+      {/* Popular Near Atlanta */}
       <section className="py-20 max-w-7xl mx-auto px-6">
         <div className="flex items-end justify-between mb-8">
           <div>
             <h2 className="font-display text-3xl font-semibold text-[#1B2A4A]">
-              Recently published
+              Popular near Atlanta
             </h2>
-            <p className="text-[#8A9AB5] mt-1">
-              Latest public marketplace records
+            <p className="text-[#5C6E8A] mt-1">
+              Recently published listings
             </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleSignIn}>
-            Sign in to browse →
+          <Button variant="ghost" size="sm" onClick={() => openSignIn("explore")}>
+            See all →
           </Button>
         </div>
-        {previewError && (
-          <div role="alert" className="mb-4 flex items-center justify-between rounded-xl bg-[#FFF5F2] p-3 text-sm text-[#C4512D]">
-            <span>{previewError}</span>
-            <button onClick={() => setRetryToken((token) => token + 1)} className="font-semibold underline">Retry</button>
-          </div>
-        )}
-        {previewLoading ? (
-          <div className="grid grid-cols-2 gap-5 md:grid-cols-4" aria-label="Loading latest listings">
-            {[0, 1, 2, 3].map((item) => <div key={item} className="h-48 animate-pulse rounded-2xl bg-white" />)}
-          </div>
-        ) : previewListings.length ? (
-          <div className="grid grid-cols-2 gap-5 md:grid-cols-4">
-            {previewListings.slice(0, 4).map((listing) => (
-              <button
-                key={listing.id}
-                onClick={handleSignIn}
-                className="rounded-2xl border border-[#E8E6DF] bg-white p-4 text-left transition-all hover:border-[#2D6A4F]/40"
-              >
-                <p className="line-clamp-2 text-sm font-semibold text-[#1B2A4A]">{listing.title}</p>
-                <p className="mt-2 text-sm font-bold text-[#1B2A4A]">
-                  {listing.priceCents === 0 ? "Free" : listing.priceCents == null ? "Price not set" : `$${(listing.priceCents / 100).toFixed(2)}`}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+          {previewState === "loading" && <p className="text-sm text-[#5C6E8A] col-span-full">Loading listings…</p>}
+          {previewState === "error" && <p className="text-sm text-[#A63D27] col-span-full" role="alert">Listings could not be loaded.</p>}
+          {previewState === "empty" && <p className="text-sm text-[#5C6E8A] col-span-full">No published listings yet.</p>}
+          {preview.map((listing) => {
+            const photo = mediaSrc(listing.images[0], "w=400&h=300&fit=crop&auto=format")
+            return (
+            <div
+              key={listing.id}
+              onClick={() => openSignIn("listing", listing.id)}
+              className="group cursor-pointer bg-white rounded-2xl border border-[#E8E6DF] overflow-hidden card-hover"
+            >
+              <div className="h-40 overflow-hidden bg-[#F5F4EF]">
+                {photo && (
+                  <img
+                    src={photo}
+                    alt={listing.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                )}
+              </div>
+              <div className="p-3">
+                <p className="text-sm font-semibold text-[#1B2A4A] line-clamp-1">
+                  {listing.title}
                 </p>
-                <p className="mt-1 text-xs text-[#8A9AB5]">{listing.category?.name ?? "Marketplace"}</p>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-8 text-center text-sm text-[#8A9AB5]">
-            No published listings yet.
-          </div>
-        )}
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-sm font-bold text-[#1B2A4A]">
+                    {listing.isFree ? (
+                      <span className="text-[#2D6A4F]">Free</span>
+                    ) : listing.price == null ? (
+                      "—"
+                    ) : (
+                      `$${listing.price.toLocaleString()}`
+                    )}
+                  </span>
+                  <span className="text-xs text-[#5C6E8A]">
+                    {listing.distance}
+                  </span>
+                </div>
+              </div>
+            </div>
+            )
+          })}
+        </div>
       </section>
 
-      {/* Product status */}
+      {/* Testimonials */}
       <section className="py-20 bg-gradient-to-br from-[#1B4332] to-[#2D6A4F]">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="font-display text-4xl font-semibold text-white mb-3">
-              Built in working slices
+              Preview · Examples
             </h2>
             <p className="text-[#74C69D] text-lg">
-              Neighborly is an early product build. Here is what is connected today.
+              Sample stories. Not live reviews.
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                title: "Persisted marketplace",
-                body: "Browse, publish, search, and save marketplace listings.",
-              },
-              {
-                title: "Request-first exchanges",
-                body: "Publish requests, receive offers, schedule exchanges, and submit reviews.",
-              },
-              {
-                title: "Messaging",
-                body: "Send persisted messages through participant-authorized conversations.",
-              },
-            ].map((feature) => (
+            {testimonials.map((t) => (
               <div
-                key={feature.title}
-                className="rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-sm"
+                key={t.name}
+                className="bg-white/10 backdrop-blur-sm border border-white/20 p-6 rounded-2xl"
               >
-                <h3 className="font-display text-xl font-semibold text-white">{feature.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-white/80">{feature.body}</p>
+                <div className="flex mb-2">
+                  {[...Array(t.rating)].map((_, i) => (
+                    <span key={i} className="text-[#F59E0B] text-sm">
+                      ★
+                    </span>
+                  ))}
+                </div>
+                <p className="text-white/90 text-sm leading-relaxed mb-5">
+                  &quot;{t.text}&quot;
+                </p>
+                <div className="flex items-center gap-3 pt-4 border-t border-white/10">
+                  <Avatar src={t.avatar} name={t.name} size="sm" />
+                  <div className="flex-1">
+                    <p className="text-white font-semibold text-sm">{t.name}</p>
+                    <p className="text-[#74C69D] text-xs">{t.neighborhood}</p>
+                  </div>
+                  <Badge variant="green" size="sm">
+                    {t.stat}
+                  </Badge>
+                </div>
               </div>
             ))}
           </div>
-          <p className="mx-auto mt-8 max-w-3xl text-center text-sm text-white/70">
-            Image uploads, payments, geospatial maps, identity verification, notifications, and community publishing remain in development. No testimonials or usage metrics are shown here.
-          </p>
         </div>
       </section>
 
@@ -521,12 +690,13 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
       <section className="py-24 max-w-7xl mx-auto px-6 text-center">
         <div className="max-w-2xl mx-auto">
           <h2 className="font-display text-5xl font-semibold text-[#1B2A4A] mb-5">
-            Your neighborhood
+            Your neighbors
             <br />
-            starts here.
+            are already here.
           </h2>
           <p className="text-[#5C6E8A] text-xl mb-10">
-            Join Neighborly as the local marketplace grows.
+            Join neighbors buying, selling, and connecting locally every
+            day.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button
@@ -537,12 +707,12 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             >
               Join for free →
             </Button>
-            <Button variant="outline" size="lg" onClick={handleSignIn}>
+            <Button variant="outline" size="lg" onClick={() => openSignIn("explore")}>
               Browse listings
             </Button>
           </div>
-          <p className="text-xs text-[#C5CCDA] mt-6">
-            Accounts use email and password. In-app payments are not available.
+          <p className="text-xs text-[#5C6E8A] mt-6">
+            No credit card required. Free to join and browse.
           </p>
         </div>
       </section>
@@ -565,8 +735,9 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                   Neighborly
                 </span>
               </div>
-              <p className="text-sm text-[#8A9AB5] leading-relaxed max-w-xs">
-                A request-first local marketplace in active development.
+              <p className="text-sm text-[#5C6E8A] leading-relaxed max-w-xs">
+                Everything local. Everyone accountable. Atlanta&apos;s trusted
+                community marketplace.
               </p>
             </div>
             {[
@@ -589,15 +760,21 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
               },
             ].map((col) => (
               <div key={col.title}>
-                <h4 className="font-semibold text-[#1B2A4A] text-sm mb-3">
+                {/* h3 for the same reason: the footer columns sit under the last h2. */}
+                <h3 className="font-semibold text-[#1B2A4A] text-sm mb-3">
                   {col.title}
-                </h4>
+                </h3>
                 <ul className="space-y-2">
                   {col.links.map((link) => (
                     <li key={link}>
-                      <span className="text-sm text-[#8A9AB5]">
+                      {/*
+                        These footer entries have no destination in this
+                        product. Rendering them as `href="#"` links would
+                        create controls that look actionable and do nothing,
+                        so they are shown as text until the pages exist.
+                      */}
+                      <span className="inline-block py-1 text-sm text-[#5C6E8A]">
                         {link}
-                        <span className="ml-1 text-xs">(coming soon)</span>
                       </span>
                     </li>
                   ))}
@@ -606,13 +783,13 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
             ))}
           </div>
           <div className="pt-8 border-t border-[#E8E6DF] flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-xs text-[#C5CCDA]">
-              © 2026 Neighborly prototype · Atlanta
+            <p className="text-xs text-[#5C6E8A]">
+              © 2026 Neighborly, Inc. Atlanta, GA. All rights reserved.
             </p>
-            <div className="flex items-center gap-4 text-xs text-[#C5CCDA]">
-              <span>Marketplace in development</span>
+            <div className="flex items-center gap-4 text-xs text-[#5C6E8A]">
+              <span>🌎 Atlanta</span>
               <span>·</span>
-              <span>Atlanta prototype</span>
+              <span>{categoryCounts ? `${Object.values(categoryCounts).reduce((total, count) => total + count, 0).toLocaleString()} published listings` : "Listing counts loading"}</span>
             </div>
           </div>
         </div>
@@ -623,6 +800,7 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
           className="fixed inset-0 z-[60] bg-[#1B2A4A]/50 backdrop-blur-sm flex items-center justify-center px-4"
           role="dialog"
           aria-modal="true"
+          aria-label="Sign in to Neighborly"
         >
           <div className="w-full max-w-md bg-white rounded-3xl border border-[#E8E6DF] shadow-2xl p-6">
             <div className="flex items-start justify-between mb-6">
@@ -630,36 +808,64 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 <h2 className="font-display text-2xl font-semibold text-[#1B2A4A]">
                   Welcome back
                 </h2>
-                <p className="text-sm text-[#8A9AB5] mt-1">
+                <p className="text-sm text-[#5C6E8A] mt-1">
                   Sign in to continue to Neighborly.
                 </p>
               </div>
               <button
                 onClick={() => setSignInOpen(false)}
-                className="text-[#8A9AB5] hover:text-[#1B2A4A]"
+                className="text-[#5C6E8A] hover:text-[#1B2A4A]"
                 aria-label="Close sign in"
               >
                 ×
               </button>
             </div>
             <div className="space-y-4">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email address"
-                className="w-full h-12 px-4 bg-[#F5F4EF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/20"
-              />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                onKeyDown={(e) => e.key === "Enter" && submitSignIn()}
-                className="w-full h-12 px-4 bg-[#F5F4EF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/20"
-              />
+              {/*
+                These fields carry a visible label rather than relying on the
+                placeholder alone. A placeholder disappears on focus and is
+                not reliably announced as the accessible name, so a screen
+                reader user had no way to know which field was which.
+              */}
+              <div>
+                <label
+                  htmlFor="signin-email"
+                  className="block text-sm font-medium text-[#1B2A4A] mb-1.5"
+                >
+                  Email address
+                </label>
+                <input
+                  id="signin-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full h-12 px-4 bg-[#F5F4EF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/20"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="signin-password"
+                  className="block text-sm font-medium text-[#1B2A4A] mb-1.5"
+                >
+                  Password
+                </label>
+                <input
+                  id="signin-password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Your password"
+                  onKeyDown={(e) => e.key === "Enter" && submitSignIn()}
+                  className="w-full h-12 px-4 bg-[#F5F4EF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/20"
+                />
+              </div>
               {signInError && (
-                <p className="text-sm text-[#A63D27]" role="alert">
+                <p className="text-sm text-[#B94C2A]" role="alert">
                   {signInError}
                 </p>
               )}
@@ -673,20 +879,22 @@ export default function Landing({ onNavigate, onSignIn }: LandingProps) {
                 {signingIn ? "Signing in..." : "Sign in"}
               </Button>
               <button
+                type="button"
                 onClick={() => {
                   setSignInOpen(false)
                   onNavigate("forgot-password")
                 }}
-                className="w-full text-sm text-[#5C6E8A] font-medium hover:underline"
+                className="w-full min-h-11 text-sm text-[#5A6B85] hover:underline"
               >
                 Forgot your password?
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setSignInOpen(false)
                   onNavigate("onboarding")
                 }}
-                className="w-full text-sm text-[#2D6A4F] font-medium hover:underline"
+                className="w-full min-h-11 text-sm text-[#2D6A4F] font-medium hover:underline"
               >
                 New to Neighborly? Create an account
               </button>

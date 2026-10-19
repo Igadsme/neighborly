@@ -1,0 +1,283 @@
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { Prisma, QuoteStatus } from '@prisma/client'
+import { assertNotBlocked } from '../common/blocks'
+import { activeAccountWhere } from '../common/active-account'
+import { assertGeoQuery, ilikeContains, orderByIds, pageWithinRadius } from '../common/geo-search'
+import { publicRating, ratingsForOwners, type PublicRating } from '../common/public-rating'
+import { publicUserSelect } from '../common/public-user.select'
+import { cleanList, cleanText, sanitizeText } from '../common/text'
+import { PrismaService } from '../prisma/prisma.service'
+import { CreateQuoteDto, CreateServiceDto, ListServicesQuery, UpdateServiceDto } from './dto'
+
+const publicServiceSelect = {
+  id: true,
+  title: true,
+  businessName: true,
+  description: true,
+  category: true,
+  startingPriceCents: true,
+  location: true,
+  availability: true,
+  tags: true,
+  imageKey: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  owner: { select: publicUserSelect }
+} satisfies Prisma.ServiceListingSelect
+
+const quoteForProviderSelect = {
+  id: true,
+  serviceId: true,
+  preferredDate: true,
+  preferredTime: true,
+  notes: true,
+  address: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  requester: { select: publicUserSelect }
+} satisfies Prisma.ServiceQuoteSelect
+
+type ProviderQuote = Prisma.ServiceQuoteGetPayload<{ select: typeof quoteForProviderSelect }>
+
+function presentService<T extends { imageKey: string | null }>(row: T) {
+  const { imageKey, ...rest } = row
+  const publicRow = rest as T & {
+    backgroundCheck?: boolean
+    rating?: Prisma.Decimal | number | string | null
+    reviewCount?: number
+  }
+  delete publicRow.backgroundCheck
+  delete publicRow.rating
+  delete publicRow.reviewCount
+  return { ...publicRow, image: imageKey }
+}
+
+function presentQuoteForProvider(quote: ProviderQuote) {
+  const card = {
+    id: quote.id,
+    serviceId: quote.serviceId,
+    preferredDate: quote.preferredDate,
+    preferredTime: quote.preferredTime,
+    notes: quote.notes,
+    status: quote.status,
+    createdAt: quote.createdAt,
+    updatedAt: quote.updatedAt,
+    requester: quote.requester
+  }
+  if (quote.status === QuoteStatus.ACCEPTED) return { ...card, address: quote.address }
+  return card
+}
+
+@Injectable()
+export class ServicesService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async list(query: ListServicesQuery) {
+    const origin = assertGeoQuery(query)
+    if (origin) {
+      const page = await pageWithinRadius(this.prisma, 'ServiceListing', origin, serviceRadiusExtra(query), query.limit, query.offset)
+      if (page.ids.length === 0) return []
+      const rows = await this.prisma.serviceListing.findMany({
+        where: { id: { in: page.ids } },
+        select: publicServiceSelect
+      })
+      return this.withRatings(orderByIds(rows, page.ids).map(presentService))
+    }
+    const search = query.query?.trim()
+    const rows = await this.prisma.serviceListing.findMany({
+      where: {
+        status: 'PUBLISHED',
+        deletedAt: null,
+        owner: activeAccountWhere,
+        ...(query.category ? { category: query.category } : {}),
+        ...(search
+          ? {
+              OR: [
+                { title: { contains: search, mode: 'insensitive' } },
+                { businessName: { contains: search, mode: 'insensitive' } },
+                { description: { contains: search, mode: 'insensitive' } }
+              ]
+            }
+          : {})
+      },
+      select: publicServiceSelect,
+      orderBy: { createdAt: 'desc' },
+      take: query.limit,
+      skip: query.offset
+    })
+    return this.withRatings(rows.map(presentService))
+  }
+
+  async get(id: string) {
+    const row = await this.prisma.serviceListing.findFirst({
+      where: { id, status: 'PUBLISHED', deletedAt: null, owner: activeAccountWhere },
+      select: publicServiceSelect
+    })
+    if (!row) throw new NotFoundException('Service not found')
+    const [presented] = await this.withRatings([presentService(row)])
+    return presented
+  }
+
+  async create(ownerId: string, input: CreateServiceDto) {
+    const created = await this.prisma.serviceListing.create({
+      data: {
+        ownerId,
+        title: input.title.trim(),
+        businessName: input.businessName.trim(),
+        description: sanitizeText(input.description),
+        category: input.category,
+        startingPriceCents: input.startingPriceCents,
+        location: input.location.trim(),
+        availability: input.availability.trim(),
+        tags: cleanList(input.tags) ?? [],
+        imageKey: cleanText(input.imageKey),
+        latitude: input.latitude,
+        longitude: input.longitude,
+        status: 'PUBLISHED'
+      },
+      select: publicServiceSelect
+    })
+    const [presented] = await this.withRatings([presentService(created)])
+    return presented
+  }
+
+  async update(userId: string, id: string, input: UpdateServiceDto) {
+    await this.requireOwner(id, userId)
+    await this.prisma.serviceListing.update({
+      where: { id },
+      data: {
+        title: input.title?.trim(),
+        businessName: input.businessName?.trim(),
+        description: input.description?.trim(),
+        category: input.category,
+        startingPriceCents: input.startingPriceCents,
+        location: input.location?.trim(),
+        availability: input.availability?.trim(),
+        tags: cleanList(input.tags),
+        imageKey: cleanText(input.imageKey),
+        latitude: input.latitude,
+        longitude: input.longitude
+      }
+    })
+    return this.get(id)
+  }
+
+  async archive(userId: string, id: string) {
+    await this.requireOwner(id, userId)
+    await this.prisma.serviceListing.update({ where: { id }, data: { status: 'ARCHIVED', deletedAt: new Date() } })
+    return { id, status: 'ARCHIVED' as const }
+  }
+
+  async createQuote(userId: string, serviceId: string, input: CreateQuoteDto) {
+    const service = await this.prisma.serviceListing.findFirst({
+      where: { id: serviceId, status: 'PUBLISHED', deletedAt: null, owner: activeAccountWhere },
+      select: { ownerId: true }
+    })
+    if (!service) throw new NotFoundException('Service not found')
+    if (service.ownerId === userId) throw new BadRequestException('You cannot request a quote on your own service')
+    await assertNotBlocked(this.prisma, userId, service.ownerId)
+    return this.prisma.serviceQuote.create({
+      data: {
+        serviceId,
+        requesterId: userId,
+        preferredDate: cleanText(input.preferredDate),
+        preferredTime: cleanText(input.preferredTime),
+        notes: sanitizeText(input.notes, 4000),
+        address: cleanText(input.address),
+        status: 'PENDING'
+      },
+      select: {
+        id: true,
+        serviceId: true,
+        preferredDate: true,
+        preferredTime: true,
+        notes: true,
+        address: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    })
+  }
+
+  async listMyQuotes(userId: string) {
+    const rows = await this.prisma.serviceQuote.findMany({
+      where: { requesterId: userId },
+      select: {
+        id: true,
+        serviceId: true,
+        preferredDate: true,
+        preferredTime: true,
+        notes: true,
+        address: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        service: { select: publicServiceSelect }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+    const presented = rows.map(row => ({ ...row, service: presentService(row.service) }))
+    const summaries = await ratingsForOwners(this.prisma, presented.map(row => row.service.owner.id))
+    return presented.map(row => ({
+      ...row,
+      service: { ...row.service, ...publicRating(summaries, row.service.owner.id) }
+    }))
+  }
+
+  async listQuotesForProvider(userId: string, serviceId: string) {
+    await this.requireOwner(serviceId, userId)
+    const quotes = await this.prisma.serviceQuote.findMany({
+      where: { serviceId },
+      select: quoteForProviderSelect,
+      orderBy: { createdAt: 'desc' }
+    })
+    return quotes.map(presentQuoteForProvider)
+  }
+
+  async acceptQuote(userId: string, quoteId: string) {
+    const quote = await this.prisma.serviceQuote.findUnique({
+      where: { id: quoteId },
+      select: {
+        ...quoteForProviderSelect,
+        service: { select: { ownerId: true, deletedAt: true, status: true } }
+      }
+    })
+    if (!quote || quote.service.deletedAt || quote.service.status !== 'PUBLISHED') throw new NotFoundException('Quote not found')
+    if (quote.service.ownerId !== userId) throw new ForbiddenException('Only the provider can accept a quote request')
+    if (quote.status === 'ACCEPTED') return presentQuoteForProvider(quote)
+    const updated = await this.prisma.serviceQuote.update({
+      where: { id: quoteId },
+      data: { status: 'ACCEPTED' },
+      select: quoteForProviderSelect
+    })
+    return presentQuoteForProvider(updated)
+  }
+
+  private async requireOwner(id: string, userId: string) {
+    const row = await this.prisma.serviceListing.findUnique({ where: { id }, select: { ownerId: true, deletedAt: true } })
+    if (!row || row.deletedAt) throw new NotFoundException('Service not found')
+    if (row.ownerId !== userId) throw new ForbiddenException('You can only change your own service')
+  }
+
+  private async withRatings<T extends { owner: { id: string } }>(rows: T[]): Promise<Array<T & PublicRating>> {
+    const summaries = await ratingsForOwners(this.prisma, rows.map(row => row.owner.id))
+    return rows.map(row => ({ ...row, ...publicRating(summaries, row.owner.id) }))
+  }
+}
+
+function serviceRadiusExtra(query: ListServicesQuery): Prisma.Sql {
+  const parts: Prisma.Sql[] = [Prisma.sql`row.status = 'PUBLISHED'`]
+  if (query.category) parts.push(Prisma.sql`row.category = ${query.category}`)
+  const search = query.query?.trim()
+  if (search) {
+    parts.push(Prisma.sql`(
+      ${ilikeContains('row.title', search)}
+      OR ${ilikeContains('row."businessName"', search)}
+      OR ${ilikeContains('row.description', search)}
+    )`)
+  }
+  return Prisma.join(parts, ' AND ')
+}

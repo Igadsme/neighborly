@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import {
   ListingCard,
+  SectionHeader,
   Badge,
   Button,
   Icon,
@@ -9,55 +10,33 @@ import {
 } from "../components/ui"
 import type { Listing } from "../data"
 import { api, ApiError } from "../api/client"
-import type { ApiFavorite, ApiSavedSearch } from "../api/types"
-import { mapApiListing } from "../api/listing-mapper"
+import type { ApiSavedSearch } from "../api/types"
+import { listingFromApi } from "../lib/view"
 
 type Page = "explore" | "listing"
 
 interface SavedItemsProps {
-  onNavigate: (p: Page, entityId?: string) => void
-  onRunSavedSearch: (search: ApiSavedSearch) => void
+  onNavigate: (p: Page, id?: string) => void
 }
 
-export default function SavedItems({
-  onNavigate,
-  onRunSavedSearch,
-}: SavedItemsProps) {
+const collections = [{ id: "all", label: "All saved" }]
+
+export default function SavedItems({ onNavigate }: SavedItemsProps) {
+  const [activeCollection, setActiveCollection] = useState("all")
   const [activeTab, setActiveTab] = useState("Saved Listings")
+  const [comparingIds, setComparingIds] = useState<string[]>([])
+  const [compareOpen, setCompareOpen] = useState(false)
   const [savedListings, setSavedListings] = useState<Listing[]>([])
   const [savedSearches, setSavedSearches] = useState<ApiSavedSearch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [retryToken, setRetryToken] = useState(0)
-  const [busySearchId, setBusySearchId] = useState("")
-
-  async function removeSavedSearch(search: ApiSavedSearch) {
-    setBusySearchId(search.id)
-    setError("")
-    try {
-      await api.listings.deleteSavedSearch(search.id)
-      setSavedSearches((current) =>
-        current.filter((item) => item.id !== search.id),
-      )
-    } catch (cause: unknown) {
-      setError(
-        cause instanceof ApiError
-          ? cause.message
-          : "Saved search could not be removed.",
-      )
-    } finally {
-      setBusySearchId("")
-    }
-  }
 
   useEffect(() => {
     let active = true
-    setLoading(true)
-    setError("")
     Promise.all([api.listings.favorites(), api.listings.savedSearches()])
       .then(([favorites, searches]) => {
         if (!active) return
-        setSavedListings(favorites.map((favorite) => mapApiListing(favorite.listing, true)))
+        setSavedListings(favorites.map((favorite) => listingFromApi(favorite.listing, true)))
         setSavedSearches(searches)
       })
       .catch((cause: unknown) => {
@@ -72,7 +51,17 @@ export default function SavedItems({
     return () => {
       active = false
     }
-  }, [retryToken])
+  }, [])
+
+  const toggleCompare = (id: string) => {
+    setComparingIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((i) => i !== id)
+        : prev.length < 3
+          ? [...prev, id]
+          : prev,
+    )
+  }
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-24 md:pb-0">
@@ -83,7 +72,7 @@ export default function SavedItems({
             <h1 className="font-display text-3xl font-semibold text-[#1B2A4A]">
               Saved items
             </h1>
-            <p className="text-[#8A9AB5] mt-1">
+            <p className="text-[#5C6E8A] mt-1">
               {savedListings.length} items saved · {savedSearches.length} saved
               searches
             </p>
@@ -110,16 +99,121 @@ export default function SavedItems({
         {/* Saved Listings tab */}
         {activeTab === "Saved Listings" && (
           <>
+            {/* Collections */}
+            <div
+              className="flex gap-2 mb-6 scroll-x-focusable scrollbar-hide pb-1"
+              tabIndex={0}
+              role="group"
+              aria-label="Saved categories"
+            >
+              {collections.map((col) => (
+                <button
+                  key={col.id}
+                  onClick={() => setActiveCollection(col.id)}
+                  className={`flex items-center gap-2 flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium border transition-all ${
+                    activeCollection === col.id
+                      ? "bg-[#2D6A4F] text-white border-[#2D6A4F]"
+                      : "bg-white text-[#5C6E8A] border-[#E8E6DF] hover:border-[#2D6A4F]/30"
+                  }`}
+                >
+                  {col.label}
+                  <span
+                    className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+                      activeCollection === col.id
+                        ? "bg-white/20 text-white"
+                        : "bg-[#F5F4EF] text-[#5C6E8A]"
+                    }`}
+                  >
+                    {savedListings.length}
+                  </span>
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled
+                className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-dashed border-[#E8E6DF] text-[#5C6E8A] bg-white cursor-not-allowed"
+              >
+                <Icon name="plus" size={12} />
+                New collection · Coming soon
+              </button>
+            </div>
+
+            {/* Compare bar */}
+            {comparingIds.length > 0 && (
+              <div className="bg-[#1B2A4A] text-white rounded-2xl p-4 mb-6 flex items-center justify-between animate-fade-in">
+                <div>
+                  <p className="font-semibold text-sm">
+                    Comparing {comparingIds.length} item
+                    {comparingIds.length > 1 ? "s" : ""}
+                  </p>
+                  <p className="text-xs text-white/60">
+                    Select up to 3 items to compare side-by-side
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setComparingIds([])
+                      setCompareOpen(false)
+                    }}
+                    className="text-xs text-white/60 hover:text-white"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCompareOpen(true)}
+                    className="bg-[#2D6A4F] text-white text-xs font-semibold px-4 py-2 rounded-xl hover:bg-[#40916C] transition-colors"
+                  >
+                    Compare →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {compareOpen && comparingIds.length > 0 && (
+              <section
+                aria-label="Saved listing comparison"
+                className="mb-6 overflow-x-auto rounded-2xl border border-[#E8E6DF] bg-white"
+              >
+                <table className="w-full text-sm text-left">
+                  <caption className="px-4 py-3 text-left font-semibold text-[#1B2A4A]">
+                    Saved listing comparison
+                  </caption>
+                  <thead className="text-xs uppercase tracking-wide text-[#5C6E8A]">
+                    <tr>
+                      <th className="px-4 py-2 font-semibold">Title</th>
+                      <th className="px-4 py-2 font-semibold">Price</th>
+                      <th className="px-4 py-2 font-semibold">Condition</th>
+                      <th className="px-4 py-2 font-semibold">Neighborhood</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {savedListings
+                      .filter((listing) => comparingIds.includes(listing.id))
+                      .map((listing) => (
+                        <tr key={listing.id} className="border-t border-[#F5F4EF]">
+                          <td className="px-4 py-3 text-[#1B2A4A]">{listing.title}</td>
+                          <td className="px-4 py-3 text-[#1B2A4A]">
+                            {listing.isFree || listing.price == null ? "Free" : `$${listing.price.toLocaleString()}`}
+                          </td>
+                          <td className="px-4 py-3 text-[#5C6E8A]">{listing.condition || "—"}</td>
+                          <td className="px-4 py-3 text-[#5C6E8A]">{listing.neighborhood}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
+
             {loading ? (
-              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
                 Loading saved items…
               </div>
             ) : error ? (
-              <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-[#E8694A]/20 bg-[#FFF5F2] p-5 text-sm text-[#C4512D]">
-                <span>{error}</span>
-                <button onClick={() => setRetryToken((token) => token + 1)} className="font-semibold underline">
-                  Retry
-                </button>
+              <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D]">
+                {error}
               </div>
             ) : savedListings.length > 0 ? (
               <div className="listing-grid">
@@ -128,27 +222,36 @@ export default function SavedItems({
                     <ListingCard
                       listing={listing}
                       onClick={() => onNavigate("listing", listing.id)}
-                      onSavedChange={async (saved) => {
-                        try {
-                          const result = await api.listings.toggleFavorite(
-                            listing.id,
-                          )
-                          if (result.saved !== saved)
-                            throw new Error("Favorite state mismatch")
-                          if (!saved)
-                            setSavedListings((items) =>
-                              items.filter((item) => item.id !== listing.id),
+                      onSavedChange={(saved) => {
+                        api.listings
+                          .toggleFavorite(listing.id)
+                          .then(() => {
+                            if (!saved)
+                              setSavedListings((items) =>
+                                items.filter((item) => item.id !== listing.id),
+                              )
+                          })
+                          .catch((cause: unknown) => {
+                            setError(
+                              cause instanceof ApiError
+                                ? cause.message
+                                : "Could not update this saved item.",
                             )
-                        } catch (cause: unknown) {
-                          setError(
-                            cause instanceof ApiError
-                              ? cause.message
-                              : "Could not update this saved item.",
-                          )
-                          throw cause
-                        }
+                          })
                       }}
                     />
+                    <button
+                      onClick={() => toggleCompare(listing.id)}
+                      className={`absolute top-2 left-2 text-xs font-semibold px-2 py-1 rounded-lg border transition-all ${
+                        comparingIds.includes(listing.id)
+                          ? "bg-[#1B2A4A] text-white border-[#1B2A4A]"
+                          : "bg-white/90 text-[#5C6E8A] border-[#E8E6DF] hover:border-[#1B2A4A]"
+                      }`}
+                    >
+                      {comparingIds.includes(listing.id)
+                        ? "✓ Compare"
+                        : "Compare"}
+                    </button>
                   </div>
                 ))}
               </div>
@@ -168,20 +271,13 @@ export default function SavedItems({
         {activeTab === "Saved Searches" && (
           <div className="space-y-3">
             {loading ? (
-              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#8A9AB5]">
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
                 Loading saved searches…
-              </div>
-            ) : error ? (
-              <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-[#E8694A]/20 bg-[#FFF5F2] p-5 text-sm text-[#C4512D]">
-                <span>{error}</span>
-                <button onClick={() => setRetryToken((token) => token + 1)} className="font-semibold underline">
-                  Retry
-                </button>
               </div>
             ) : savedSearches.length === 0 ? (
               <EmptyState
                 title="No saved searches yet"
-                description="Save search metadata from Explore. New-match notifications are not available yet."
+                description="Save a search from Explore to receive matching listings."
                 action={() => onNavigate("explore")}
                 actionLabel="Browse listings"
                 icon={<Icon name="search" size={24} />}
@@ -189,7 +285,7 @@ export default function SavedItems({
             ) : (
               savedSearches.map((search) => (
                 <div
-                  key={search.id}
+                  key={search.query}
                   className="bg-white rounded-2xl border border-[#E8E6DF] p-5"
                 >
                   <div className="flex items-start justify-between gap-4 mb-3">
@@ -198,18 +294,18 @@ export default function SavedItems({
                         <Icon
                           name="search"
                           size={13}
-                          className="text-[#8A9AB5]"
+                          className="text-[#5C6E8A]"
                         />
                         <p className="font-semibold text-sm text-[#1B2A4A]">
-                          "{search.query}"
+                          &quot;{search.query}&quot;
                         </p>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-[#8A9AB5]">
+                      <div className="flex items-center gap-3 text-xs text-[#5C6E8A]">
                         <span className="flex items-center gap-1">
                           <Icon name="mapPin" size={10} />
-                          {typeof search.filters.category === "string"
-                            ? search.filters.category
-                            : "All categories"}
+                          {typeof search.filters.neighborhood === "string"
+                            ? search.filters.neighborhood
+                            : "All neighborhoods"}
                         </span>
                         <span>
                           Saved{" "}
@@ -218,25 +314,19 @@ export default function SavedItems({
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <Badge variant="green" size="sm">Saved search</Badge>
+                      <Badge variant="green" size="sm">
+                        <Icon name="bell" size={9} /> Saved
+                      </Badge>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="primary" size="xs" onClick={() => onRunSavedSearch(search)}>
-                      Restore search
-                    </Button>
+                  <div className="flex gap-2">
                     <Button
-                      variant="outline"
+                      variant="primary"
                       size="xs"
-                      loading={busySearchId === search.id}
-                      disabled={Boolean(busySearchId)}
-                      onClick={() => void removeSavedSearch(search)}
+                      onClick={() => onNavigate("explore")}
                     >
-                      Remove
+                      View results →
                     </Button>
-                    <span className="self-center text-xs text-[#8A9AB5]">
-                      New-match alerts are not available.
-                    </span>
                   </div>
                 </div>
               ))
@@ -258,16 +348,29 @@ export default function SavedItems({
         {/* Price Alerts tab */}
         {activeTab === "Price Alerts" && (
           <div>
-            <div className="rounded-2xl border border-[#E8E6DF] bg-white p-8">
-              <h2 className="font-display text-xl font-semibold text-[#1B2A4A]">
-                Price and match alerts are unavailable
-              </h2>
-              <p className="mt-2 text-sm text-[#5C6E8A]">
-                Neighborly does not yet record price history or deliver saved-search notifications. Saved listings remain available in the Saved Listings tab.
-              </p>
-              <Button variant="soft" size="xs" className="mt-4" onClick={() => setActiveTab("Saved Listings")}>
-                View saved listings
-              </Button>
+            <SectionHeader
+              title="Price drops"
+              subtitle="Price changes are not tracked yet"
+            />
+            <div className="space-y-4">
+              <EmptyState
+                title="No price alerts yet"
+                description="Price alerts will appear when a saved listing changes price."
+                action={() => setActiveTab("Saved Listings")}
+                actionLabel="View saved listings"
+                icon={<Icon name="bell" size={24} />}
+              />
+            </div>
+
+            {/* New listings alerts */}
+            <SectionHeader
+              title="New listing alerts"
+              subtitle="New items matching your saved searches"
+              className="mt-8"
+            />
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 text-sm text-[#5C6E8A]">
+              New-match alerts will appear here once saved-search notifications
+              are enabled.
             </div>
           </div>
         )}

@@ -1,21 +1,339 @@
-import MarketplaceCategory from "./MarketplaceCategory"
+import { useEffect, useState } from 'react'
+import { Badge, Avatar, StarRating, Button, Icon, LoadState, InlineAlert } from '../components/ui'
+import { hasDisplayableRating } from '../lib/ratings'
+import { api, readStatus } from '../api/client'
+import { mediaSrc } from '../lib/view'
+import { housingCard, type HousingCard } from '../lib/verticals'
 
-const categoryTerms = ["housing", "rental", "room"]
+type Page = 'map' | 'messages'
 
 interface HousingProps {
-  onNavigate: (
-    page: "listing" | "create",
-    listingId?: string,
-  ) => void
+  onNavigate: (p: Page, id?: string) => void
 }
 
 export default function Housing({ onNavigate }: HousingProps) {
+  const [listingType, setListingType] = useState<'rent' | 'sale'>('rent')
+  const [type, setType] = useState('Any')
+  const [minBeds, setMinBeds] = useState(0)
+  const [maxPrice, setMaxPrice] = useState('')
+  const [pets, setPets] = useState(false)
+  const [furnished, setFurnished] = useState(false)
+  const [utilitiesIncluded, setUtilitiesIncluded] = useState(false)
+  const [sort, setSort] = useState('newest')
+  const [selected, setSelected] = useState<string | null>(null)
+  const [searchNonce, setSearchNonce] = useState(0)
+  const [rows, setRows] = useState<HousingCard[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [actionNote, setActionNote] = useState('')
+  const [messagingId, setMessagingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError('')
+    const max = Number(maxPrice)
+    api.housing
+      .list({
+        listingType,
+        type: type === 'Any' ? undefined : type,
+        minBeds: minBeds > 0 ? minBeds : undefined,
+        maxPriceCents: maxPrice && Number.isFinite(max) ? Math.round(max * 100) : undefined,
+        pets: pets || undefined,
+        furnished: furnished || undefined,
+        utilitiesIncluded: utilitiesIncluded || undefined,
+        sort: sort as 'newest' | 'price_asc' | 'price_desc' | 'beds',
+        limit: 100,
+      })
+      .then((list) => {
+        if (active) setRows(list.map(housingCard))
+      })
+      .catch((cause: unknown) => {
+        if (active) setError(readStatus(cause, 'Homes could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [listingType, type, minBeds, maxPrice, pets, furnished, utilitiesIncluded, sort, searchNonce])
+
+  const messageOwner = async (property: HousingCard) => {
+    if (!property.ownerId) {
+      setActionNote('This listing has no contact yet.')
+      return
+    }
+    setMessagingId(property.id)
+    setActionNote('')
+    try {
+      const result = await api.conversations.create({
+        participantId: property.ownerId,
+        body: `Hi, I'm interested in "${property.title}".`,
+      })
+      onNavigate('messages', result.conversation.id)
+    } catch (cause: unknown) {
+      setActionNote(readStatus(cause, 'Unable to message this neighbor.'))
+    } finally {
+      setMessagingId(null)
+    }
+  }
+
   return (
-    <MarketplaceCategory
-      title="Housing"
-      description="Browse persisted housing-category marketplace listings. Booking, applications, and housing-specific verification are not available."
-      categoryTerms={categoryTerms}
-      onNavigate={onNavigate}
-    />
+    <div className="min-h-screen bg-[#FAFAF7] pb-24 md:pb-0">
+      {/* Housing hero */}
+      <div className="relative h-52 md:h-64 overflow-hidden">
+        <img
+          src="https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=1400&h=500&fit=crop&auto=format"
+          alt="Atlanta neighborhood"
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#1B2A4A]/60 to-[#1B2A4A]/20" />
+        <div className="absolute inset-0 flex items-center justify-center text-center">
+          <div>
+            <h1 className="font-display text-4xl md:text-5xl font-semibold text-white mb-2">Find your next home</h1>
+            <p className="text-white/80">Apartments, rooms, houses, and more in Atlanta</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6">
+
+        {/* Search + filters */}
+        <div className="bg-white rounded-3xl border border-[#E8E6DF] shadow-md p-5 mb-8 -mt-12 relative z-10">
+          {/* Rent / Sale toggle */}
+          <div className="flex gap-1 bg-[#F5F4EF] p-1 rounded-xl mb-4 w-fit">
+            <button
+              onClick={() => setListingType('rent')}
+              className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${listingType === 'rent' ? 'bg-white text-[#1B2A4A] shadow-sm' : 'text-[#5C6E8A]'}`}
+            >
+              For Rent
+            </button>
+            <button
+              onClick={() => setListingType('sale')}
+              className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${listingType === 'sale' ? 'bg-white text-[#1B2A4A] shadow-sm' : 'text-[#5C6E8A]'}`}
+            >
+              For Sale
+            </button>
+          </div>
+
+          {/* Filters row */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {/* Type */}
+            <select
+              aria-label="Home type"
+              value={type}
+              onChange={e => setType(e.target.value)}
+              className="h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none"
+            >
+              {['Any', 'Apartment', 'House', 'Room', 'Studio', 'Condo', 'Sublet'].map(t => <option key={t}>{t}</option>)}
+            </select>
+
+            {/* Beds */}
+            <select
+              aria-label="Minimum bedrooms"
+              value={minBeds}
+              onChange={e => setMinBeds(parseInt(e.target.value))}
+              className="h-11 px-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none"
+            >
+              <option value={0}>Any beds</option>
+              <option value={1}>1+ bed</option>
+              <option value={2}>2+ beds</option>
+              <option value={3}>3+ beds</option>
+            </select>
+
+            {/* Max price */}
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5C6E8A] text-sm">$</span>
+              <input
+                type="number"
+                placeholder={listingType === 'rent' ? 'Max/mo' : 'Max price'}
+                value={maxPrice}
+                onChange={e => setMaxPrice(e.target.value)}
+                className="w-full h-11 pl-7 pr-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F]"
+              />
+            </div>
+
+            {/* Toggles */}
+            <label className="flex items-center gap-2 px-3 h-11 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl cursor-pointer">
+              <input type="checkbox" checked={pets} onChange={e => setPets(e.target.checked)} className="accent-[#2D6A4F]" />
+              <span className="text-sm text-[#1B2A4A]">Pet-friendly</span>
+            </label>
+
+            <Button variant="primary" size="md" fullWidth onClick={() => setSearchNonce(n => n + 1)}>Search homes</Button>
+          </div>
+
+          {/* Additional filters */}
+          <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-[#F5F4EF]">
+            <label className="flex items-center gap-2 text-sm text-[#5C6E8A] cursor-pointer">
+              <input type="checkbox" checked={furnished} onChange={e => setFurnished(e.target.checked)} className="accent-[#2D6A4F]" />
+              Furnished
+            </label>
+            <label className="flex items-center gap-2 text-sm text-[#5C6E8A]">
+              <input type="checkbox" disabled className="accent-[#2D6A4F]" />
+              Verified landlord · Coming soon
+            </label>
+            <label className="flex items-center gap-2 text-sm text-[#5C6E8A] cursor-pointer">
+              <input type="checkbox" checked={utilitiesIncluded} onChange={e => setUtilitiesIncluded(e.target.checked)} className="accent-[#2D6A4F]" />
+              Utilities included
+            </label>
+            <div className="ml-auto flex items-center gap-2">
+              <button onClick={() => onNavigate('map')} className="flex items-center gap-1.5 text-xs font-semibold text-[#4A7FB5] hover:underline">
+                <Icon name="map" size={13} />
+                Map view
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Results header */}
+        <div className="flex items-center justify-between mb-5">
+          <p className="text-sm text-[#5C6E8A]">
+            {loading ? (
+              'Loading homes…'
+            ) : error ? (
+              'Homes could not be loaded.'
+            ) : (
+              <>
+                <span className="font-bold text-[#1B2A4A]">{rows.length}</span> homes {listingType === 'rent' ? 'for rent' : 'for sale'} in Atlanta
+              </>
+            )}
+          </p>
+          <select aria-label="Sort homes" value={sort} onChange={e => setSort(e.target.value)} className="h-9 px-3 bg-white border border-[#E8E6DF] rounded-xl text-xs font-medium text-[#1B2A4A] focus:outline-none">
+            <option value="newest">Newest first</option>
+            <option value="price_asc">Price: Low to High</option>
+            <option value="price_desc">Price: High to Low</option>
+            <option value="beds">Most bedrooms</option>
+          </select>
+        </div>
+
+        <InlineAlert message={error || actionNote} />
+
+        {loading ? (
+          <LoadState loading loadingLabel="Loading homes…" />
+        ) : error ? null : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {rows.map(property => {
+              const photo = mediaSrc(property.images[0], 'w=600&h=400&fit=crop&auto=format')
+              return (
+                <div
+                  key={property.id}
+                  onClick={() => setSelected(selected === property.id ? null : property.id)}
+                  className="bg-white rounded-3xl border border-[#E8E6DF] overflow-hidden cursor-pointer card-hover"
+                >
+                  {/* Image */}
+                  <div className="relative h-52 bg-[#F5F4EF] overflow-hidden">
+                    {photo && (
+                      <img
+                        src={photo}
+                        alt={property.title}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
+                    {/* Badges */}
+                    <div className="absolute top-3 left-3 flex gap-1.5">
+                      <Badge variant={property.listingType === 'rent' ? 'blue' : 'green'}>
+                        {property.listingType === 'rent' ? 'For Rent' : 'For Sale'}
+                      </Badge>
+                      {property.verified && <Badge variant="green">✓ Verified</Badge>}
+                    </div>
+                    {/* Save */}
+                    {/* Available */}
+                    <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm text-xs font-semibold text-[#2D6A4F] px-2.5 py-1 rounded-full">
+                      Available {property.available}
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-4">
+                    {/* Price + type */}
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <h3 className="font-semibold text-[#1B2A4A] text-sm leading-snug line-clamp-2 flex-1">{property.title}</h3>
+                      <div className="text-right flex-shrink-0">
+                        <p className="font-bold text-[#1B2A4A]">
+                          ${property.price.toLocaleString()}
+                          {property.priceUnit && <span className="text-xs font-normal text-[#5C6E8A]">{property.priceUnit}</span>}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Location */}
+                    <p className="text-xs text-[#5C6E8A] mb-3 flex items-center gap-1">
+                      <Icon name="mapPin" size={10} className="text-[#B94C2A]" />
+                      {property.neighborhood} · {property.distance}
+                    </p>
+
+                    {/* Stats */}
+                    <div className="flex items-center gap-3 text-sm text-[#5C6E8A] mb-3">
+                      {property.beds > 0 && <span className="flex items-center gap-1 font-medium"><span className="text-[#1B2A4A]">{property.beds}</span> bd</span>}
+                      {property.beds === 0 && <span className="font-medium text-[#1B2A4A]">Studio</span>}
+                      <span className="text-[#5C6E8A]">·</span>
+                      <span className="flex items-center gap-1 font-medium"><span className="text-[#1B2A4A]">{property.baths}</span> ba</span>
+                      {property.sqft > 0 && (
+                        <>
+                          <span className="text-[#5C6E8A]">·</span>
+                          <span className="flex items-center gap-1 font-medium"><span className="text-[#1B2A4A]">{property.sqft.toLocaleString()}</span> sqft</span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Amenities */}
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {property.pets && <Badge variant="green" size="sm">🐾 Pet OK</Badge>}
+                      {property.furnished && <Badge variant="blue" size="sm">Furnished</Badge>}
+                      {property.utilities !== 'N/A' && <Badge variant="gray" size="sm">💡 {property.utilities}</Badge>}
+                    </div>
+
+                    {/* Lease */}
+                    {property.lease !== 'N/A' && (
+                      <p className="text-xs text-[#5C6E8A] mb-3">
+                        📋 Lease: {property.lease}
+                      </p>
+                    )}
+
+                    {/* Seller */}
+                    <div className="flex items-center justify-between pt-3 border-t border-[#F5F4EF]">
+                      <div className="flex items-center gap-2">
+                        <Avatar src={property.seller.avatar} name={property.seller.name} size="xs" verified={property.seller.verified} />
+                        <div>
+                          <p className="text-xs font-medium text-[#1B2A4A]">{property.seller.name}</p>
+                          {hasDisplayableRating(property.seller.rating, property.seller.reviews) && (
+                            <StarRating rating={property.seller.rating} count={property.seller.reviews ?? undefined} size="xs" />
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button disabled={messagingId === property.id} onClick={e => { e.stopPropagation(); void messageOwner(property) }} className="text-xs font-semibold text-[#2D6A4F] bg-[#F0FBF3] px-3 py-1.5 rounded-lg hover:bg-[#D8F3DC] transition-colors disabled:opacity-40">{messagingId === property.id ? 'Sending...' : 'Message'}</button>
+                        <button type="button" disabled className="text-xs font-semibold text-[#5C6E8A] bg-[#F5F4EF] px-3 py-1.5 rounded-lg cursor-not-allowed">Tour · Coming soon</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {!loading && !error && rows.length === 0 && (
+          <div className="py-20 text-center">
+            <div className="text-5xl mb-4">🏠</div>
+            <h3 className="font-display text-xl font-semibold text-[#1B2A4A] mb-2">No homes match your filters</h3>
+            <p className="text-[#5C6E8A]">Try adjusting your search criteria.</p>
+          </div>
+        )}
+
+        {/* Commute calculator teaser */}
+        <div className="mt-8 bg-gradient-to-r from-[#DDEEFF] to-[#F0FBF3] border border-[#90BEE5]/30 rounded-2xl p-5">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">🚇</span>
+            <div className="flex-1">
+              <p className="font-semibold text-[#1B2A4A]">Commute time filter · Coming soon</p>
+              <p className="text-sm text-[#5C6E8A]">Filtering homes by commute time is not available yet.</p>
+            </div>
+            <Button variant="soft" size="sm" disabled>Coming soon</Button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

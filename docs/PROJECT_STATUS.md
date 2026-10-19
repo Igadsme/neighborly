@@ -1,65 +1,118 @@
-# Project status
+# Project Status
 
-Neighborly is an early marketplace foundation with several real, persisted flows. It is not a complete MVP or production-ready application.
+**19 Oct 2026 — `main` at `12540f8`.** Milestones 1–12 are in this tree. BL-001 through BL-010 are merged (PRs #29, #30, and #31). Screens are History API paths in `src/lib/paths.ts`, not only in-memory page ids. The app is not launched. The dated notes below are the earlier board; where they disagree with this paragraph, this paragraph is the current contract. Progress after the takeover audit is `docs/IMPLEMENTATION_PROGRESS.md`.
 
-## Connected frontend flows
+**12 Oct 2026 — Milestone 7 (Neighborly Borrow & Lending).** Borrowable items on the existing listing model, an explicit borrowing lifecycle, server-enforced double-booking prevention via a partial GiST exclusion constraint, two-sided pickup and return confirmation, extensions, an idempotent overdue sweep, condition reports, and a dispute workflow with private evidence. `docs/MILESTONE_7_NEIGHBORLY_BORROW.md`.
 
-- Session restore, login, registration, onboarding persistence, and logout use the centralized API client.
-- Onboarding now requires manual neighborhood selection rather than pretending browser location was detected; its completion view uses the account's entered name and saved preferences, not fabricated user/listing counts. Message notification preference controls in-app message notifications; push/email delivery is not implemented.
-- HomeFeed marketplace cards, Explore search and supported filters, and listing details use API listing records. HomeFeed and Explore initialize favorite state from persisted favorites.
-- Dashboard now derives account summary, published listings, incoming request offers, exchanges, and conversations from APIs; offer accept/decline actions persist server-side.
-- Profile now shows the signed-in user's persisted identity, published listings, completed exchange count, and received review records. It no longer displays prototype verification, trust scores, fake ratings, or simulated follow/report actions.
-- Categories now loads the actual category catalog and newest published listings; choosing a category opens Explore with that category selected instead of inventing category counts and trending items.
-- The signed-out landing page now previews public API listings/categories and no longer claims fabricated local usage counts, testimonials, verification badges, or trust outcomes. Unpublished legal docs are disclosed; this build should not collect sensitive production user data.
-- Housing, Services, and Jobs now query real published marketplace listings in matching persisted categories, with search, save, details, and create-listing navigation. Housing applications, bookings, job applications, and provider/employer modules remain unavailable.
-- Legacy listing routes without a persisted listing ID and the map page now show explicit unavailable states instead of prototype listing details, fabricated pins, or fabricated safe-meetup locations.
-- Listing creation loads real categories, saves metadata as a private draft, uploads up to five validated images with signed S3-compatible forms, sets cover/order, and publishes only after successful uploads. Draft management after leaving the creation flow is not implemented.
-- Favorites and saved searches load from and persist to the API; saved searches can restore their query/filters and be deleted by their owner, while favorite UI rolls back on failed writes.
-- Need requests can be created and discovered. Request owners can accept or reject offers.
-- Accepting an offer atomically accepts the offer, closes the request, creates a transaction, and creates a private conversation.
-- Transactions can be scheduled, advanced through valid states, completed, and reviewed.
-- Messages use durable REST history/send/read endpoints and authenticated Socket.IO events, with polling when disconnected.
-- Unavailable HomeFeed sections are labeled instead of displaying seeded community, event, provider, and neighbor fixtures.
+**12 Oct 2026 — Milestone 6 (messaging, realtime & notifications).** Durable outbox consumer, persisted notifications with enforced preferences, saved-search alerts, realtime unread counts and read receipts over the existing Socket.IO gateway, and the notification center, preferences, and saved-search editing UI. Completes the saved-search deferral from Milestone 4. `docs/MILESTONE_6_MESSAGING_NOTIFICATIONS.md`.
 
-## Backend endpoints implemented
+**12 Oct 2026 — Milestone 5 (I need request & matching engine).** Request lifecycle with a declared state machine, server-side request discovery, a deterministic explainable matching engine, expanded offer management, atomic acceptance that also fulfils the request, and the typed domain-event contract plus transactional outbox that Milestone 6 consumes. `docs/MILESTONE_5_REQUEST_MATCHING.md`.
 
-- `GET /api/v1/health`, `GET /api/v1/ready`
-- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`
-- `GET /api/v1/users/me`, `PATCH /api/v1/users/me/onboarding`
-- `GET /api/v1/categories`
-- Listings: `GET /listings`, `GET /listings/:id`, `POST /listings`, `PATCH /listings/:id`, `DELETE /listings/:id`, `POST /listings/:id/favorite`, `GET /listings/favorites`, `GET|POST /listings/saved-searches`, `DELETE /listings/saved-searches/:id`
-- Listing media: `POST /listings/:id/publish`, `POST /listings/:id/images/upload`, `POST /listings/:id/images/complete`, `POST /listings/:id/images/reorder`, `DELETE /listings/:id/images/:imageId`
-- Requests: `GET|POST /requests`, `POST /requests/:id/offers`, `POST /requests/offers/:id/counter`, `PATCH /requests/offers/:id/accept`, `PATCH /requests/offers/:id/reject`
-- Conversations: `GET|POST /conversations`, `GET|POST /conversations/:id/messages`, `PATCH /conversations/:id/read`
-- Notifications: `GET /notifications`, `GET /notifications/unread-count`, `PATCH /notifications/:id/read`, `PATCH /notifications/read-all`
-- Transactions: `GET /transactions`, `PATCH /transactions/:id/status`, `POST /transactions/:id/appointments`, `POST /transactions/:id/reviews`
-- Swagger UI: `/docs`
+**12 Oct 2026 — Milestone 3 (authentication & user accounts).** Registration hardening, email verification, password recovery, refresh-token rotation with reuse detection, session management, account settings, email change, anonymizing account deletion, and suspension enforcement across REST and realtime landed on `milestone3-authentication-user-accounts`. Requirements, evidence, and verification runs: `docs/MILESTONE_3_AUTHENTICATION.md`. Email delivery has **no provider configured** (`docs/EMAIL_DELIVERY.md`). Listing image upload is mounted; a separate avatar upload is not.
 
-The API uses PostgreSQL via Prisma. Offer acceptance and transaction transitions use database-side guards/transactions. Public listing, request, and conversation responses use selected fields to avoid returning password hashes or exact coordinates.
+**12 Oct 2026 — Milestone 2 (database, security, data integrity).** Atomic offer acceptance, transaction concurrency safety, request privacy, a guarded migration adding unique `Transaction.offerId`, a production category bootstrap, auth/WebSocket hardening, and isolated PostgreSQL integration tests landed on `milestone2-database-security-integrity`. Requirements, evidence, and verification runs: `docs/MILESTONE_2_DATABASE_SECURITY_INTEGRITY.md`.
 
-## Still incomplete
+**23 Sep 2026 — Phase 7 prep.** Production is not launched and not deployed. The preparation package is `docs/PHASE_7_PROD_PREP.md`. Product Owner approval is still required before any deploy or announcement. Staging QA (P0/P1 = 0) is `docs/PHASE_6_STAGING_QA.md`.
 
-- No live database migration or end-to-end workflow has been verified; the Docker daemon probe timed out. Prisma schema validation and generated-client compilation do not prove runtime database behavior.
-- No Playwright suite exists for the critical request-to-review journey. No API/database integration test coverage exists for the new marketplace flow or object-storage uploads.
-- Community clearly reports that posts/events are unavailable rather than rendering seeded discussions or inert interactions. MapDiscovery and the legacy ListingDetail entry show explicit unavailable states. HomeFeed services, events, community, follow, alerts, and map surfaces are explicitly marked unavailable.
-- Listing image upload uses S3-compatible signed POSTs and owner/type/size/signature checks; local MinIO is in Compose. Listing draft management UI after leaving the creation flow, refresh-token rotation, Redis-backed behavior, payment processing, geospatial radius discovery, email/phone verification, push/email notifications, trust metrics, reports/blocks, moderation, and account export/deletion remain unimplemented. Durable in-app notifications cover offer/counteroffer decisions and incoming messages.
-- Explore supports only the filters implemented by the API; verified-only filtering is intentionally disabled because verification data does not exist. The API no longer equates email confirmation with trust verification. Saved-search persistence exists, but matching/price alerts and delivery do not.
-- Existing transaction/request operations need live concurrency, authorization, and migration tests before being relied on in production.
+Neighborly status board. Housing, jobs, services, and community pages call the `/api/v1` routes added in `cfd0db3`. `1f38563` points those pages, plus Home and Dashboard, at the APIs with loading, empty, error, and 401 states. Dashboard and Home no longer render fixture arrays for listings, offers, messages, transactions, reviews, or those verticals. The app is not release-complete. `docs/RELEASE_CHECKLIST.md` Section B records the offer, message, and review wiring that is in this tree. Section E (local `.env`, Compose, migrate, seed, Node 22 on the Mac, signed-in e2e) stays unchecked: Docker Desktop is not installed on the Mac, and that e2e was not run.
 
-## Verification and environment
+The June Sprint 1 notes below are the handoff from `d0dab1c`. Where they disagree with the "What is running today" list, the running list is the current contract.
 
-Verified in this checkout:
+## Source of truth
 
-- `cd app && npx -y -p node@22 -p pnpm@10.34.3 -c 'pnpm exec tsc --noEmit && pnpm build'` (passed with Node 22.23.3 and pnpm 10.34.3)
-- `cd app/backend && npx -y -p node@22 -p pnpm@10.34.3 -c 'export DATABASE_URL="postgresql://neighborly:neighborly@localhost:5432/neighborly" && pnpm exec prisma validate && pnpm exec prisma generate && pnpm exec tsc --noEmit && pnpm test && pnpm build'` (schema, types, 6 suites/21 tests, build passed)
-- `cd app && docker compose --env-file backend/.env.example config --quiet` (Compose configuration parsed; services were not started)
+- **Visual source of truth:** the Figma-generated React screens under `src/pages` and `src/components`. Layout, color, type, and component structure stay as generated.
+- **App shell:** Vite + React 19 + Tailwind CSS v4. `src/App.tsx` still switches screens by page id, and each addressable screen has a History API path (`src/lib/paths.ts`) that survives refresh. Unknown paths render the 404 screen.
+- **Backend:** NestJS modular monolith under `backend/`, Prisma/PostgreSQL, global prefix `/api/v1`, Swagger at `/docs`.
+- **June Sprint 1 write scope was** `docs/` only. Sprint 2 added `backend/` persistence for housing, jobs, services, and community. The wiring pass points the existing Figma pages at those routes. It does not add page ids or a new visual design.
 
-Backend lint was attempted with `cd app/backend && npx pnpm@9 lint` but is blocked because the configured `eslint` executable is not installed or declared. Docker-backed database/migration, MinIO upload, and Playwright end-to-end tests were not run; a direct Docker daemon probe timed out.
+v1 product docs do not add OpenAI, embeddings, or semantic search. Copy already painted into the Figma screens (the Create Listing "AI Review" step, the landing "Scam Detection" line) stays on screen and is not a v1 capability.
 
-The host reports `darwin arm64` (Apple Silicon), Node `20.16.0`, and pnpm `9.15.9`; `.mise.toml` pins Node 22 and pnpm 10.34.3. Frontend/backend checks passed using temporary Node 22.23.3/pnpm 10.34.3. The Prisma validation used a syntactically valid local URL and did not connect to a database. No local `.env` is present.
+## Sprint 1 outcome
 
-The working local API requires `DATABASE_URL`, `JWT_SECRET`, and `CORS_ORIGIN`; image upload also requires configured S3 endpoint, bucket, access/secret keys, and public image URL. Docker/Postgres/Redis/MinIO, payment, and map services have not been run or externally verified. The latest frontend JavaScript bundle is about 414 kB minified.
+June's Sprint 1 deliverable is the orchestration and UX-state docs Nova needs to wire the request-first flow onto screens that already exist.
 
-## Readiness
+| Doc | Role |
+| --- | --- |
+| `docs/PROJECT_STATUS.md` | This board |
+| `docs/DECISIONS.md` | Locked choices for Nova |
+| `docs/INTEGRATION_LOG.md` | What is actually wired today |
+| `docs/RELEASE_CHECKLIST.md` | What must be true before a request-flow release |
+| `docs/API_SPEC.md` | Implemented routes vs target contract |
+| `docs/DATABASE_DESIGN.md` | Prisma models that exist vs target entities |
+| `docs/FRONTEND_BACKEND_MAP.md` | Every page id, fixture vs API |
+| `docs/UX_REQUEST_FLOW_STATES.md` | Request composer, offer compare, and review prompt states |
 
-The app is not yet safe to call a complete MVP or production-ready. The connected slices are suitable for continued local development, but the critical database-backed journey, live storage validation, end-to-end tests, operational services, and remaining major page integrations are outstanding.
+## What is running today
+
+Implemented and reachable in code:
+
+- Auth: `POST /api/v1/auth/register`, `POST /api/v1/auth/login` (Argon2). The access token is a bearer JWT. Refresh tokens are httpOnly cookies.
+- Session read: `GET /api/v1/users/me`. Onboarding write: `PATCH /api/v1/users/me/onboarding`.
+- Categories: `GET /api/v1/categories` (seed list in `backend/prisma/seed.ts`), plus `listingCount` for published listings. The Featured in Atlanta strip loads `GET /api/v1/listings` with `status=PUBLISHED` and `limit=6`.
+- Listings: list, get (drafts hidden), create (`PUBLISHED`), `POST /listings/drafts`, `POST /listings/:id/publish`, owner update, owner archive, favorite toggle, favorites list, saved searches. `ListingStatus.DRAFT` was already in `0001_init`; this pass did not add a migration.
+- Requests: public list and get, authenticated create (always `PUBLISHED`), `GET /requests/offers` (`scope` `received` by default, plus `sent` and `all`), create offer, counter, accept, and reject. Accept creates one conversation and one `ACCEPTED` transaction.
+- Messaging: list conversations, list/send messages, mark read, and `POST /conversations`. Create requires a JWT, rejects a message to yourself, and reuses a conversation whose participants are exactly the caller and the other user. Optional `listingId` is validated (the listing exists, is not a draft or deleted, and the other user is the seller) and is not stored. The first message uses the same write and `publishMessage` path as send. Socket.IO namespace `/realtime` requires a JWT and emits `message.created` after a participant sends. The signed-in nav badge counts unread threads from `GET /conversations` (caller `lastReadAt` compared with the latest message). It is not a notification list. Signed-out, an empty or fully read inbox, and 401 hide the badge.
+- Transactions: list for a participant, status transition through `backend/src/transactions/transaction-state.ts`.
+- Reviews: `POST /reviews` for a participant when the transaction is `COMPLETED`. `GET /users/:id/reviews` lists reviews about that user. `GET /users/:id/profile` is the public profile card.
+- Housing, jobs, services, community: list/get are public; create, update, and archive require the owner. Jobs apply and save, service quotes (street address hidden until the provider accepts), community reactions, comments, RSVPs, and giveaway claims are implemented. See `docs/API_SPEC.md`. The Housing, Jobs, Services, and Community pages call the public lists and the mutations that already have a control (apply, save, quote, post, reaction, RSVP, claim).
+- Health: `GET /api/v1/health` (liveness), `GET /api/v1/ready` (Postgres `SELECT 1`, plus a Redis ping when `REDIS_URL` is set).
+- Local infra: `docker-compose.yml` runs PostGIS 16 and Redis 7. The schema stores latitude/longitude as decimals. There is no geometry column. `pnpm prisma:seed` loads categories plus fixture-shaped rows for the four verticals. Booting that stack from a local `.env` on a Mac is still a separate step.
+
+Frontend pages that call the API include `App` (session, plus `GET /conversations` for the nav unread badge), `Landing` (login), `Onboarding`, `CreateListing` (`POST /listings` and draft save), `Categories` (`GET /categories`), `SavedItems`, `ListingCard`, Dashboard (`GET /requests/offers?scope=all`), Messages, Home (listings plus services, events, and posts), Housing, Jobs, Services, Community, Map (`GET /listings`), Profile (`GET /users/me`, `GET /users/:id/profile`, `GET /users/:id/reviews`, seller listings), and Listing Detail. For a UUID id, Listing Detail loads `GET /listings/:id` for the main body and `GET /listings` for similar cards. It does not use `src/data` fixtures for that path. Non-UUID ids still use fixtures. Save uses `POST /listings/:id/favorite`. Message send on a UUID listing calls `POST /conversations` and then the existing “Message sent!” redirect. Fixture ids still use the local modal. Negotiate, reserve, report, and share stay local. Explore still loads listings and then applies extra filters in the browser. Categories loads the featured strip from published listings (`listingFromApi`, up to six cards, click uses the listing UUID). Tiles with no matching category name still use the painted counts. Trending searches and neighborhood counts stay painted. Map pins are neighborhood centroids on the painted map; listing and profile coordinates are not returned. Listing Detail is wired to the live listing read. The app is not release-complete.
+
+## Request-first flow status
+
+The product flow is: post a need, receive offers, compare and counter, message, complete, review.
+
+| Step | UI that already exists | API that already exists | Gap Nova must not invent a screen for |
+| --- | --- | --- | --- |
+| Compose and publish a listing | `create` → `src/pages/CreateListing.tsx` wizard | `POST /api/v1/listings` and `POST /api/v1/listings/drafts` | The wizard does not post a need. AI Review is still copy only. |
+| See offers | `dashboard` Offers tab and Overview pending cards; `messages` offer card | Dashboard: `GET /api/v1/requests/offers?scope=all`. Messages still uses `GET /api/v1/requests` and `GET /api/v1/requests/:id`. | Public request list is still every published request. |
+| Accept / decline | Dashboard and Messages buttons | `POST /api/v1/requests/:id/offers/:offerId/accept` and `.../reject`. Counter: `POST /api/v1/requests/offers/:id/counter`. | Accept opens one conversation and one `ACCEPTED` transaction. |
+| Thread | `messages` | Conversation read/send for an existing participant. Accept creates a thread. Listing Detail message send calls `POST /conversations`, which reuses a pairwise thread when one already exists. `/realtime` requires a JWT. | The Messages plus button does not create a thread. |
+| Complete exchange | Messages progress strip; Dashboard meetups | `GET` + `PATCH /api/v1/transactions/:id/status` | No appointment route. Accept inserts the transaction. |
+| Review | Dashboard "Reviews to complete" cards; Profile reviews tab | `POST /api/v1/reviews`, `GET /api/v1/users/:id/reviews` | Profile reviews load from the API. Dashboard still does not hide a prompt when a review already exists. Follow and report on Profile stay local. |
+
+State-by-state wiring instructions are in `docs/UX_REQUEST_FLOW_STATES.md`.
+
+## Page inventory
+
+
+`src/App.tsx` page ids, in order: `landing`, `onboarding`, `home`, `explore`, `categories`, `map`, `listing`, `create`, `messages`, `saved`, `profile`, `dashboard`, `housing`, `services`, `jobs`, `community`.
+
+Signed-out visitors can open `landing` and `onboarding`. Any other id shows the existing "Sign in to continue" gate. `Navigation` is hidden on `landing` and `onboarding`. When a session is present, the message badge reads `GET /conversations` and passes that unread-thread count into `Navigation`. It is 0 (badge hidden) when nothing is unread, the caller is signed out, or the list returns 401. The old hardcoded `2` is gone. There is still no notification-list route. Landing header Browse, Services, Housing, Jobs, and "Post a Listing" open the sign-in dialog. They do not jump into signed-in pages. Get started still opens onboarding. Login still calls `POST /auth/login`. The app is not release-complete. Docker Compose, migrate, seed, and signed-in browser e2e stay blocked because Docker Desktop is not installed on this Mac.
+
+`listing` loads `GET /listings/:id` when the path is `/listings/:id`. Similar listings come from `GET /listings` (same category, or recent published when that category has no other row). The seller link passes that seller's user id into `profile` (`/profile/:id`). Message on a listing calls `POST /conversations`. Negotiate and reserve stay local. A UUID listing report calls `POST /safety/reports`. Share copies the listing path. Owner pause and mark-sold live on Dashboard and My Listings, not on this public screen. Listing Detail is not a release-complete claim.
+
+## Nova handoff
+
+1. Read `docs/DECISIONS.md` before changing behavior.
+2. Wire only the states in `docs/UX_REQUEST_FLOW_STATES.md`. Do not add page ids, routes, or layouts.
+3. Treat `docs/API_SPEC.md` and `docs/DATABASE_DESIGN.md` **IMPLEMENTED** sections as the contract that exists. **TARGET** sections are not permission to pretend the UI is persisted.
+4. Where a control has no endpoint (Promote, profile follow, the Messages plus button), keep the control and surface the existing error treatment when a call is attempted. Do not flip local fixture state and call it success. Pause, mark sold, save draft, and Listing Detail message send call the API.
+5. Leave Figma sample copy and the AI Review step on the Create Listing wizard. Do not call a model.
+
+## Explicitly not in this status
+
+- No `src/` or `backend/` diff in the June Sprint 1 docs PR.
+- No AI feature work.
+- Landing marketing cards remain a fixture screen. The Categories featured strip reads `GET /listings` and is not a fixture strip. Map, Profile, and Listing Detail (UUID ids) read the API. Non-UUID listing ids still use fixtures. Map still paints the Atlanta map, the mile line, and safe spots; it does not call Mapbox. The categories grid reads `GET /categories` for counts on Housing, Jobs, Services, and Vehicles. Other tile counts, trending searches, and neighborhood counts stay painted. Housing, services, jobs, and community pages read the APIs from `0003_verticals`. They are mapped in `docs/FRONTEND_BACKEND_MAP.md`.
+- This board is not a release-complete claim. Docker Compose, migrate, seed, and signed-in browser e2e were not run for this pass. Docker Desktop is still missing on this Mac, so those steps stay blocked.
+- Local `.env`, `docker compose`, and a full browser pass against Postgres on a Mac are not part of this wiring. CI runs frontend lint, `tsc`, Vitest, and `vite build`, plus backend lint, `prisma validate`, `tsc`, the Jest suite, and `nest build` (`.github/workflows/ci.yml`).
+
+## Workspace (T7 Shield)
+
+- **Canonical local path:** `/Volumes/T7 Shield/Projects/neighborly`
+- **Backup only (do not modify):** `~/Desktop/Neighborly/app`
+- **Paused:** 2026-09-23 00:00 EDT for SSD transfer; see `docs/PAUSE_CHECKPOINT.md`.
+- **Resumed:** 2026-09-23 — feature work continues from this path only. Node 22 via `.mise.toml` (Vite/Rolldown). Do not weaken for Node 20.
+- **GitHub remote:** `https://github.com/Igadsme/neighborly.git`
+- **Secrets:** recreate local `.env` from `env.example` on T7; never commit real secrets. Required to boot API: `DATABASE_URL`, `JWT_SECRET` (≥32 chars), `CORS_ORIGIN`. Frontend: `VITE_API_URL`.
+
+## Resume verification (2026-09-23)
+
+- Path on T7 Shield confirmed; Desktop copy left untouched.
+- Branch `main` after June docs merge; frontend `tsc` + `vite build` pass under Node 22; backend prisma generate, `tsc`, tests, nest build pass.
+- `prisma validate` needs `DATABASE_URL` (expected without local `.env`).
+- Offer accept/reject → conversation + transaction is in the API and on Dashboard/Messages. Vertical screens are wired to the same client. Release is not complete. Mac `.env`, Compose, migrate, seed, and signed-in e2e are still open (`docs/RELEASE_CHECKLIST.md` Section E).
+

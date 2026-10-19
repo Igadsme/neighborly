@@ -8,6 +8,30 @@ The repository pins the intended local toolchain in `.mise.toml` (`node = "22"`,
 
 ## 2. Required environment variables
 
+Boot validation is `backend/src/common/config/env.validation.ts`. The committed local template is `env.example`. Staging uses `env.staging.example`. Production placeholders are `env.production.example` (Phase 7). Copying the production file unchanged fails boot on purpose. Copy a local template to `backend/.env` and, for `VITE_API_URL`, to `.env` at the repo root. Do not commit those copies. Do not commit a filled production env file.
+
+Required in every environment:
+
+| Variable | Rule |
+| --- | --- |
+| `DATABASE_URL` | `postgresql://` or `postgres://` |
+| `JWT_SECRET` | At least 32 characters |
+| `CORS_ORIGIN` | Comma-separated absolute `http` or `https` origins. `*` is rejected |
+
+Also required when `NODE_ENV=production`:
+
+| Variable | Rule |
+| --- | --- |
+| `REDIS_URL` | `redis://` or `rediss://`. Shared rate-limit counters. |
+| `TRUST_PROXY` | `1` or `0`. Use `1` only when the proxy overwrites `X-Forwarded-For`. |
+| `JWT_SECRET` | Must not be a placeholder (`change-me`, `replace-with`, …) and must not be low-diversity. |
+
+Optional variables and their defaults are listed in `env.example`. A partial S3 set (some of endpoint, bucket, access key, secret key) fails boot. `SENTRY_DSN`, when set, must be `https`. Payments and maps are not called by this release. Refresh tokens are httpOnly cookies. Listing image upload calls object storage when the S3 set is complete.
+
+Production does not serve Swagger. Access tokens travel in `Authorization: Bearer`. The refresh token is an httpOnly cookie.
+
+The block below is the older target inventory for services that are not wired yet. It is not the boot contract. Do not copy placeholder secrets into a production environment.
+
 The application should include an environment file based on the following contract:
 
 ```env
@@ -26,8 +50,8 @@ POSTGRES_PASSWORD=neighborly
 REDIS_URL=redis://redis:6379
 
 # Auth
-JWT_SECRET=change-me
-JWT_REFRESH_SECRET=change-me
+JWT_SECRET=replace-with-jwt-secret
+JWT_REFRESH_SECRET=replace-with-jwt-refresh-secret
 JWT_ACCESS_TTL=15m
 JWT_REFRESH_TTL=7d
 
@@ -35,7 +59,7 @@ JWT_REFRESH_TTL=7d
 S3_ENDPOINT=http://minio:9000
 S3_BUCKET=neighborly-media
 S3_ACCESS_KEY=neighborly
-S3_SECRET_KEY=neighborly-secret
+S3_SECRET_KEY=replace-with-object-store-secret
 S3_REGION=us-east-1
 S3_PUBLIC_URL=http://localhost:9000/neighborly-media
 
@@ -69,37 +93,68 @@ ENABLE_MAPS=true
 
 ## 3. Containerized runtime
 
-`docker-compose.yml` provides local Postgres, Redis, and RustFS S3-compatible storage (including automatic bucket/CORS setup by the API). Copy `backend/.env.example` to `backend/.env`, replace the local-only storage password with a strong value, and use the same username/password for `S3_ACCESS_KEY` and `S3_SECRET_KEY`. Start dependencies with `docker compose up -d`; run the NestJS API and Vite frontend from their package directories.
+The committed Compose file is the contract. It is not the sketch below.
 
-The local Compose services are:
+Dev `docker compose up -d` starts only:
 
-- `postgres` – PostgreSQL with PostGIS extension
-- `redis` – shared rate-limit state and readiness dependency
-- `minio` – RustFS-backed S3-compatible object storage (the service name remains stable)
+- `postgres` – PostGIS 16, published on `127.0.0.1:5432`
+- `redis` – AOF on, published on `127.0.0.1:6379`
 
-The production images are defined by `Dockerfile` and `backend/Dockerfile`. `compose.production.yml` wires those stateless images to externally managed PostgreSQL, Redis, and S3 services and refuses to start when required configuration is missing. Run `pnpm prisma:deploy` as a one-off release step before the API rollout; do not let every application replica race to apply migrations.
+There is no API container in that default project. The API runs on the host with `pnpm start:dev`.
 
-For a deployed environment, set S3-compatible endpoint, bucket, access key, secret, region, and public image URL to the provider/CDN values. Never reuse local MinIO credentials. The local bucket permits public reads for published listing images; configure the equivalent narrowly scoped read policy and browser CORS origins for the production app.
+The `staging` profile adds its own Postgres (`127.0.0.1:5433`), Redis (`127.0.0.1:6380`), rustfs object store (`rustfs/rustfs:1.0.1` on `127.0.0.1:9000`, Compose service name `minio`, volume `rustfs-staging-data`), the API, the web image, and Caddy. `neighborly-staging-minio` stays declared and unused. Staging objects are disposable test data. After switching to `rustfs-staging-data`, existing ListingImage rows in Postgres still reference storage keys that no longer exist, so those images will fail to load. Re-seed staging so the database and object store start empty together, then re-upload test photos. Keep the old `neighborly-staging-minio` volume until the owner explicitly approves removing it. See `docker-compose.yml` and `docs/PHASE_5_STAGING.md`. Do not publish the dev database ports on `0.0.0.0`. Dev Redis has a `redis-cli ping` healthcheck. Nothing in the default project waits on it, because the API runs on the host.
+
+History API paths need a fallback to `index.html`. Staging Caddy (`deploy/staging/Caddyfile`) sends `/api` and `/socket.io` to the API and `/assets` plus every other path to nginx. nginx (`deploy/staging/nginx.conf`) serves real files and falls back to `index.html` only for unknown extensionless paths. `deploy/production/Caddyfile` is the same split for a future host. The production workflow does not read it and still refuses. `vite preview` uses the same rule.
+
+Migration `0015_postgis_geography` runs `CREATE EXTENSION IF NOT EXISTS postgis`. On a managed Postgres service that statement needs a superuser, or the provider's admin role (`rds_superuser` on RDS, the cloudsqlsuperuser role, or the equivalent console action). If the application role cannot create extensions, create `postgis` before `prisma migrate deploy`. The local Compose image `postgis/postgis:16-3.4` already allows the database user to create it. Undoing the geography columns is a new forward migration, described in `docs/DATABASE_DESIGN.md`. It keeps the extension. Do not run that SQL by hand.
 
 ## 4. CI/CD expectations
 
-- Run lint and unit tests on every PR
-- Run Prisma migration validation before deploy
-- Run database smoke checks and seed validation in staging environments
-- Apply infrastructure changes via IaC or environment-managed deployment scripts
-- Require a smoke test against the staging environment before production deploy
+- Run frontend and backend typecheck, tests, and build on every pull request (`.github/workflows/ci.yml`)
+- The same workflow renders `docker compose config` for the default project and the staging profile. Every published port must use `127.0.0.1`. A staging image with no tag, or a `:latest` tag, fails the job. The Compose `minio` image must equal the storage job pin `rustfs/rustfs:1.0.1`
+- That workflow also rejects an assignment of `change-me` or `neighborly-secret` under `docs/` and in `env*.example`. Naming those strings as rejected placeholders is still allowed
+- A separate job starts only `minio` and `minio-init` and requires `minio-init` to exit 0, which depends on the RustFS healthcheck. It does not delete volumes
+- Apply Prisma migrations with `prisma migrate deploy` before the staging API listens
+- Run the staging seed and check `/health` and `/ready` before calling the stack up
+- Keep production deploy behind a product-owner approval. This repository does not deploy to production. Phase 7 did not change that.
+- `.github/workflows/deploy-staging.yml` is manual (`workflow_dispatch`). It builds the Compose staging profile on the runner and smokes it. It pushes images to GHCR only when the repository variable `STAGING_PUSH_IMAGES` is `true`. Leave that variable unset.
+- `.github/workflows/deploy-production.yml` is manual (`workflow_dispatch`) and is a stub. It does not run on push or pull request. It refuses before any build, registry login, or remote command unless `PRODUCTION_DEPLOY_ENABLED` is the string `true`, and it still refuses then because no production target is configured. Image push is a separate job that runs only when `PRODUCTION_PUSH_IMAGES` is also `true`, and that job refuses without logging in to GHCR. Leave both variables unset. Phase 7 did not dispatch this workflow.
 
 ## 5. Production readiness checklist
 
-- Postgres backups scheduled and tested
-- Redis persistence and failover configured
-- Object storage lifecycle rules set for uploaded images and documents
-- Sentry DSN configured and error alerts enabled
-- Stripe webhook ingress validated and secret-rotated
-- Email provider integrated with transactional templates
-- Mapbox token scoped to production domains only
-- CORS, CSP, and security headers enabled
-- Rate limiting active and tuned from observed traffic patterns
+This checklist is not satisfied by Phase 4, Phase 5, Phase 6, or the Phase 7 preparation package. The launch form is `docs/LAUNCH_CHECKLIST.md`. Every public row there is blocked on the product owner. Do not treat a green CI run, a local staging stack, or Phase 6 (P0/P1 = 0) as a production launch.
+
+- Postgres backups scheduled and tested. Local Compose procedure: `scripts/backup-postgres.sh` and `scripts/restore-postgres.sh` (see below).
+- Redis persistence and failover configured. Compose Redis runs with AOF so local counters survive a restart. Redis is not the source of truth. A lost Redis only resets rate-limit counters.
+- Object storage lifecycle rules set for uploaded images and documents. Listing image upload is mounted. A production bucket is not configured in this repo.
+- Sentry DSN configured and error alerts enabled. `captureException` logs today and is the forwarding hook. The SDK is not bundled.
+- Stripe webhook ingress validated and secret-rotated. Payments are not wired.
+- Email provider integrated with transactional templates. Email is not wired.
+- Mapbox token scoped to production domains only. Maps are not wired.
+- CORS, CSP, and security headers enabled. Helmet and an explicit CORS list are on. CSP and HSTS apply when `NODE_ENV=production`.
+- Rate limiting active and tuned from observed traffic patterns. Defaults are in `backend/src/common/rate-limit.ts`. Production must set `REDIS_URL`.
+
+### Postgres backup and restore (Compose)
+
+Stop the API before a restore. Backup can run while the API is up.
+
+```sh
+scripts/backup-postgres.sh
+scripts/restore-postgres.sh artifacts/backups/<dump-file>
+```
+
+The dump is PostgreSQL custom format (`pg_dump -Fc`). Files under `artifacts/backups/` are gitignored. A restore uses `pg_restore --clean --if-exists` into the existing `neighborly` database. Take a fresh dump before a restore you might want to undo. There is no point-in-time recovery in Compose. A hosted Postgres needs the provider's backup schedule and a tested restore; these scripts do not cover that.
+
+### Health
+
+- `GET /api/v1/health` is liveness. It does not check dependencies.
+- `GET /api/v1/ready` runs `SELECT 1`. When `REDIS_URL` is set it also pings Redis. Postgres down or that ping failing returns 503. An empty `REDIS_URL` reports `redis: skipped` and can still be ready. Production boot does not allow an empty `REDIS_URL`.
+
+### Logs and abuse signals
+
+Logs are single-line JSON. `http.request` includes `requestId`, method, path, status, and duration. Query strings are not logged. `auth.login.failure` includes the email address; treat the drain as sensitive. `rate_limit.redis_fallback` means that process is counting in memory until it restarts. A burst of HTTP 429s on `auth.login` or `auth.register` is the auth-abuse signal. Per-user 429s are messaging, listings, offers, and reports.
+
+`SLOW_QUERY_LOG=1` warns on Prisma queries at or above `SLOW_QUERY_MS` (default 200). The line includes SQL text with placeholders, not bound values. Leave it off unless you are investigating.
 
 ## 6. Release strategy
 
@@ -107,15 +162,46 @@ Use a simple staging-to-production path:
 
 1. Local development with Docker Compose
 2. CI validation on pull requests
-3. Staging deployment with production-like environment variables
-4. Manual or automated approval gate for release
-5. Production deployment with rollback plan and database migration safety checks
+3. Staging on the Compose `staging` profile (section 8). This step is what Phase 5 delivered.
+4. Product-owner approval before any production change
+5. Production deployment with a rollback plan and migration safety checks
+
+Step 5 is written in `docs/PRODUCTION.md` and was not executed. Phase 7 is preparation only. **NOT LAUNCHED / NOT DEPLOYED.** A green staging run is not a launch.
 
 ## 7. Observability
 
 - Structured logs: request id, user id, route, latency, and status code
 - Metrics: listing creation, offer acceptance, message throughput, payment failures
 - Alerts: DB connectivity, Redis health, S3 upload failures, payment webhook issues, elevated 5xx rates
-- Health checks: `/health`, `/ready`, and critical dependency liveness checks
+- Health checks: `GET /api/v1/health` (liveness) and `GET /api/v1/ready` (Postgres, and Redis when `REDIS_URL` is set)
 
 This approach keeps the first release stable while leaving room for scaling and hardening as Neighborly expands its local marketplace and community platform.
+
+## 8. Staging
+
+Phase 5 runs staging on this machine. The record, the health results, and the product-owner blockers are in `docs/PHASE_5_STAGING.md`. Release readiness is not claimed.
+
+`scripts/staging-up.sh` starts the `staging` profile: API, frontend, PostGIS, Redis, rustfs, and Caddy. The template is `env.staging.example`. Copy it to `.env.staging`. That file is gitignored. The script fills an empty `JWT_SECRET` and does not print it. Do not commit a staging or production secret.
+
+| Surface | URL |
+| --- | --- |
+| App | `https://staging.neighborly.localhost:8444/` |
+| Health | `https://staging.neighborly.localhost:8444/api/v1/health` |
+| Ready | `https://staging.neighborly.localhost:8444/api/v1/ready` |
+| API on loopback | `http://127.0.0.1:3001/api/v1/` |
+
+HTTPS is Caddy's internal CA on port 8444. A public certificate needs a domain and DNS. Those were not purchased or changed. Until the product owner approves them, staging stays on loopback.
+
+`staging-migrate` applies the committed Prisma migrations, including `0004_trust_safety` and `0005_query_indexes`, then runs `backend/prisma/seed.ts`. The seed upserts fixture rows. It does not delete data. The shared seed password `neighborly-local-seed` is a local fixture. The migrate script refuses any database host other than `staging-postgres`.
+
+The dev database on port 5432 is a different volume. `scripts/backup-postgres.sh` dumps that dev database. `scripts/staging-backup.sh` dumps staging. `scripts/staging-rollback.sh` retags `neighborly-api:staging-previous` and `neighborly-web:staging-previous` and can restore a staging dump. Migrations are forward-only. Restoring a dump is the data rollback. `scripts/staging-down.sh` stops the staging containers and leaves the dev Postgres service running.
+
+`docker compose down -v` deletes the dev Postgres volume as well as the staging volumes. Do not run it on a machine that still needs the dev database. The GitHub Actions staging job uses `down -v` only on an ephemeral runner.
+
+GitHub Environment `staging` is the place for a future `STAGING_JWT_SECRET`. The current workflow does not read it. It generates a throwaway JWT for the smoke run. No production secret goes in that environment or in git.
+
+## 9. Production preparation
+
+Phase 7 added a preparation package and did not deploy it. The completion record is `docs/PHASE_7_PROD_PREP.md`. The intended public path is `docs/PRODUCTION.md`. The checklist is `docs/LAUNCH_CHECKLIST.md`. Incident and rollback steps for the Compose scripts that exist are in `docs/INCIDENT_ROLLBACK.md`.
+
+**NOT LAUNCHED / NOT DEPLOYED.** Staging Compose remains the verified path. Public DNS, a public certificate, and any paid host stay blocked until Product Owner Imani Gad approves them. `.github/workflows/deploy-production.yml` is a manual stub that refuses. It was not dispatched.

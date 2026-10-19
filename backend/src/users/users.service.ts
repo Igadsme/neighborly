@@ -1,8 +1,23 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
-import * as argon2 from 'argon2'
-import { randomBytes } from 'node:crypto'
+import { Injectable, NotFoundException } from '@nestjs/common'
+import { StaffRole } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
-import { CompleteOnboardingDto, DeleteAccountDto, UpdateProfileDto } from './dto'
+import { CompleteOnboardingDto } from './dto'
+
+const accountInclude = {
+  profile: true,
+  preference: true,
+  notificationPreference: true,
+  staffRoles: { select: { role: true } }
+} as const
+
+/**
+ * Account payload for GET /users/me. `staffRoles` is the role names only.
+ * Moderation routes still authorize from StaffRoleAssignment on the server.
+ */
+export function presentAccount<T extends { passwordHash: string; staffRoles?: { role: StaffRole }[] }>(user: T) {
+  const { passwordHash: _passwordHash, staffRoles = [], ...safeUser } = user
+  return { ...safeUser, staffRoles: staffRoles.map(row => row.role).sort() }
+}
 
 @Injectable()
 export class UsersService {
@@ -11,11 +26,10 @@ export class UsersService {
   async me(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { profile: true, preference: true, notificationPreference: true }
+      include: accountInclude
     })
     if (!user) throw new NotFoundException('User not found')
-    const { passwordHash: _passwordHash, ...safeUser } = user
-    return safeUser
+    return presentAccount(user)
   }
 
   async completeOnboarding(userId: string, input: CompleteOnboardingDto) {
@@ -66,22 +80,6 @@ export class UsersService {
     return this.me(userId)
   }
 
-  async updateProfile(userId: string, input: UpdateProfileDto) {
-    await this.prisma.profile.update({
-      where: { userId },
-      data: {
-        firstName: input.firstName?.trim(),
-        lastName: input.lastName?.trim(),
-        displayName: input.displayName?.trim() || null,
-        bio: input.bio?.trim() || null,
-        neighborhood: input.neighborhood?.trim() || null,
-        city: input.city?.trim() || null,
-        state: input.state?.trim() || null,
-      },
-    })
-    return this.me(userId)
-  }
-
   async publicProfile(userId: string) {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, status: 'ACTIVE', deletedAt: null },
@@ -90,99 +88,44 @@ export class UsersService {
         createdAt: true,
         profile: {
           select: {
-            firstName: true,
             displayName: true,
+            firstName: true,
+            lastName: true,
             bio: true,
             neighborhood: true,
             city: true,
-            state: true,
-            emailVerified: true,
-            phoneVerified: true,
-          },
-        },
-        reviewsReceived: {
-          select: { id: true, rating: true, body: true, createdAt: true },
-          orderBy: { createdAt: 'desc' },
-          take: 50,
-        },
-        listings: {
-          where: { status: 'PUBLISHED', deletedAt: null },
-          select: { id: true, title: true, priceCents: true, condition: true, createdAt: true },
-          orderBy: { createdAt: 'desc' },
-          take: 50,
-        },
-      },
+            emailVerified: true
+          }
+        }
+      }
     })
-    if (!user) throw new NotFoundException('User not found')
-    return user
-  }
+    if (!user?.profile) throw new NotFoundException('Profile not found')
 
-  async exportData(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        profile: true,
-        preference: true,
-        notificationPreference: true,
-        listings: { include: { images: true } },
-        requests: { include: { offers: true } },
-        offers: { include: { counterOffers: true, items: true } },
-        favorites: true,
-        savedSearches: true,
-        notifications: true,
-        conversations: {
-          include: { conversation: { include: { messages: true } } },
-        },
-        reviewsGiven: true,
-        reviewsReceived: true,
-        transactionMembers: { include: { transaction: true } },
-        reportsFiled: true,
-        blocksInitiated: true,
-      },
-    })
-    if (!user) throw new NotFoundException('User not found')
-    const { passwordHash: _passwordHash, deviceSessions: _deviceSessions, ...safeUser } = {
-      ...user,
-      deviceSessions: undefined,
-    }
-    return { exportedAt: new Date().toISOString(), user: safeUser }
-  }
+    const [rating, soldCount] = await Promise.all([
+      this.prisma.review.aggregate({
+        where: { subjectId: userId },
+        _avg: { rating: true },
+        _count: { _all: true }
+      }),
+      this.prisma.listing.count({
+        where: { sellerId: userId, status: 'SOLD', deletedAt: null }
+      })
+    ])
 
-  async deleteAccount(userId: string, input: DeleteAccountDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } })
-    if (!user || !(await argon2.verify(user.passwordHash, input.password))) {
-      throw new UnauthorizedException('Password confirmation failed')
+    const average = rating._avg.rating
+    return {
+      id: user.id,
+      displayName: user.profile.displayName,
+      firstName: user.profile.firstName,
+      lastName: user.profile.lastName,
+      bio: user.profile.bio,
+      neighborhood: user.profile.neighborhood,
+      city: user.profile.city,
+      memberSince: user.createdAt,
+      emailVerified: user.profile.emailVerified,
+      ratingAverage: average == null ? null : Math.round(average * 10) / 10,
+      reviewCount: rating._count._all,
+      soldCount
     }
-    const replacementHash = await argon2.hash(randomBytes(48).toString('base64url'))
-    await this.prisma.$transaction(async (tx) => {
-      const now = new Date()
-      await tx.deviceSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } })
-      await tx.listing.updateMany({ where: { sellerId: userId, deletedAt: null }, data: { status: 'DELETED', deletedAt: now } })
-      await tx.needRequest.updateMany({ where: { requesterId: userId, deletedAt: null }, data: { status: 'CANCELLED', deletedAt: now } })
-      await tx.profile.update({
-        where: { userId },
-        data: {
-          firstName: 'Deleted',
-          lastName: 'User',
-          displayName: 'Deleted user',
-          bio: null,
-          neighborhood: null,
-          city: null,
-          state: null,
-          latitude: null,
-          longitude: null,
-        },
-      })
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          email: `deleted+${userId}@neighborly.invalid`,
-          passwordHash: replacementHash,
-          status: 'DELETED',
-          deletedAt: now,
-        },
-      })
-    })
-    return { deleted: true }
   }
 }

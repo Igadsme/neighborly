@@ -1,15 +1,14 @@
 import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module'
-import { NotificationsModule } from '../notifications/notifications.module'
 import { MessagingController } from './messaging.controller'
 import { MessagingGateway } from './messaging.gateway'
 import { MessagingService } from './messaging.service'
-import { SafetyModule } from '../safety/safety.module'
+import { SocketRedis } from './socket-redis'
 
 @Module({
-  imports: [AuthModule, NotificationsModule, SafetyModule],
+  imports: [AuthModule],
   controllers: [MessagingController],
-  providers: [MessagingService, MessagingGateway],
-  exports: [MessagingService, MessagingGateway]
+  providers: [MessagingService, MessagingGateway, SocketRedis],
+  exports: [MessagingService, MessagingGateway, SocketRedis]
 })
 export class MessagingModule {}

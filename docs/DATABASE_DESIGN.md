@@ -1,217 +1,227 @@
 # Database Design
 
-## 1. Design goals
+PostgreSQL via Prisma (`backend/prisma/schema.prisma`). Migrations: `backend/prisma/migrations/0001_init`, `backend/prisma/migrations/0002_onboarding`, `backend/prisma/migrations/0003_verticals`, `backend/prisma/migrations/0004_trust_safety`, `backend/prisma/migrations/0005_query_indexes`, and `backend/prisma/migrations/0006_transaction_offer_unique` (unique `Transaction.offerId`; the migration aborts without changing data if duplicates already exist). Client provider: `prisma-client-js`. Category reference data is loaded by `backend/prisma/bootstrap.ts` (`pnpm prisma:bootstrap`), separately from the demo seed.
 
-The data model should reflect the actual marketplace flow and the current frontend inventory. The main design requirement is to support request-first commerce, not just item posting.
+**IMPLEMENTED** is every model, enum, and index in that schema. **TARGET** is the rest of the older entity list that has no table. A model with no service writer is called out; it is still implemented schema, not a target table.
 
-The schema must provide:
+v1 does not add an embeddings table, a vector column, or a semantic-index job.
 
-- normalized relational data for users, listings, requests, offers, and transactions
-- geospatial indexing and search support
-- soft delete and audit trails for user-generated content
-- clear trust and moderation data
-- support for neighborhood-level community features
+## IMPLEMENTED
 
-## 2. Entity relationship overview
+### Enums
+
+| Enum | Values |
+| --- | --- |
+| `UserStatus` | `ACTIVE`, `SUSPENDED`, `DELETED` |
+| `ListingStatus` | `DRAFT`, `PUBLISHED`, `SOLD`, `ARCHIVED`, `DELETED` |
+| `RequestStatus` | `DRAFT`, `PUBLISHED`, `CLOSED`, `EXPIRED`, `CANCELLED` |
+| `OfferStatus` | `PENDING`, `COUNTERED`, `ACCEPTED`, `REJECTED`, `WITHDRAWN`, `EXPIRED` |
+| `TransactionStatus` | `DRAFT`, `PUBLISHED`, `OFFER_RECEIVED`, `NEGOTIATING`, `ACCEPTED`, `SCHEDULED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `DISPUTED`, `REFUNDED`, `EXPIRED` |
+| `ExchangeMode` | `BUY`, `BORROW`, `RENT`, `HIRE`, `TRADE`, `SKILL_SWAP`, `FREE` |
+| `PublishStatus` | `PUBLISHED`, `ARCHIVED` |
+| `QuoteStatus` | `PENDING`, `ACCEPTED` |
+| `StaffRole` | `MODERATOR`, `ADMIN` |
+| `ReportTargetType` | `LISTING`, `USER`, `MESSAGE`, `COMMUNITY_POST` |
+| `ReportReason` | `SPAM`, `SCAM`, `HARASSMENT`, `INAPPROPRIATE`, `OTHER` |
+| `ReportStatus` | `OPEN`, `REVIEWING`, `RESOLVED`, `DISMISSED` |
+| `ModerationActionKind` | `DISMISS`, `RESOLVE`, `HIDE`, `SUSPEND_USER`, `RESTORE_USER` |
+
+Marketplace create handlers set listing and request status to `PUBLISHED`. Housing, jobs, services, community posts, events, lost-and-found, and giveaways do the same with `PublishStatus`. Owner delete sets `ARCHIVED` and `deletedAt`. Offer create leaves `PENDING`. Counter sets `COUNTERED`. Accept sets `ACCEPTED` and inserts the conversation and transaction. Transaction statuses after that change through `PATCH /transactions/:id/status`. Service quotes start `PENDING`; provider accept sets `ACCEPTED`.
+
+### Identity
+
+- `User` — `id` UUID, unique `email`, `passwordHash`, `status`, timestamps, `deletedAt`.
+- `Profile` — 1:1 user. `firstName`, `lastName`, optional `displayName`, `bio`, `neighborhood`, `city`, `state`, decimal `latitude` / `longitude`, `phoneVerified`, `emailVerified` (both default false). No route sets the verified flags.
+- `UserPreference` — JSON `interests`, JSON `capabilities`, `completedAt`. Written by onboarding.
+- `NotificationPreference` — booleans `newListings`, `priceDrops`, `messages` (default true), `events`, `community` (default false). Written by onboarding. No notification rows exist.
+- `StaffRoleAssignment` — `userId` + `StaffRole` (`MODERATOR` or `ADMIN`), unique together. No self-serve writer. Insert a row to grant the moderation queue.
+- `BlockedUser` — `blockerId`, `blockedId`, unique together. Either direction blocks messaging and the other interactions listed in `docs/PHASE_3_TRUST_SAFETY.md`.
+- `Report` — reporter, `targetType`, `targetId`, `reason`, optional `details`, `status`. Unique per reporter and target.
+- `ModerationAction` — staff `actorId`, `kind`, optional `note`, linked to one report.
+- `Message.hiddenAt` — set when staff hides a reported message. Participant reads replace the body with “This message was removed.”
+
+### Catalog and listings
+
+- `Category` — unique `name`, unique `slug`. Seeded. Referenced by `Listing` and `NeedRequest`.
+- `Listing` — seller, category, title, description, optional `priceCents`, `condition`, status, neighborhood, city, decimal lat/lng, `radiusMiles`, pickup (default true), delivery and shipping (default false), `deletedAt`. Indexes: `[status, categoryId, createdAt]`, `[sellerId, status]`, `[city, neighborhood]`.
+- `ListingImage` — `objectKey`, `sortOrder`. No upload path writes it.
+- `Favorite` — composite id `(userId, listingId)`.
+- `SavedSearch` — `query`, JSON `filters`.
+- `PriceHistory` — `listingId`, `priceCents`, `createdAt`. **No writer.**
+
+### Requests
+
+- `NeedRequest` — requester, category, title, description, optional `budgetCents`, decimal lat/lng, `radiusMiles` default 10, `deadline`, `urgency`, `mode`, status, `deletedAt`. Indexes: `[requesterId, status, createdAt]`, `[categoryId, status]`.
+- `RequestOffer` — request, offerer (`Offerer` relation), optional `amountCents`, `message`, status. Indexes: `[requestId, status, createdAt]`, `[offererId, status]`.
+- `OfferItem` — offer + listing, unique `(offerId, listingId)`.
+- `CounterOffer` — offer, `fromUserId` (plain UUID, no User relation), optional `amountCents`, `message`.
+- `RequestMatch` — request + listing, unique pair, `score` `Decimal(5, 2)`. **No writer.** Not a vector store.
+
+### Conversations
+
+- `Conversation` — timestamps, participants, messages, optional transactions.
+- `ConversationParticipant` — composite id, `joinedAt`, `lastReadAt`.
+- `Message` — `body`, `senderId`, index `[conversationId, createdAt]`. No attachment or per-message receipt table.
+
+Offer accept and `POST /conversations` insert `Conversation` and `ConversationParticipant`. `POST /conversations` does not add a `listingId` column. It reuses a thread whose participants are exactly those two users, then writes `Message` the same way as `POST /conversations/:id/messages`.
+
+### Transactions and reviews
+
+- `Transaction` — optional `conversationId`, optional `offerId` (no FK to `RequestOffer`), status. Includes participants, milestones, appointments, reviews.
+- `TransactionParticipant` — composite id, string `role`.
+- `TransactionMilestone` — `fromStatus`, `toStatus`. Written by the status patch.
+- `Appointment` — `startsAt`, `locationNote`. **No writer.** Included when transactions are listed.
+- `Review` — `transactionId`, `authorId`, `subjectId`, `rating` int, `body`. Written by `POST /reviews` when the transaction is `COMPLETED`. No unique constraint yet.
+
+### What the schema does not do
+
+- No full-text index. Search is application `contains`.
+- `0005_query_indexes` adds btree indexes for reads that were filtering or sorting without a matching index: published listing and request feeds (`status, createdAt`), listing images (`listingId, sortOrder`), saved searches (`userId, updatedAt`), counter offers (`offerId, createdAt`), conversation inbox (`ConversationParticipant.userId`, `Conversation.updatedAt`), transaction lists (`TransactionParticipant.userId`, `Transaction.updatedAt`, milestone `transactionId, createdAt`), reviews (`subjectId, createdAt` and `transactionId`), and a caller's own reports (`reporterId, createdAt`). There is still no slow-query log unless `SLOW_QUERY_LOG=1`. Primary keys and the earlier composite indexes are unchanged.
+- No soft-delete on offers, messages, or reviews.
+- No money, payout, refund, or dispute tables. Dispute is only a transaction status.
+
+### Housing, jobs, services, and community
+
+Added in `0003_verticals`. Screens still read `src/data/index.ts` until the wiring PR. Seed rows in `backend/prisma/seed.ts` follow those fixtures (dollars converted to cents). Local seed users are `seed.<firstname>@example.com`. The shared password is `SEED_PASSWORD` in that file, for local boot only.
+
+Latitude and longitude stay `Decimal(9, 6)` and are write-only on public reads. Migration `0015_postgis_geography` enables PostGIS and adds a nullable `geog geography(Point,4326)` column, maintained by a trigger, on `Listing`, `NeedRequest`, `HousingListing`, `JobListing`, and `ServiceListing`. Each has a GiST index. Prisma Client does not read or write `geog`. Profile coordinates stay off the public card. Service quote `address` is stored and returned to the requester, and to the provider only after `ACCEPTED`.
+
+#### Rolling back `0015_postgis_geography`
+
+There is no down migration. `0015_postgis_geography/migration.sql` stays as approved. Ship the drop SQL below as a new forward migration, for example `0016_drop_geography`, in the same change that reverts the Prisma schema. Do not run it by hand. A hand-run drop leaves `_prisma_migrations` saying `0015` is applied while the columns are gone, so migration drift and `prisma migrate dev` break. The statements drop the five triggers, the five GiST indexes, the five `geog` columns, and `neighborly_sync_location()`. They keep the `postgis` extension. Do not run `DROP EXTENSION postgis`.
+
+```sql
+DROP TRIGGER IF EXISTS listing_geog_sync ON "Listing";
+DROP TRIGGER IF EXISTS need_request_geog_sync ON "NeedRequest";
+DROP TRIGGER IF EXISTS housing_listing_geog_sync ON "HousingListing";
+DROP TRIGGER IF EXISTS job_listing_geog_sync ON "JobListing";
+DROP TRIGGER IF EXISTS service_listing_geog_sync ON "ServiceListing";
+
+DROP INDEX IF EXISTS "Listing_geog_idx";
+DROP INDEX IF EXISTS "NeedRequest_geog_idx";
+DROP INDEX IF EXISTS "HousingListing_geog_idx";
+DROP INDEX IF EXISTS "JobListing_geog_idx";
+DROP INDEX IF EXISTS "ServiceListing_geog_idx";
+
+ALTER TABLE "Listing" DROP COLUMN IF EXISTS "geog";
+ALTER TABLE "NeedRequest" DROP COLUMN IF EXISTS "geog";
+ALTER TABLE "HousingListing" DROP COLUMN IF EXISTS "geog";
+ALTER TABLE "JobListing" DROP COLUMN IF EXISTS "geog";
+ALTER TABLE "ServiceListing" DROP COLUMN IF EXISTS "geog";
+
+DROP FUNCTION IF EXISTS neighborly_sync_location();
+```
+
+Revert the Prisma schema in that same change: remove `geog Unsupported("geography(Point,4326)")?` and `@@index([geog], type: Gist)` from `Listing`, `NeedRequest`, `HousingListing`, `JobListing`, and `ServiceListing`. Latitude and longitude stay. Do not edit `0015`. `prisma migrate deploy` applies the new forward migration; it does not re-apply an already recorded `0015`.
+
+`verified`, `backgroundCheck`, `rating`, and `reviewCount` are columns the API does not accept from clients. Seed writes them.
+
+- `HousingListing` — owner, `propertyType` (Apartment, House, Room, Studio, Condo, Sublet), `listingType` (`rent` or `sale`), `priceCents`, optional `priceUnit`, beds, baths, sqft, neighborhood, city, `available`, `lease`, pets, furnished, utilities, verified, `PublishStatus`, write-only lat/lng, `deletedAt`. `HousingImage.objectKey` is the unsplash id the card already uses. Indexes: `[status, listingType, createdAt]`, `[ownerId, status]`, `[city, neighborhood]`.
+- `JobListing` — owner, title, company, `logoKey`, description, `responsibilities` text array, `employmentType` (Full-time, Part-time, Freelance, Internship), `level`, `salary` display string, location, `remote` (Remote, Hybrid, On-site), deadline, `tags`, verified, write-only lat/lng. `JobApplication` is unique on `(jobId, applicantId)`. `JobSave` is composite `(userId, jobId)`.
+- `ServiceListing` — owner, title, `businessName`, description, `category` (the Services pills), `startingPriceCents`, location, availability, tags, `imageKey`, `backgroundCheck`, `rating` `Decimal(2, 1)`, `reviewCount`. `ServiceQuote` stores `preferredDate`, `preferredTime`, `notes`, private `address`, and `QuoteStatus`.
+- `CommunityPost` — author, `type` (discussion, announcement, lost_found, recommendation, event, giveaway), title, body, neighborhood, city. `CommunityReaction` is one emoji per `(postId, userId)` (`👍`, `❤️`, `😮`). `CommunityComment` is the reply.
+- `CommunityEvent` — organizer, title, description, neighborhood, city, `dateLabel`, `timeLabel`, `imageKey`. `CommunityEventRsvp` is composite `(eventId, userId)`. `attending` in the API is the RSVP count, not a stored column.
+- `LostFoundItem` — author, `kind` (`lost` or `found`; the API calls it `type`), item, neighborhood, city, `imageKey`.
+- `Giveaway` — author, item, neighborhood, city, `claimed`, optional `claimedById`. Public reads do not include `claimedBy`.
 
 ```mermaid
 erDiagram
-    USER ||--o{ PROFILE : has
-    USER ||--o{ VERIFICATION : has
-    USER ||--o{ USER_ROLE : has
-    USER ||--o{ USER_PREFERENCE : has
-    USER ||--o{ DEVICE_SESSION : has
-    USER ||--o{ BLOCKED_USER : blocks
-    USER ||--o{ LISTING : creates
-    USER ||--o{ NEED_REQUEST : creates
+    USER ||--o| PROFILE : has
+    USER ||--o| USER_PREFERENCE : has
+    USER ||--o| NOTIFICATION_PREFERENCE : has
+    USER ||--o{ LISTING : sells
+    USER ||--o{ NEED_REQUEST : requests
+    USER ||--o{ REQUEST_OFFER : offers
+    USER ||--o{ FAVORITE : saves
+    USER ||--o{ SAVED_SEARCH : saves
     USER ||--o{ CONVERSATION_PARTICIPANT : joins
+    USER ||--o{ MESSAGE : sends
     USER ||--o{ REVIEW : writes
-    USER ||--o{ REPORT : files
-
+    CATEGORY ||--o{ LISTING : tags
+    CATEGORY ||--o{ NEED_REQUEST : tags
     LISTING ||--o{ LISTING_IMAGE : has
-    LISTING ||--o{ LISTING_CATEGORY : tags
-    LISTING ||--o{ LISTING_ATTRIBUTE : has
-    LISTING ||--o{ LISTING_AVAILABILITY : has
-    LISTING ||--o{ LISTING_LOCATION : has
-    LISTING ||--o{ FAVORITE : saved_by
     LISTING ||--o{ PRICE_HISTORY : tracks
-
-    NEED_REQUEST ||--o{ REQUEST_CATEGORY : tags
-    NEED_REQUEST ||--o{ REQUEST_REQUIREMENT : has
+    LISTING ||--o{ OFFER_ITEM : included_in
+    LISTING ||--o{ REQUEST_MATCH : matched
     NEED_REQUEST ||--o{ REQUEST_OFFER : receives
     NEED_REQUEST ||--o{ REQUEST_MATCH : matches
-
     REQUEST_OFFER ||--o{ OFFER_ITEM : includes
-    REQUEST_OFFER ||--o{ COUNTER_OFFER : has
-    REQUEST_OFFER ||--o{ OFFER_STATUS_HISTORY : tracks
-
-    TRANSACTION ||--o{ TRANSACTION_PARTICIPANT : has
+    REQUEST_OFFER ||--o{ COUNTER_OFFER : counters
+    CONVERSATION ||--o{ MESSAGE : contains
+    CONVERSATION ||--o{ TRANSACTION : may_have
     TRANSACTION ||--o{ TRANSACTION_MILESTONE : tracks
     TRANSACTION ||--o{ APPOINTMENT : schedules
-    TRANSACTION ||--o{ PAYMENT : records
-    TRANSACTION ||--o{ PAYOUT : settles
-    TRANSACTION ||--o{ REFUND : resolves
-    TRANSACTION ||--o{ DISPUTE : has
-
-    CONVERSATION ||--o{ CONVERSATION_PARTICIPANT : includes
-    CONVERSATION ||--o{ MESSAGE : contains
-    MESSAGE ||--o{ MESSAGE_ATTACHMENT : has
-    MESSAGE ||--o{ MESSAGE_READ_RECEIPT : records
-
-    USER ||--o{ TRUST_PASSPORT : owns
-    TRUST_PASSPORT ||--o{ TRUST_EVENT : emits
-    TRUST_PASSPORT ||--o{ REPUTATION_METRIC : aggregates
-    USER ||--o{ REVIEW_RESPONSE : responds_to
-    REVIEW ||--o{ REVIEW_RESPONSE : supports
-
-    NEIGHBORHOOD ||--o{ COMMUNITY_POST : hosts
-    COMMUNITY_POST ||--o{ COMMUNITY_COMMENT : has
-    COMMUNITY_POST ||--o{ COMMUNITY_REACTION : gets
-    NEIGHBORHOOD ||--o{ COMMUNITY_EVENT : schedules
-    NEIGHBORHOOD ||--o{ COMMUNITY_GOAL : defines
-    COMMUNITY_GOAL ||--o{ COMMUNITY_VOTE : receives
-    COMMUNITY_GOAL ||--o{ NEIGHBORHOOD_MISSION : contains
-    NEIGHBORHOOD_MISSION ||--o{ MISSION_CONTRIBUTOR : supports
-    NEIGHBORHOOD_MISSION ||--o{ MISSION_TASK : has
+    TRANSACTION ||--o{ REVIEW : may_have
 ```
 
-## 3. Core Prisma models
+```mermaid
+erDiagram
+    USER ||--o{ HOUSING_LISTING : posts
+    USER ||--o{ JOB_LISTING : posts
+    USER ||--o{ SERVICE_LISTING : offers
+    USER ||--o{ COMMUNITY_POST : writes
+    USER ||--o{ COMMUNITY_EVENT : organizes
+    USER ||--o{ LOST_FOUND_ITEM : posts
+    USER ||--o{ GIVEAWAY : posts
+    HOUSING_LISTING ||--o{ HOUSING_IMAGE : has
+    JOB_LISTING ||--o{ JOB_APPLICATION : receives
+    JOB_LISTING ||--o{ JOB_SAVE : bookmarked
+    SERVICE_LISTING ||--o{ SERVICE_QUOTE : receives
+    COMMUNITY_POST ||--o{ COMMUNITY_REACTION : has
+    COMMUNITY_POST ||--o{ COMMUNITY_COMMENT : has
+    COMMUNITY_EVENT ||--o{ COMMUNITY_EVENT_RSVP : has
+```
 
-At minimum, the schema should include the following models and relationships:
+## TARGET
 
-### Identity and accounts
+Tables and constraints the earlier design named that are **not** in `schema.prisma`. Do not document UI as if these exist.
 
-- `User`
-- `Profile`
-- `Verification`
-- `UserRole`
-- `UserPreference`
-- `NotificationPreference`
-- `DeviceSession`
-- `BlockedUser`
+### Identity and safety
 
-### Marketplace
+`Verification`, `DeviceSession`. `StaffRoleAssignment` and `BlockedUser` are implemented (see above).
 
-- `Listing`
-- `ListingImage`
-- `ListingCategory`
-- `ListingAttribute`
-- `ListingAvailability`
-- `ListingLocation`
-- `Favorite`
-- `SavedSearch`
-- `Wishlist`
-- `PriceHistory`
+### Marketplace extras
 
-### Request-first commerce
+`ListingCategory` (category is a single FK today), `ListingAttribute`, `ListingAvailability`, `ListingLocation` (location columns live on `Listing`), `Wishlist` separate from `Favorite`.
 
-- `NeedRequest`
-- `RequestCategory`
-- `RequestRequirement`
-- `RequestOffer`
-- `OfferItem`
-- `OfferStatusHistory`
-- `CounterOffer`
-- `RequestMatch`
-- `MatchPreference`
+### Request extras
 
-### Transactions
+`RequestCategory`, `RequestRequirement`, `OfferStatusHistory`, `MatchPreference`.
 
-- `Transaction`
-- `TransactionParticipant`
-- `TransactionMilestone`
-- `Appointment`
-- `PickupDetails`
-- `Payment`
-- `Payout`
-- `Refund`
-- `Dispute`
-- `Evidence`
-- `GuaranteeClaim`
+### Money and disputes
 
-### Communication
+`Payment`, `Payout`, `Refund`, `Dispute`, `Evidence`, `GuaranteeClaim`, `PickupDetails` (appointment has `locationNote` only).
 
-- `Conversation`
-- `ConversationParticipant`
-- `Message`
-- `MessageAttachment`
-- `MessageReadReceipt`
-- `TypingStatus`
+### Messaging extras
 
-### Trust
+`MessageAttachment`, `MessageReadReceipt`, `TypingStatus`.
 
-- `Review`
-- `ReviewResponse`
-- `TrustPassport`
-- `TrustEvent`
-- `ReputationMetric`
-- `Report`
-- `ModerationAction`
-- `SafetyIncident`
+### Trust extras
 
-### Community
+`ReviewResponse`, `TrustPassport`, `TrustEvent`, `ReputationMetric`, `SafetyIncident`. `Report` and `ModerationAction` are implemented. Profile stars and "Verified Neighbor" on Dashboard and Profile are fixture copy, not these tables.
 
-- `Neighborhood`
-- `TrustCircle`
-- `TrustCircleMember`
-- `CommunityPost`
-- `CommunityComment`
-- `CommunityReaction`
-- `CommunityEvent`
-- `NeighborhoodMission`
-- `MissionContributor`
-- `MissionTask`
-- `CommunityGoal`
-- `CommunityVote`
+### Community and verticals
 
-### Specialized categories
+`Neighborhood`, `TrustCircle`, `TrustCircleMember`, `NeighborhoodMission`, `MissionContributor`, `MissionTask`, `CommunityGoal`, `CommunityVote`, `VehicleListing`, `BorrowAgreement`, `SkillSwap`, `Bounty`, `Team`, `Bundle`, `BundleItem`.
 
-- `HousingListing`
-- `JobListing`
-- `ServiceProviderProfile`
-- `ServiceOffer`
-- `VehicleListing`
-- `BorrowAgreement`
-- `SkillSwap`
-- `Bounty`
-- `Team`
-- `Bundle`
-- `BundleItem`
+`HousingListing`, `JobListing`, `ServiceListing`, `ServiceQuote`, `CommunityPost`, `CommunityComment`, `CommunityReaction`, `CommunityEvent`, `LostFoundItem`, and `Giveaway` are implemented (see above). The older names `ServiceProviderProfile` and `ServiceOffer` were not added. Housing, jobs, services, and community screens still read `src/data/index.ts` until the wiring PR.
 
-## 4. Required data quality patterns
+### Target constraints worth keeping when those tables are added
 
-- Use UUID primary keys for most user-generated records
-- Add `createdAt`, `updatedAt`, and `deletedAt` timestamps consistently
-- Use soft deletes for any content that can be moderated or reported
-- Add correlation IDs for event-driven operations
-- Add appropriate indexes on `userId`, `status`, `category`, and geospatial columns
-- Use Prisma enums for lifecycle statuses and trust severity levels
+- UUID primary keys, `createdAt` / `updatedAt`, and `deletedAt` on user-generated content that can be moderated.
+- Unique active conversation membership.
+- One `Review` per `(transactionId, authorId)`.
+- Check constraints for non-negative cents and legal status values (enums already cover status).
+- Radius search uses `ST_DWithin` on `geog`. The PostGIS behavior is covered by `listings.integration.spec.ts` and `migrations/0015-postgis.integration.spec.ts`, which run in the CI integration job against `postgis/postgis:16-3.4`. Do not treat that job as passed until it has run on the commit.
+- Full-text index on listing and request text as ordinary Postgres text search. Not embeddings.
 
-## 5. Recommended indexes
+### Schema rows that still have no writer
 
-Key indexes should include:
+Accept creates `Conversation`, `ConversationParticipant`, `Transaction`, and `TransactionParticipant`. `POST /reviews` writes `Review`. These still have no insert route:
 
-- `Listing(userId, status, createdAt)`
-- `Listing(category, status, neighborhoodId)`
-- `NeedRequest(userId, status, createdAt)`
-- `RequestOffer(requestId, status)`
-- `ConversationParticipant(userId, conversationId)`
-- `Message(conversationId, createdAt)`
-- `Review(targetUserId, createdAt)`
-- `CommunityPost(neighborhoodId, createdAt)`
-- PostGIS index on `ListingLocation` and `Neighborhood` geometry fields
-- Full-text indexes on listing titles/descriptions and request text
-
-## 6. Security and integrity controls
-
-- Prevent direct deletion of immutable trust records
-- Require explicit `userId` ownership checks for edits and deletes
-- Enforce transaction-level integrity for order, payment, and settlement records
-- Use unique constraints for active conversations and one-to-one participant records
-- Use DB-level checks for price, status, and scheduled date validity
-
-## 7. Example Prisma modeling strategy
-
-The schema should use clear domain modules and careful relation naming. The first release should prioritize correctness over over-normalization, but still avoid duplication of key facts such as reputation, availability, location, and pricing history.
-
-This is especially important for the request-first flow because a single request can spawn multiple offers and a single listing can be matched to many requests across different neighborhoods and categories.
+| Model | Needed for |
+| --- | --- |
+| `Appointment` | Dashboard meetup cards |
+| `RequestMatch` | Any "matches" list (deterministic, not semantic) |
+| `PriceHistory` | Saved Items price alerts without the fake $100 drop |
+| `ListingImage` | Create Listing photos |

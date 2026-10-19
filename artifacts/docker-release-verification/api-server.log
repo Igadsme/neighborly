@@ -1,0 +1,124 @@
+
+> neighborly-api@1.0.0 start /Volumes/T7 Shield/Projects/neighborly/backend
+> node dist/main.js
+
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [NestFactory] Starting Nest application...
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] AppModule dependencies initialized +1ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] PrismaModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] ConfigHostModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] JwtModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] HealthModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] CategoriesModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] AuthModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] ListingsModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] RequestsModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] ReviewsModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] TransactionsModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] HousingModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] JobsModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] ServicesModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] CommunityModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] UsersModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [InstanceLoader] MessagingModule dependencies initialized +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [WebSocketsController] MessagingGateway subscribed to the "conversation.join" message +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] HealthController {/api/v1}: +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/health, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/ready, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] AuthController {/api/v1/auth}: +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/auth/register, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/auth/login, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] ListingsController {/api/v1/listings}: +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/listings, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/listings/favorites, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/listings/saved-searches, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/listings/:id, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/listings, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/listings/drafts, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/listings/:id/publish, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/listings/:id, PATCH} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/listings/:id, DELETE} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/listings/:id/favorite, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/listings/saved-searches, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] RequestsController {/api/v1/requests}: +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/requests, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/requests/offers, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/requests/:id, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/requests, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/requests/:id/offers/:offerId/accept, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/requests/:id/offers/:offerId/reject, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/requests/offers/:id/counter, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/requests/:id/offers, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] ReviewsController {/api/v1/reviews}: +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/reviews, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] TransactionsController {/api/v1/transactions}: +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/transactions, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/transactions/:id/status, PATCH} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] MessagingController {/api/v1/conversations}: +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/conversations, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/conversations, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/conversations/:id/messages, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/conversations/:id/messages, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/conversations/:id/read, PATCH} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] UsersController {/api/v1/users}: +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/users/me, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/users/me/onboarding, PATCH} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] UserProfilesController {/api/v1/users}: +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/users/:id/profile, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/users/:id/reviews, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] CategoriesController {/api/v1/categories}: +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/categories, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] HousingController {/api/v1/housing}: +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/housing, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/housing/:id, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/housing, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/housing/:id, PATCH} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/housing/:id, DELETE} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] JobsController {/api/v1/jobs}: +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/jobs, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/jobs/saved, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/jobs/applications, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/jobs/:id/applications, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/jobs/:id, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/jobs, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/jobs/:id/apply, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/jobs/:id/save, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/jobs/:id, PATCH} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/jobs/:id, DELETE} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] ServicesController {/api/v1/services}: +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/services, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/services/quotes/mine, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/services/:id, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/services/:id/quotes, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/services, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/services/quotes/:id/accept, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/services/:id/quotes, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/services/:id, PATCH} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/services/:id, DELETE} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RoutesResolver] CommunityController {/api/v1/community}: +1ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/posts, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/posts, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/posts/:id, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/posts/:id, PATCH} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/posts/:id, DELETE} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/posts/:id/reactions, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/posts/:id/comments, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/posts/:id/comments, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/events, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/events, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/events/:id, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/events/:id, PATCH} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/events/:id, DELETE} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/events/:id/rsvp, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/lost-found, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/lost-found, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/lost-found/:id, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/lost-found/:id, PATCH} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/lost-found/:id, DELETE} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/giveaways, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/giveaways, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/giveaways/:id, GET} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/giveaways/:id, PATCH} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/giveaways/:id, DELETE} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [RouterExplorer] Mapped {/api/v1/community/giveaways/:id/claim, POST} route +0ms
+[Nest] 23687  - 09/23/2026, 3:05:54 PM     LOG [NestApplication] Nest application successfully started +0ms

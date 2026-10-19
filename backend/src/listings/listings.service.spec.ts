@@ -1,111 +1,309 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
+import { Test } from '@nestjs/testing'
 import { PrismaService } from '../prisma/prisma.service'
-import { StorageService } from '../storage/storage.service'
 import { ListingsService } from './listings.service'
+import { stubStorage } from '../common/testing/stub-storage'
 
-describe('ListingsService', () => {
+const publicSeller = {
+  select: {
+    id: true,
+    profile: {
+      select: {
+        displayName: true,
+        firstName: true,
+        neighborhood: true,
+        city: true
+      }
+    }
+  }
+}
+
+function expectPublicSeller(seller: unknown) {
+  expect(seller).toEqual(publicSeller)
+  const serialized = JSON.stringify(seller)
+  expect(serialized).not.toContain('passwordHash')
+  expect(serialized).not.toContain('email')
+  expect(serialized).not.toContain('latitude')
+  expect(serialized).not.toContain('longitude')
+  expect(serialized).not.toContain('phoneVerified')
+  expect(serialized).not.toContain('emailVerified')
+  expect(seller).not.toHaveProperty('select.passwordHash')
+  expect(seller).not.toHaveProperty('select.status')
+}
+
+describe('ListingsService public reads', () => {
+  it('selects a public seller card for the published listing list', async () => {
+    const findMany = jest.fn().mockResolvedValue([])
+    const moduleRef = await Test.createTestingModule({
+      providers: [ListingsService, stubStorage().provider, { provide: PrismaService, useValue: { listing: { findMany, count: async () => 1 } } }]
+    }).compile()
+
+    await moduleRef.get(ListingsService).list({ limit: 24, offset: 0 })
+
+    const query = findMany.mock.calls[0][0]
+    expect(query.where.status).toBe('PUBLISHED')
+    expectPublicSeller(query.select.seller)
+    expect(JSON.stringify(query)).not.toContain('passwordHash')
+
+    // Coordinates are read for distance math but never returned.
+    const page = await moduleRef.get(ListingsService).list({})
+    expect(JSON.stringify(page)).not.toContain('latitude')
+  })
+
+  it('selects a public seller card for listing detail', async () => {
+    const findFirst = jest.fn().mockResolvedValue({ id: 'listing-1' })
+    const moduleRef = await Test.createTestingModule({
+      providers: [ListingsService, stubStorage().provider, { provide: PrismaService, useValue: { listing: { findFirst } } }]
+    }).compile()
+
+    const detail = await moduleRef.get(ListingsService).get('listing-1')
+
+    const query = findFirst.mock.calls[0][0]
+    expect(query.where).toEqual({
+      id: 'listing-1',
+      deletedAt: null,
+      status: { in: ['PUBLISHED', 'SOLD'] },
+      seller: { status: 'ACTIVE', deletedAt: null }
+    })
+    expectPublicSeller(query.select.seller)
+    expect(query.select.images).toEqual({ orderBy: { sortOrder: 'asc' } })
+    expect(JSON.stringify(query)).not.toContain('passwordHash')
+    // Read for distance math, then stripped: the response never carries them.
+    expect(detail).not.toHaveProperty('latitude')
+    expect(detail).not.toHaveProperty('longitude')
+  })
+
+  it('returns 404 for a paused listing that the old public filter would return', async () => {
+    const paused = {
+      id: 'listing-1',
+      status: 'ARCHIVED',
+      deletedAt: null,
+      latitude: null,
+      longitude: null,
+      images: []
+    }
+    const findFirst = jest.fn(async (args: { where: { status?: { not?: string; in?: string[] } } }) => {
+      const status = args.where.status
+      // Today's get() asks for every non-draft, which includes a pause.
+      if (status?.not === 'DRAFT' || status?.in?.includes('ARCHIVED')) return paused
+      return null
+    })
+    const moduleRef = await Test.createTestingModule({
+      providers: [ListingsService, stubStorage().provider, { provide: PrismaService, useValue: { listing: { findFirst } } }]
+    }).compile()
+
+    await expect(moduleRef.get(ListingsService).get('listing-1')).rejects.toBeInstanceOf(NotFoundException)
+  })
+
+  it('still returns a paused listing from the owner manage read', async () => {
+    const paused = {
+      id: 'listing-1',
+      sellerId: 'user-1',
+      status: 'ARCHIVED',
+      deletedAt: null,
+      latitude: null,
+      longitude: null,
+      images: []
+    }
+    const findFirst = jest.fn().mockResolvedValue(paused)
+    const moduleRef = await Test.createTestingModule({
+      providers: [ListingsService, stubStorage().provider, { provide: PrismaService, useValue: { listing: { findFirst } } }]
+    }).compile()
+
+    const detail = await moduleRef.get(ListingsService).getForOwner('user-1', 'listing-1')
+    expect(detail).toMatchObject({ id: 'listing-1', status: 'ARCHIVED', deletedAt: null })
+    expect(findFirst.mock.calls[0][0].where).toEqual({
+      id: 'listing-1',
+      sellerId: 'user-1',
+      status: { not: 'DELETED' }
+    })
+  })
+
+  it('selects a public seller card for favorites', async () => {
+    const findMany = jest.fn().mockResolvedValue([])
+    const moduleRef = await Test.createTestingModule({
+      providers: [ListingsService, stubStorage().provider, { provide: PrismaService, useValue: { favorite: { findMany } } }]
+    }).compile()
+
+    await moduleRef.get(ListingsService).listFavorites('user-1')
+
+    const query = findMany.mock.calls[0][0]
+    // Only listings a buyer could still act on stay in the saved list.
+    expect(query.where).toEqual({
+      userId: 'user-1',
+      listing: { deletedAt: null, status: { in: ['PUBLISHED', 'SOLD'] } }
+    })
+    expectPublicSeller(query.include.listing.select.seller)
+    expect(query.include.listing.select.latitude).toBeUndefined()
+    expect(query.include.listing.select.longitude).toBeUndefined()
+    expect(JSON.stringify(query)).not.toContain('passwordHash')
+  })
+
+  it('can list a seller’s published or sold cards without coordinates', async () => {
+    const findMany = jest.fn().mockResolvedValue([])
+    const moduleRef = await Test.createTestingModule({
+      providers: [ListingsService, stubStorage().provider, { provide: PrismaService, useValue: { listing: { findMany, count: async () => 1 } } }]
+    }).compile()
+    const service = moduleRef.get(ListingsService)
+    const sellerId = '11111111-1111-4111-8111-111111111111'
+
+    const page = await service.list({ sellerId, limit: 24, offset: 0 })
+    expect(findMany.mock.calls[0][0].where).toMatchObject({ status: 'PUBLISHED', sellerId })
+    expect(JSON.stringify(page.items)).not.toContain('latitude')
+
+    await service.list({ sellerId, status: 'SOLD', limit: 24, offset: 0 })
+    expect(findMany.mock.calls[1][0].where).toMatchObject({ status: 'SOLD', deletedAt: null, sellerId })
+  })
+
+  it('rejects a latitude outside -90..90 before it queries', async () => {
+    const queryRaw = jest.fn()
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        ListingsService,
+        stubStorage().provider,
+        { provide: PrismaService, useValue: { listing: { findMany: jest.fn(), count: jest.fn() }, $queryRaw: queryRaw } }
+      ]
+    }).compile()
+
+    await expect(
+      moduleRef.get(ListingsService).list({ latitude: 91, longitude: 0, radiusMiles: 5, limit: 24, offset: 0 })
+    ).rejects.toBeInstanceOf(BadRequestException)
+    await expect(
+      moduleRef.get(ListingsService).list({ latitude: 0, longitude: 181, radiusMiles: 5, limit: 24, offset: 0 })
+    ).rejects.toBeInstanceOf(BadRequestException)
+    await expect(
+      moduleRef.get(ListingsService).list({ latitude: 33.75, longitude: -84.35, radiusMiles: 10000, limit: 24, offset: 0 })
+    ).rejects.toBeInstanceOf(BadRequestException)
+    expect(queryRaw).not.toHaveBeenCalled()
+  })
+
+  it('rejects an out-of-range viewer coordinate on the detail read', async () => {
+    const findFirst = jest.fn()
+    const moduleRef = await Test.createTestingModule({
+      providers: [ListingsService, stubStorage().provider, { provide: PrismaService, useValue: { listing: { findFirst } } }]
+    }).compile()
+
+    await expect(moduleRef.get(ListingsService).get('listing-1', { latitude: 91, longitude: 0 })).rejects.toBeInstanceOf(BadRequestException)
+    expect(findFirst).not.toHaveBeenCalled()
+  })
+
+  it('searches with ST_DWithin and keeps paused, draft, and suspended rows out of the SQL', async () => {
+    const queryRaw = jest.fn().mockResolvedValue([])
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        ListingsService,
+        stubStorage().provider,
+        { provide: PrismaService, useValue: { listing: { findMany: jest.fn() }, $queryRaw: queryRaw } }
+      ]
+    }).compile()
+
+    const page = await moduleRef.get(ListingsService).list({
+      latitude: 33.75,
+      longitude: -84.35,
+      radiusMiles: 5,
+      limit: 24,
+      offset: 0
+    })
+
+    expect(page).toEqual({ items: [], total: 0, limit: 24, offset: 0 })
+    expect(queryRaw).toHaveBeenCalledTimes(1)
+    const queries = queryRaw.mock.calls.map(call => sqlOf(call[0]))
+    const text = queries.map(query => query.text).join('\n')
+    const values = queries.flatMap(query => query.values)
+    expect(text).toContain('ST_DWithin')
+    expect(text).toContain('COUNT(*) OVER()')
+    expect(text).toContain('owner.status = \'ACTIVE\'')
+    expect(text).not.toContain('owner.status::text')
+    expect(text).toContain('deletedAt')
+    expect(text).toContain('ACTIVE')
+    expect(text).toContain('geog')
+    expect(values).toContain('PUBLISHED')
+    expect(values).not.toContain('ARCHIVED')
+    expect(values).not.toContain('DRAFT')
+    expect(values).toContain(5 * 1609.344)
+  })
+})
+
+function sqlOf(query: unknown): { text: string; values: unknown[] } {
+  const sql = query as { text?: string; strings?: string[]; values?: unknown[] }
+  const text = typeof sql.text === 'string' ? sql.text : (sql.strings ?? []).join(' ')
+  return { text, values: sql.values ?? [] }
+}
+
+describe('ListingsService owner actions', () => {
   const listing = {
-    findFirst: jest.fn(),
+    id: 'listing-1',
+    sellerId: 'user-1',
+    status: 'PUBLISHED' as 'PUBLISHED' | 'ARCHIVED' | 'SOLD' | 'DRAFT',
+    deletedAt: null,
+    title: 'Oak chair',
+    description: 'Solid oak dining chair'
   }
-  const listingImage = {
-    count: jest.fn(),
+
+  function serviceWith(listingRow: typeof listing | null, update = jest.fn(async ({ data }: { data: object }) => ({ ...listingRow, ...data }))) {
+    const findUnique = jest.fn().mockResolvedValue(listingRow)
+    const prisma = { listing: { findUnique, update, findMany: jest.fn(), groupBy: jest.fn() } }
+    return Test.createTestingModule({
+      providers: [ListingsService, stubStorage().provider, { provide: PrismaService, useValue: prisma }]
+    })
+      .compile()
+      .then((moduleRef) => ({ service: moduleRef.get(ListingsService), update, prisma }))
   }
-  const savedSearch = {
-    findUnique: jest.fn(),
-    delete: jest.fn(),
-  }
-  const storage = {
-    createImageUpload: jest.fn(),
-    verifyImage: jest.fn(),
-    publicImageUrl: jest.fn(),
-    deleteImage: jest.fn(),
-  }
-  const service = new ListingsService(
-    { listing, listingImage, savedSearch } as unknown as PrismaService,
-    storage as unknown as StorageService,
-  )
 
-  beforeEach(() => {
-    jest.clearAllMocks()
+  it('pauses a published listing without deleting it', async () => {
+    const { service, update } = await serviceWith(listing)
+    await service.pause('user-1', 'listing-1')
+    // Pausing is reversible, so it must not stamp deletedAt.
+    expect(update).toHaveBeenCalledWith({ where: { id: 'listing-1' }, data: { status: 'ARCHIVED', deletedAt: null } })
   })
 
-  it('does not return draft listings through the public detail lookup', async () => {
-    listing.findFirst.mockResolvedValue(null)
-    await expect(service.get('draft-id')).rejects.toBeInstanceOf(
-      NotFoundException,
-    )
-    expect(listing.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'draft-id', deletedAt: null, status: 'PUBLISHED' },
-      }),
-    )
+  it('archives by stamping deletedAt, which pause does not', async () => {
+    const { service, update } = await serviceWith(listing)
+    await service.archive('user-1', 'listing-1')
+    const data = update.mock.calls[0][0].data as { status: string; deletedAt: Date | null }
+    expect(data.status).toBe('ARCHIVED')
+    expect(data.deletedAt).toBeInstanceOf(Date)
+
+    update.mockClear()
+    await service.pause('user-1', 'listing-1')
+    expect(update).toHaveBeenCalledWith({ where: { id: 'listing-1' }, data: { status: 'ARCHIVED', deletedAt: null } })
   })
 
-  it('does not issue image upload grants to a non-owner', async () => {
-    listing.findFirst.mockResolvedValue({
-      id: 'listing-id',
-      sellerId: 'owner-id',
-    })
-    await expect(
-      service.createImageUpload('attacker-id', 'listing-id', {
-        contentType: 'image/jpeg',
-        sizeBytes: 100,
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException)
-    expect(listingImage.count).not.toHaveBeenCalled()
-    expect(storage.createImageUpload).not.toHaveBeenCalled()
+  it('refuses to pause a listing the caller does not own', async () => {
+    const { service } = await serviceWith(listing)
+    await expect(service.pause('someone-else', 'listing-1')).rejects.toBeInstanceOf(ForbiddenException)
   })
 
-  it('enforces the image count limit before issuing upload grants', async () => {
-    listing.findFirst.mockResolvedValue({
-      id: 'listing-id',
-      sellerId: 'owner-id',
-    })
-    listingImage.count.mockResolvedValue(5)
-    await expect(
-      service.createImageUpload('owner-id', 'listing-id', {
-        contentType: 'image/png',
-        sizeBytes: 100,
-      }),
-    ).rejects.toThrow('at most 5 images')
-    expect(storage.createImageUpload).not.toHaveBeenCalled()
+  it('marks a published listing sold', async () => {
+    const { service, update } = await serviceWith(listing)
+    await service.markSold('user-1', 'listing-1')
+    expect(update).toHaveBeenCalledWith({ where: { id: 'listing-1' }, data: { status: 'SOLD', deletedAt: null } })
   })
 
-  it('rejects an image key belonging to another user before reading storage', async () => {
-    listing.findFirst.mockResolvedValue({
-      id: 'listing-id',
-      sellerId: 'owner-id',
-    })
-    await expect(
-      service.completeImageUpload('owner-id', 'listing-id', {
-        key: 'listings/other-user/listing-id/some-id.jpg',
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException)
-    expect(storage.verifyImage).not.toHaveBeenCalled()
+  it('republishes a paused listing and still rejects a sold one', async () => {
+    const paused = { ...listing, status: 'ARCHIVED' as const }
+    const { service, update } = await serviceWith(paused)
+    await service.publish('user-1', 'listing-1')
+    // Restoring clears deletedAt so the row is publicly visible again.
+    expect(update).toHaveBeenCalledWith({ where: { id: 'listing-1' }, data: { status: 'PUBLISHED', deletedAt: null } })
+
+    const sold = await serviceWith({ ...listing, status: 'SOLD' })
+    await expect(sold.service.publish('user-1', 'listing-1')).rejects.toBeInstanceOf(ConflictException)
+    await expect(sold.service.markSold('user-1', 'listing-1')).resolves.toMatchObject({ status: 'SOLD' })
   })
 
-  it('prevents deleting another user’s saved search', async () => {
-    savedSearch.findUnique.mockResolvedValue({
-      id: 'search-id',
-      userId: 'owner-id',
-    })
-    await expect(
-      service.deleteSavedSearch('attacker-id', 'search-id'),
-    ).rejects.toBeInstanceOf(ForbiddenException)
-    expect(savedSearch.delete).not.toHaveBeenCalled()
-  })
-
-  it('deletes a saved search owned by the requesting user', async () => {
-    savedSearch.findUnique.mockResolvedValue({
-      id: 'search-id',
-      userId: 'user-id',
-    })
-    savedSearch.delete.mockResolvedValue({ id: 'search-id' })
-    await expect(
-      service.deleteSavedSearch('user-id', 'search-id'),
-    ).resolves.toEqual({ deleted: true })
-    expect(savedSearch.delete).toHaveBeenCalledWith({
-      where: { id: 'search-id' },
-    })
+  it('counts published listings by neighborhood', async () => {
+    const groupBy = jest.fn().mockResolvedValue([
+      { neighborhood: 'Decatur', _count: { _all: 2 } },
+      { neighborhood: null, _count: { _all: 1 } },
+      { neighborhood: 'Inman Park', _count: { _all: 4 } }
+    ])
+    const moduleRef = await Test.createTestingModule({
+      providers: [ListingsService, stubStorage().provider, { provide: PrismaService, useValue: { listing: { groupBy } } }]
+    }).compile()
+    await expect(moduleRef.get(ListingsService).neighborhoodCounts()).resolves.toEqual([
+      { neighborhood: 'Inman Park', count: 4 },
+      { neighborhood: 'Decatur', count: 2 }
+    ])
   })
 })

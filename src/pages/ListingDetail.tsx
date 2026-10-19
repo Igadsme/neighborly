@@ -1,27 +1,598 @@
-import { Button, Icon } from "../components/ui"
+import { useEffect, useState } from 'react'
+import { Avatar, StarRating, Badge, Button, Icon, ListingCard } from '../components/ui'
+import type { Listing } from '../data'
+import { api, ApiError, readError, readStatus } from '../api/client'
+import type { ApiListing } from '../api/types'
+import { copyShareUrl, pathFor } from '../lib/paths'
+import { hasDisplayableRating } from '../lib/ratings'
+import { isUuid, listingFromApi, mediaSrc } from '../lib/view'
+
+type Page = 'listing' | 'messages' | 'profile' | 'explore'
 
 interface ListingDetailProps {
-  onNavigate: (page: "explore") => void
+  listingId?: string | null
+  onNavigate: (p: Page, id?: string) => void
 }
 
-export default function ListingDetail({ onNavigate }: ListingDetailProps) {
+const safeSpots = ['Publix on Moreland Ave', 'Chase Bank ATM (Ponce)', 'Starbucks — Edgewood', 'APD Precinct 6 Lobby']
+
+async function loadRelated(currentId: string, categoryId?: string) {
+  let rows: ApiListing[] = []
+  if (categoryId) {
+    try {
+      const sameCategory = await api.listings.list({ categoryId, limit: 8 })
+      rows = sameCategory.items.filter((row) => row.id !== currentId)
+    } catch {
+      rows = []
+    }
+  }
+  if (rows.length === 0) {
+    const recent = await api.listings.list({ limit: 8 })
+    rows = recent.items.filter((row) => row.id !== currentId)
+  }
+  return rows.slice(0, 4).map((row) => listingFromApi(row))
+}
+
+export default function ListingDetail({ listingId, onNavigate }: ListingDetailProps) {
+  const fromApi = isUuid(listingId)
+  const [apiListing, setApiListing] = useState<Listing | null>(null)
+  const [loading, setLoading] = useState(fromApi)
+  const [loadError, setLoadError] = useState(!listingId || fromApi ? '' : 'Listing not found')
+  const [activeImage, setActiveImage] = useState(0)
+  const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [messageOpen, setMessageOpen] = useState(false)
+  const [message, setMessage] = useState('')
+  const [messageSent, setMessageSent] = useState(false)
+  const [messageSending, setMessageSending] = useState(false)
+  const [messageError, setMessageError] = useState('')
+  const [actionNote, setActionNote] = useState('')
+  const [zoomed, setZoomed] = useState(false)
+  const [relatedRows, setRelatedRows] = useState<Listing[]>([])
+  const [relatedLoading, setRelatedLoading] = useState(fromApi)
+  const [relatedError, setRelatedError] = useState('')
+
+  useEffect(() => {
+    if (!fromApi || !listingId) return
+    let active = true
+    setLoading(true)
+    setLoadError('')
+    setApiListing(null)
+    setRelatedRows([])
+    setRelatedError('')
+    setRelatedLoading(true)
+    setSaved(false)
+    setSaveError('')
+    setActiveImage(0)
+    setMessage('')
+    setMessageError('')
+    setMessageSent(false)
+    const savedIds = api.auth.hasSession()
+      ? api.listings
+          .favorites()
+          .then((rows) => new Set(rows.map((row) => row.listing.id)))
+          .catch(() => new Set<string>())
+      : Promise.resolve(new Set<string>())
+    Promise.all([api.listings.get(listingId), savedIds])
+      .then(([row, ids]) => {
+        if (!active) return
+        const next = listingFromApi(row, ids.has(row.id))
+        setApiListing(next)
+        setSaved(next.saved)
+      })
+      .catch((cause: unknown) => {
+        if (!active) return
+        setRelatedLoading(false)
+        if (cause instanceof ApiError && cause.status === 404) {
+          setLoadError('Listing not found')
+          return
+        }
+        setLoadError(readStatus(cause, 'This listing could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [fromApi, listingId])
+
+  useEffect(() => {
+    if (!fromApi || !apiListing) return
+    let active = true
+    setRelatedLoading(true)
+    setRelatedError('')
+    setRelatedRows([])
+    loadRelated(apiListing.id, apiListing.categoryId)
+      .then((rows) => {
+        if (active) setRelatedRows(rows)
+      })
+      .catch((cause: unknown) => {
+        if (active) setRelatedError(readError(cause, 'Similar listings could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setRelatedLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [fromApi, apiListing])
+
+  const listing = apiListing
+  const relatedListings = relatedRows
+
+  useEffect(() => {
+    if (!messageSent) return
+    const timer = window.setTimeout(() => {
+      setMessageOpen(false)
+      onNavigate('messages')
+    }, 1200)
+    return () => window.clearTimeout(timer)
+  }, [messageSent, onNavigate])
+
+  const toggleSaved = async () => {
+    if (!listing) return
+    setSaveError('')
+    try {
+      const result = await api.listings.toggleFavorite(listing.id)
+      setSaved(result.saved)
+    } catch (cause: unknown) {
+      setSaveError(readStatus(cause, 'Saving this listing is unavailable.'))
+    }
+  }
+
+  const reportListing = async () => {
+    if (!listingId) return
+    setActionNote('')
+    try {
+      await api.safety.report({ targetType: 'LISTING', targetId: listingId, reason: 'OTHER' })
+      setActionNote('Report submitted.')
+    } catch (cause: unknown) {
+      setActionNote(readStatus(cause, 'Unable to submit this report.'))
+    }
+  }
+
+  const handleSendMessage = async () => {
+    const body = message.trim()
+    if (!body || !listing || messageSending) return
+    if (!isUuid(listing.seller.id)) {
+      setMessageError("This seller can't be messaged yet.")
+      return
+    }
+    setMessageSending(true)
+    setMessageError('')
+    try {
+      await api.conversations.create({
+        participantId: listing.seller.id,
+        listingId: listing.id,
+        body,
+      })
+      setMessageSent(true)
+    } catch (cause: unknown) {
+      setMessageError(readStatus(cause, "This message couldn't be sent."))
+    } finally {
+      setMessageSending(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
+        <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
+          Loading listing…
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError || !listing) {
+    return (
+      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center px-4">
+        <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D] max-w-md text-center">
+          {loadError || 'Choose a listing to see its details.'}
+        </div>
+      </div>
+    )
+  }
+
+  const cover = (image: string | undefined, params: string) => mediaSrc(image, params)
+  const detailRows = [
+    { label: 'Condition', value: listing.condition || '—' },
+    { label: 'Category', value: listing.category || '—' },
+    { label: 'Neighborhood', value: listing.neighborhood || '—' },
+    { label: 'City', value: listing.city || '—' },
+    { label: 'Pickup', value: listing.pickupAvailable ? 'Available' : 'Not available' },
+    { label: 'Delivery', value: listing.deliveryAvailable ? 'Available' : 'Not available' },
+    { label: 'Shipping', value: listing.shippingAvailable ? 'Available' : 'Not available' },
+  ]
+
   return (
-    <main className="flex min-h-[70vh] items-center justify-center bg-[#FAFAF7] px-4 py-16">
-      <section className="max-w-lg rounded-3xl border border-[#E8E6DF] bg-white p-8 text-center shadow-sm">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F0FBF3] text-[#2D6A4F]">
-          <Icon name="tag" size={24} />
-        </span>
-        <h1 className="mt-5 font-display text-2xl font-semibold text-[#1B2A4A]">
-          Listing details unavailable
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-[#5C6E8A]">
-          This link did not include a published listing ID. Prototype listing details are no longer shown as if they were real. Browse the marketplace and open a persisted listing instead.
-        </p>
-        <Button variant="primary" size="sm" className="mt-6" onClick={() => onNavigate("explore")}>
-          <Icon name="search" size={14} />
-          Browse listings
+    <div className="min-h-screen bg-[#FAFAF7] pb-32 md:pb-16">
+
+      {/* Breadcrumb */}
+      <div className="bg-white border-b border-[#E8E6DF]">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 flex items-center gap-2 text-sm text-[#5C6E8A]">
+          <button onClick={() => onNavigate('explore')} className="hover:text-[#2D6A4F] transition-colors">Explore</button>
+          <Icon name="chevronRight" size={12} />
+          <span>{listing.category || 'Listing'}</span>
+          <Icon name="chevronRight" size={12} />
+          <span className="text-[#1B2A4A] font-medium truncate">{listing.title}</span>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6">
+        <div className="grid lg:grid-cols-[1fr_380px] gap-8">
+
+          {/* Left column */}
+          <div>
+            {/* Photo gallery */}
+            <div className="mb-6">
+              {/* Main image */}
+              <div
+                className="relative bg-[#F5F4EF] rounded-3xl overflow-hidden mb-3 cursor-zoom-in h-72 md:h-[480px]"
+                onClick={() => setZoomed(!zoomed)}
+              >
+                {cover(listing.images[activeImage], 'w=900&h=600&fit=crop&auto=format') && (
+                <img
+                  src={cover(listing.images[activeImage], 'w=900&h=600&fit=crop&auto=format')!}
+                  alt={listing.title}
+                  className="w-full h-full object-cover"
+                />
+                )}
+                {/* Actions overlay */}
+                <div className="absolute top-4 right-4 flex gap-2">
+                  <button
+                    type="button"
+                    aria-label="Save listing"
+                    onClick={e => { e.stopPropagation(); void toggleSaved() }}
+                    className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-md hover:scale-110 transition-transform"
+                  >
+                    <Icon name="heart" size={16} className={saved ? 'fill-[#E8694A] stroke-[#E8694A]' : 'stroke-[#5C6E8A]'} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Share listing"
+                    onClick={e => {
+                      e.stopPropagation()
+                      const path = pathFor('listing', listing.id)
+                      if (!path) {
+                        setActionNote("Sharing a link isn't available in this version.")
+                        return
+                      }
+                      void copyShareUrl(path).then(result => {
+                        setActionNote(
+                          result === 'copied'
+                            ? 'Link copied.'
+                            : "Sharing a link isn't available in this version.",
+                        )
+                      })
+                    }}
+                    className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-md hover:scale-110 transition-transform"
+                  >
+                    <Icon name="share" size={16} className="stroke-[#5C6E8A]" />
+                  </button>
+                </div>
+                {/* Image counter */}
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs font-medium px-3 py-1 rounded-full backdrop-blur-sm">
+                  {listing.images.length ? activeImage + 1 : 0} / {listing.images.length}
+                </div>
+                {/* Condition badge */}
+                <div className="absolute top-4 left-4">
+                  <Badge variant="blue">{listing.condition}</Badge>
+                </div>
+              </div>
+
+              {/* Thumbnails */}
+              <div className="flex gap-2">
+                {listing.images.map((img, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActiveImage(i)}
+                    className={`w-20 h-20 rounded-xl overflow-hidden border-2 transition-all bg-[#F5F4EF] ${activeImage === i ? 'border-[#2D6A4F]' : 'border-transparent'}`}
+                  >
+                    {cover(img, 'w=160&h=160&fit=crop&auto=format') && (
+                      <img src={cover(img, 'w=160&h=160&fit=crop&auto=format')!} alt="" className="w-full h-full object-cover" />
+                    )}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  disabled
+                  className="w-20 h-20 rounded-xl border-2 border-dashed border-[#E8E6DF] flex flex-col items-center justify-center text-[#5C6E8A] cursor-not-allowed"
+                >
+                  <Icon name="camera" size={16} />
+                  <span className="text-[9px] mt-1 text-center leading-tight">Video · Coming soon</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Title, price, meta */}
+            <div className="mb-6">
+              <div className="flex items-start justify-between gap-4 mb-3">
+                <h1 className="font-display text-2xl md:text-3xl font-semibold text-[#1B2A4A] leading-tight">{listing.title}</h1>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-3xl font-bold text-[#1B2A4A]">{listing.isFree ? 'Free' : listing.price != null ? `$${listing.price.toLocaleString()}` : 'OBO'}</p>
+                  <p className="text-xs text-[#5C6E8A]">or best offer</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                {listing.condition && <Badge variant="blue">{listing.condition}</Badge>}
+                {listing.pickupAvailable && <Badge variant="green">Pickup available</Badge>}
+                {listing.deliveryAvailable && <Badge variant="blue">Delivery</Badge>}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4 text-sm text-[#5C6E8A]">
+                <span className="flex items-center gap-1"><Icon name="mapPin" size={13} className="text-[#B94C2A]" />{[listing.neighborhood, listing.city].filter(Boolean).join(', ')} · {listing.distance}</span>
+                <span className="flex items-center gap-1"><Icon name="calendar" size={13} />Posted {listing.postedAt}</span>
+                <span className="flex items-center gap-1"><Icon name="eye" size={13} />— views</span>
+                <span className="flex items-center gap-1"><Icon name="heart" size={13} />— saves</span>
+              </div>
+            </div>
+
+            {/* AI Summary */}
+            <div className="bg-gradient-to-r from-[#F0FBF3] to-[#F0F7FF] border border-[#74C69D]/30 rounded-2xl p-4 mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">✨</span>
+                <span className="text-xs font-semibold text-[#2D6A4F] uppercase tracking-wide">Neighborly AI Summary</span>
+              </div>
+              <p className="text-sm text-[#1B2A4A] leading-relaxed">{listing.description}</p>
+            </div>
+
+            {/* Description */}
+            <div className="mb-6">
+              <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-3">Description</h2>
+              <p className="text-[#5C6E8A] leading-relaxed text-sm">{listing.description}</p>
+            </div>
+
+            {/* Details */}
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 mb-6">
+              <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-4">Item details</h2>
+              <div className="grid grid-cols-2 gap-3">
+                {detailRows.map(({ label, value }) => (
+                  <div key={label} className="flex flex-col">
+                    <span className="text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide">{label}</span>
+                    <span className="text-sm text-[#1B2A4A] mt-0.5">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Pickup & delivery */}
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 mb-6">
+              <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-4">Pickup & delivery</h2>
+              <div className="space-y-3">
+                <div className={`flex items-center gap-3 p-3 rounded-xl ${listing.pickupAvailable ? 'bg-[#F0FBF3]' : 'bg-[#F5F4EF] opacity-50'}`}>
+                  <div className="w-9 h-9 rounded-full bg-[#D8F3DC] flex items-center justify-center"><Icon name="mapPin" size={15} className="text-[#2D6A4F]" /></div>
+                  <div>
+                    <p className="font-medium text-sm text-[#1B2A4A]">{listing.pickupAvailable ? 'Pickup available' : 'Pickup — not available'}</p>
+                    <p className="text-xs text-[#5C6E8A]">{listing.neighborhood || 'Nearby'} — seller can help load</p>
+                  </div>
+                  {listing.pickupAvailable && <Icon name="check" size={14} className="ml-auto text-[#2D6A4F]" />}
+                </div>
+                <div className={`flex items-center gap-3 p-3 rounded-xl ${listing.deliveryAvailable ? 'bg-[#F0FBF3]' : 'bg-[#F5F4EF] opacity-50'}`}>
+                  <div className="w-9 h-9 rounded-full bg-[#EEF0F5] flex items-center justify-center"><Icon name="truck" size={15} className="text-[#5C6E8A]" /></div>
+                  <div>
+                    <p className="font-medium text-sm text-[#1B2A4A]">{listing.deliveryAvailable ? 'Delivery available' : 'Delivery — not available'}</p>
+                    <p className="text-xs text-[#5C6E8A]">{listing.deliveryAvailable ? 'Seller offers delivery' : 'Seller does not offer delivery'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Safety */}
+            <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Icon name="shield" size={16} className="text-[#B94C2A]" />
+                <h2 className="font-semibold text-[#1B2A4A]">Safety tips</h2>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {safeSpots.map(spot => (
+                  <div key={spot} className="flex items-center gap-2 text-xs text-[#1B2A4A] bg-white rounded-lg p-2">
+                    <span className="text-[#2D6A4F]">📍</span>
+                    {spot}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-[#5C6E8A] mt-3">⚠️ Never pay via gift cards, wire transfer, or apps like Zelle/Venmo to strangers. Always meet in person for large items.</p>
+            </div>
+
+            {/* Reviews */}
+            <div className="mb-6">
+              <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-4">Seller reviews</h2>
+              <div className="space-y-4">
+                <p className="text-sm text-[#5C6E8A]">Seller reviews appear after completed exchanges.</p>
+              </div>
+            </div>
+
+            {/* Similar listings */}
+            <div>
+              <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-4">Similar listings</h2>
+              {relatedError && <p className="text-sm text-[#C4512D] mb-3">{relatedError}</p>}
+              {relatedLoading && <p className="text-sm text-[#5C6E8A]">Loading similar listings…</p>}
+              {!relatedLoading && !relatedError && relatedListings.length === 0 && (
+                <p className="text-sm text-[#5C6E8A]">No similar listings yet.</p>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                {relatedListings.map(l => (
+                  <ListingCard key={l.id} listing={l} onClick={() => onNavigate('listing', l.id)} compact />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right column — sticky actions */}
+          <div className="hidden lg:block">
+            <div className="sticky top-24 space-y-4">
+              {/* Price card */}
+              <div className="bg-white rounded-3xl border border-[#E8E6DF] shadow-md p-6">
+                <div className="flex items-baseline justify-between mb-1">
+                  <span className="text-3xl font-bold text-[#1B2A4A]">{listing.isFree ? 'Free' : listing.price != null ? `$${listing.price.toLocaleString()}` : 'OBO'}</span>
+                  <button onClick={() => void toggleSaved()} className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${saved ? 'text-[#B94C2A]' : 'text-[#5C6E8A] hover:text-[#B94C2A]'}`}>
+                    <Icon name="heart" size={15} className={saved ? 'fill-[#E8694A] stroke-[#E8694A]' : ''} />
+                    {saved ? 'Saved' : 'Save'}
+                  </button>
+                </div>
+                <p className="text-xs text-[#5C6E8A] mb-5">or best offer · {listing.neighborhood} · {listing.distance}</p>
+                {saveError && <p className="text-xs text-[#C4512D] mb-3">{saveError}</p>}
+
+                <div className="space-y-3">
+                  <Button variant="primary" size="lg" fullWidth onClick={() => setMessageOpen(true)}>
+                    <Icon name="message" size={16} />
+                    Message seller
+                  </Button>
+                  <Button variant="secondary" size="lg" fullWidth disabled>
+                    <Icon name="dollar" size={16} />
+                    Make an offer · Coming soon
+                  </Button>
+                  {actionNote && <p className="text-xs text-[#A63D27]" role="alert">{actionNote}</p>}
+                  <Button variant="outline" size="md" fullWidth disabled>Reserve item · Coming soon</Button>
+                </div>
+
+                <div className="mt-5 pt-5 border-t border-[#F5F4EF] space-y-2">
+                  <div className="flex items-center gap-2 text-xs text-[#5C6E8A]">
+                    <Icon name="shield" size={12} className="text-[#2D6A4F]" />
+                    Neighborly buyer protection
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-[#5C6E8A]">
+                    <Icon name="mapPin" size={12} className="text-[#2D6A4F]" />
+                    Safe meetup spots suggested
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-[#5C6E8A]">
+                    <Icon name="message" size={12} className="text-[#2D6A4F]" />
+                    Secure in-app messaging only
+                  </div>
+                </div>
+              </div>
+
+              {/* Seller card */}
+              <div className="bg-white rounded-3xl border border-[#E8E6DF] p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <Avatar src={listing.seller.avatar} name={listing.seller.name} size="lg" verified={listing.seller.verified} />
+                  <div>
+                    <p className="font-semibold text-[#1B2A4A]">{listing.seller.name}</p>
+                    <p className="text-xs text-[#5C6E8A]">{listing.seller.neighborhood}{listing.seller.memberSince ? ` · Member since ${listing.seller.memberSince}` : ''}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      {hasDisplayableRating(listing.seller.rating, listing.seller.reviews) && (
+                        <StarRating rating={listing.seller.rating} count={listing.seller.reviews} size="xs" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="bg-[#F5F4EF] rounded-xl p-2 text-center">
+                    <p className="font-bold text-[#1B2A4A] text-sm">—</p>
+                    <p className="text-[9px] text-[#5C6E8A]">Sales</p>
+                  </div>
+                  <div className="bg-[#F5F4EF] rounded-xl p-2 text-center">
+                    <p className="font-bold text-[#1B2A4A] text-sm">—</p>
+                    <p className="text-[9px] text-[#5C6E8A]">Response</p>
+                  </div>
+                  <div className="bg-[#F5F4EF] rounded-xl p-2 text-center">
+                    <p className="font-bold text-[#2D6A4F] text-sm">—</p>
+                    <p className="text-[9px] text-[#5C6E8A]">Rating</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {listing.seller.verified && <Badge variant="green" size="sm">✓ Email verified</Badge>}
+                  {listing.seller.idVerified && <Badge variant="green" size="sm">🪪 ID verified</Badge>}
+                </div>
+
+                <button onClick={() => onNavigate('profile', isUuid(listing.seller.id) ? listing.seller.id : undefined)} className="w-full py-2 text-sm font-medium text-[#2D6A4F] border border-[#2D6A4F]/30 rounded-xl hover:bg-[#F0FBF3] transition-colors">
+                  View full profile
+                </button>
+              </div>
+
+              {/* Report */}
+              <button
+                onClick={() => void reportListing()}
+                className="w-full text-xs font-medium text-center py-2 transition-colors text-[#5C6E8A] hover:text-[#5C6E8A]"
+              >
+                Report this listing
+              </button>
+              {actionNote && <p className="text-xs text-[#A63D27] text-center" role="alert">{actionNote}</p>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile sticky actions */}
+      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-40 bg-white border-t border-[#E8E6DF] px-4 py-3 flex gap-3 md:hidden">
+        <button type="button" aria-label="Save listing" onClick={() => void toggleSaved()} className={`w-12 h-12 rounded-full border flex items-center justify-center flex-shrink-0 ${saved ? 'bg-[#FDE8E0] border-[#E8694A]' : 'bg-white border-[#E8E6DF]'}`}>
+          <Icon name="heart" size={18} className={saved ? 'fill-[#E8694A] stroke-[#E8694A]' : 'stroke-[#5C6E8A]'} />
+        </button>
+        <Button variant="primary" size="md" fullWidth onClick={() => setMessageOpen(true)}>
+          <Icon name="message" size={15} />
+          Message seller
         </Button>
-      </section>
-    </main>
+        <Button variant="secondary" size="md" fullWidth disabled>
+          Make offer · Coming soon
+        </Button>
+      </div>
+
+      {/* Message modal */}
+      {messageOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 animate-fade-in-up">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display text-lg font-semibold text-[#1B2A4A]">Message {listing.seller.name.split(' ')[0]}</h3>
+              <button type="button" aria-label="Close message" onClick={() => setMessageOpen(false)} className="w-8 h-8 rounded-full bg-[#F5F4EF] flex items-center justify-center hover:bg-[#E8E6DF] transition-colors">
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+            {/* Listing preview */}
+            <div className="flex gap-3 p-3 bg-[#F5F4EF] rounded-xl mb-4">
+              <div className="w-12 h-12 rounded-lg overflow-hidden bg-[#E8E6DF]">
+                {cover(listing.images[0], 'w=100&h=100&fit=crop') && (
+                  <img src={cover(listing.images[0], 'w=100&h=100&fit=crop')!} alt="" className="w-full h-full object-cover" />
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-[#1B2A4A] line-clamp-1">{listing.title}</p>
+                <p className="text-xs text-[#5C6E8A]">{listing.isFree ? 'Free' : listing.price != null ? `$${listing.price.toLocaleString()}` : 'OBO'}</p>
+              </div>
+            </div>
+            {messageSent ? (
+              <div className="text-center py-4">
+                <div className="text-3xl mb-2">✅</div>
+                <p className="font-semibold text-[#1B2A4A]">Message sent!</p>
+                <p className="text-sm text-[#5C6E8A]">Redirecting to messages...</p>
+              </div>
+            ) : (
+              <>
+                {/* Quick replies */}
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {['Is this still available?', 'Would you take $600?', 'Can I pick up this weekend?'].map(r => (
+                    <button key={r} onClick={() => setMessage(r)} className="text-xs px-3 py-1.5 bg-[#F0FBF3] text-[#2D6A4F] border border-[#74C69D]/30 rounded-full hover:bg-[#D8F3DC] transition-colors font-medium">
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                {messageError && (
+                  <div className="mb-3 rounded-xl border border-[#E8694A]/30 bg-[#FFF5F2] px-4 py-3 text-sm text-[#A63D27]" role="alert">
+                    {messageError}
+                  </div>
+                )}
+                <textarea
+                  value={message}
+                  onChange={e => { setMessage(e.target.value); setMessageError('') }}
+                  placeholder="Ask about the item, availability, or suggest a meetup..."
+                  rows={3}
+                  className="w-full p-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] resize-none focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-all"
+                />
+                <div className="flex justify-end mt-3">
+                  <Button variant="primary" size="md" onClick={() => { void handleSendMessage() }} disabled={!message.trim() || messageSending}>
+                    <Icon name="send" size={14} />
+                    Send message
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

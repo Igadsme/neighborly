@@ -1,50 +1,111 @@
 # Frontend-to-backend feature map
 
-The React/Vite application and its existing component system remain the UI source of truth. `src/api/client.ts` centralizes REST and Socket.IO access; `src/api/listing-mapper.ts` maps API listing records into the existing listing-card model.
+Page engine: `src/App.tsx` holds `page` and swaps screens. There is no URL per screen. Remaining fixtures live in `src/data/index.ts` (`sellers`, `listings`, `mapListings`). Map and Profile no longer read those arrays. Housing, jobs, services, and community fixture arrays were removed after those screens were pointed at `/api/v1`. Landing still uses `listings`. The Categories featured strip loads published rows from `GET /listings` and does not import that fixture array. Listing Detail uses `GET /listings/:id` for UUID ids, including the similar strip. Non-UUID ids still use `listings`.
 
-## Current page and action mapping
+**IMPLEMENTED** means the page or client already calls an endpoint that exists. **TARGET** means the screen is Figma-complete and still local, or a control on a wired screen has no endpoint. Request-flow states for Nova are specified in [UX_REQUEST_FLOW_STATES.md](./UX_REQUEST_FLOW_STATES.md). Decisions that constrain wiring are in [DECISIONS.md](./DECISIONS.md).
 
-| Page / route | Connected behavior | Remaining fixture, unavailable, or partial behavior |
+v1 wiring does not add AI calls. The Create Listing AI Review step and landing scam-detection sentence stay visual. This map is not a release-complete claim. Local `.env`, Compose, and browser e2e on a Mac are still a separate step.
+
+## IMPLEMENTED
+
+### Shell
+
+| Location | Behavior | API |
 | --- | --- | --- |
-| Landing | Public API listing/category preview, email/password login; registration routes to onboarding | Social sign-in is unavailable; usage/testimonial/trust claims are removed |
-| Onboarding | Account, manually selected neighborhood, interests, capabilities, and preference persistence | Automatic location, email/phone verification, legal documents, push/email notification delivery, and refresh-token rotation are absent |
-| HomeFeed | Marketplace listing feed, API category filters, free-only filter, persisted favorite state, listing-ID navigation, loading/error/empty/retry states | Recommendations are not personalized; alerts, services, community, events, follows, and maps are explicitly unavailable |
-| Explore | API listing search, server-side supported filters/sort, persisted favorite state, pagination inputs | Radius and verified-only controls are unavailable; map mode is disabled; example queries are not search history |
-| Categories | API category catalog, newest marketplace listings, category selection opens filtered Explore | Category descriptions/counts/trending terms are not available in API |
-| MapDiscovery | Explicit unavailable state | Map pins, radius search, and neighborhood boundaries are not implemented |
-| ListingDetail | Persisted listing ID route uses API detail, listing images, favorite toggle, direct conversation with seller | Legacy route without an ID shows an unavailable state; listing-specific offers are unavailable |
-| CreateListing | Dynamic categories; files validated client/server, uploaded via short-lived S3-compatible signed forms, confirmed and ordered before the listing draft is published; retries continue a saved draft | Drafts cannot yet be managed after leaving this flow; the UI does not expose post-publication image editing; image upload requires configured object storage |
-| Requests | Create/discover requests, submit offer, requester accept/reject, transaction schedule/progression/completion, review | No request detail API, matching/radius search, attachments, or live database/E2E verification |
-| Messages | REST conversation history/send/read, Socket.IO message/typing/read updates, disconnected polling fallback; incoming message persists a notification | Attachments and push/email notification delivery are unavailable |
-| Notifications | API-backed offer, counteroffer, offer decision, and incoming-message records; read state and unread count persist, notification center has loading/empty/error/retry states | Latest 50 only; no pagination, push/email delivery, notification preferences UI, or live database/E2E verification |
-| SavedItems | API favorites and saved-search persistence; save-state failure rollback; restore saved query and filters to Explore; owner-only saved-search deletion | Price alerts, new-match alerts, and collections/wishlist are unavailable |
-| Profile | Current account identity, own published listings, completed exchange count, and received review records use APIs | Profile editing, verification, passport, report/block, and explainable trust metrics are unavailable |
-| Dashboard | Account-derived listing/offer/exchange/conversation counts, incoming request offers, accept/decline actions, exchange status, conversation previews, and owner-only listing edit/archive actions use APIs | Listing analytics, draft management, counteroffers, notification activity feed, and trust metrics are unavailable |
-| Housing | Searches real marketplace listings in a matching persisted housing category; details, saves, and generic message-seller flow reuse core marketplace APIs | No housing category yields an explicit unavailable state; no applications, booking, or housing-specific verification |
-| Services | Searches real marketplace listings in a matching persisted service category; details, saves, and generic message-seller flow reuse core marketplace APIs | Provider profiles, availability, booking, and background checks are unavailable |
-| Jobs | Searches real marketplace listings in a matching persisted jobs/gigs category; details, saves, and generic message-seller flow reuse core marketplace APIs | No matching category yields an unavailable state; applications and hiring workflow are absent |
-| Community | Explicit unavailable state with routes back to marketplace and requests | Posts, reactions, events, RSVP, and moderation APIs are absent |
+| `App` boot | "Loading Neighborly..." until session check finishes | `GET /users/me` when `neighborly.access_token` is set. Failure clears the token. |
+| `App` sign-out | Returns to `landing` | `api.auth.signOut` removes the token only. |
+| `Navigation` message badge | Same coral count on the desktop header, the mobile header, and the mobile bottom nav. The badge stays hidden at 0. Click still opens `messages`. | `GET /conversations` after a session. The count is conversations whose latest message is from someone else and whose caller `lastReadAt` is missing or older than that message (`unreadConversations`). `GET /conversations` returns only the latest message, so this is a thread count, not a notification feed. 401, an empty inbox, and signed-out all hide the badge. There is no `GET /notifications`. |
+| Signed-out gate | Any page other than `landing` and `onboarding` shows the existing house empty state with two buttons, both navigating to `landing` | None |
+| `Landing` sign-in dialog | Email and password, inline error, disabled while submitting | `POST /auth/login` |
+| `Onboarding` | Multi-step account setup. Email path persists. | `POST /auth/register`, then `PATCH /users/me/onboarding` |
+| `CreateListing` | Loads categories. Publish persists a marketplace listing. Save draft persists `DRAFT` and returns home. Step-5 alert, "Publishing...", and "Saving..." stay in the existing wizard. AI Review copy is still local. | `GET /categories`, `POST /listings`, `POST /listings/drafts` |
+| `SavedItems` | Saved Listings and Saved Searches tabs load, error, and empty for real. | `GET /listings/favorites`, `GET /listings/saved-searches`, `POST /listings/:id/favorite` |
+| `ListingCard` heart | Calls the API unless the parent passes `onSavedChange` | `POST /listings/:id/favorite` |
+| `HomeFeed` listings, services, events, discussions | Nearby, recommended, free, and new-today rails use listings. Service, event, and discussion strips use the vertical APIs. Loading, empty, and error cards match Dashboard. 401 copy is "Sign in to continue." | `GET /listings`, `GET /services`, `GET /community/events`, `GET /community/posts`, `GET /users/me` for the greeting name |
+| `Categories` featured strip | Section header, `listing-grid`, and `ListingCard` stay. Up to six published cards. A short loading, empty, or error line sits under that header. 401 copy is "Sign in to continue." A card click opens `listing` with the real id. Category counts, trending searches, and neighborhood counts are unchanged. | `GET /listings?status=PUBLISHED&limit=6` alongside `GET /categories` |
+| `Dashboard` offers, reviews, meetups, my listings, activity, message count | Offers, reviews, and meetups were already live. The Offers tab and Overview pending cards now load the caller's offers (`scope=all` so Received and Sent chips still work). My Listings filters `GET /listings` to the signed-in seller. Activity is built from offers, conversations, and transactions. Header name comes from `GET /users/me`. | `GET /users/me`, `GET /requests/offers?scope=all`, `GET /transactions`, `GET /conversations`, `GET /listings`, `POST /reviews`, offer accept/reject |
+| `Housing` | Rent/sale, type, beds, max price (dollars converted to `maxPriceCents`), pets, furnished, verified, utilities, and sort are query params. Cards format `priceCents / 100`. Owner name is the public card. Distance is the label "Nearby" because miles are not stored. | `GET /housing` |
+| `Jobs` | Type, level, workplace, and search hit `GET /jobs`. Salary stays the display string. Apply and bookmark call the job routes. Saved and applied ids come from the caller's lists. A 401 on those private reads leaves the public list up and shows "Sign in to continue." | `GET /jobs`, `GET /jobs/saved`, `GET /jobs/applications`, `POST /jobs/:id/apply`, `POST /jobs/:id/save` |
+| `Services` | Category pills and the search field call `GET /services`. "Request quote" posts notes, preferred date/time, and address. The requester's success panel is the existing "Request sent!" block. The provider still does not see the street address until accept, which this page does not perform. | `GET /services`, `POST /services/:id/quotes` |
+| `Community` | Feed, events, lost & found, and giveaways load from the community routes. Reactions, RSVP, giveaway claim, and the new-post modal persist. Counts on the stats bar for posts and events are the loaded rows. | `GET/POST /community/posts`, `POST /community/posts/:id/reactions`, `GET /community/events`, `POST /community/events/:id/rsvp`, `GET /community/lost-found`, `GET /community/giveaways`, `POST /community/giveaways/:id/claim` |
 
-## Global navigation
+`src/api/client.ts` implements requests, conversations, transactions, reviews, housing, jobs, services, and community. Vitest covers the vertical mappers plus happy, empty, and 401 renders for these screens (`pnpm test`).
 
-The navigation identity and neighborhood are read from the authenticated profile; absent values are shown as generic/unset rather than fabricated. Location editing and radius search are unavailable, and the location display is non-interactive. Search inputs route to Explore but do not accept or preserve a query. The bell badge uses the persisted unread notification count; no message-unread count is advertised.
+### Create Listing payload that actually leaves the browser
 
-## Persisted API data and workflow
+`categoryId`, `title` (AI-suggested title string if "Apply suggestion" was clicked, still just a string), `description`, `condition`, `pickupAvailable`, `deliveryAvailable`, and `priceCents` when the dollar field is filled (`Math.round(dollars * 100)`). Publish calls `POST /listings`. Save draft calls `POST /listings/drafts` with the same body.
 
-- Account and onboarding: `POST /auth/register`, `POST /auth/login`, `GET /users/me`, `PATCH /users/me/onboarding`.
-- Marketplace: categories and listing search/detail/create/edit/archive in the listings controller.
-- Saving: listing favorite toggle and saved-search create/list.
-- Requests: create/list and offer submit/counter/accept/reject.
-- Acceptance: server-side operation accepts one offer, closes the request, creates a transaction, and creates a participant-only conversation.
-- Transaction lifecycle: schedule appointment, enforce status transition, complete, then review.
-- Messaging: conversation create/list, message history/send, read state, authenticated Socket.IO events. Offer and message actions persist in-app notification records; notifications can be listed/read through the authenticated API.
+Not sent: photos, tags, shipping, coordinates, listing-type card, and the AI panels. Those panels stay on screen. `POST /requests` is not called by this wizard.
 
-The API uses explicit public response selections for listing/request/conversation data. Never map password hashes, private profile fields, or exact coordinates into public cards.
+### Saved Items behaviors that are not the API
 
-## Remaining mock-data dependencies
+- Collection chips and "New collection" are local. Every chip shows `savedListings.length`.
+- Compare bar is local (max 3). "Compare →" has no handler.
+- Price Alerts copies favorites and paints a synthetic "$100 off" / "↓ $100 off". That is not `PriceHistory`.
+- New-match block is static copy: "New-match alerts will appear here once saved-search notifications are enabled."
 
-No page imports runtime marketplace fixtures from `src/data`; remaining references in Explore, HomeFeed, and SavedItems are type-only. Unimplemented capability surfaces remain explicit: MapDiscovery, Community publishing, Housing bookings/applications, Services booking/provider profiles, Job applications, saved-search alerts/removal, trust/safety verification, payments, and push/email notifications. Listing photos now use signed uploads; Landing retains static brand/feature copy but uses live records for its listing/category preview.
+### Chrome that stays painted after this wiring
 
-## Interaction policy
+These controls and copy do not have an endpoint. They stay on screen and are not treated as persisted:
 
-For any further page connection, meaningful controls must call a persisted endpoint, reflect backend state after refresh, be intentionally disabled with an explanation, or show an explicit unavailable state. Loading, empty, error, retry, unauthorized, and removed states should be supplied for connected operations. Preserve existing responsive layout and styles.
+- Home location line "Inman Park · Atlanta, GA", category chips (visual only), "Neighbors to follow" people, and the map teaser pins.
+- Community neighbor count loads `GET /community/summary` (`neighbors`, active accounts). It is not the painted "2,847". Service category pill counts `(24)`, `(12)`, and the rest are the original labels.
+- Dashboard trust banner ("Verified Neighbor", 98%, 4.9, 52 transactions). View, save, message, and offer counters on a listing card are "—". "Earned" is "—" because payments are not connected. Pause calls `POST /listings/:id/pause`. Mark sold calls `POST /listings/:id/sold`. Promote has no route.
+- Housing heart, Tour, and the commute teaser. Message jumps to the messages page without creating a thread.
+- Jobs city field stays "Atlanta, GA" and is not a query param. Share has no handler. Responsibility bullets fall back to the original four lines only when a job has an empty `responsibilities` array.
+- Services heart and "Become a provider".
+- Community "+ Post lost/found" and "+ Give something" have no composer yet. Reply and Share on a post do not open a thread. Lost-and-found "Contact" does not start a conversation.
+- Explore's bell ("Save alert") calls `POST /listings/saved-searches`. The Saved Items price-alert bell and Onboarding notification toggles are not the nav message badge. Price-alert copy stays local. Saved-search delivery has a worker; a price-history series does not.
+
+## TARGET
+
+### Page inventory
+
+| Page id | File | What the screen shows today | Fixtures | Target module when wired | Notes for Nova |
+| --- | --- | --- | --- | --- | --- |
+| `landing` | `Landing.tsx` | Marketing, search field, sign-in dialog | Inline feature copy and `listings` slice | Auth is implemented | Search box is not hooked to `GET /listings`. Header Browse, Services, Housing, Jobs, and "Post a Listing" open the sign-in dialog. Get started and "Create an account" still open onboarding. There is no preview bar that enters the app without a session. |
+| `onboarding` | `Onboarding.tsx` | Method, profile, neighborhood, interests, notifications | Step copy | Implemented | Google and Apple tiles are not providers. |
+| `home` | `HomeFeed.tsx` | Category chips, listing rails, services, community strip | Suggested people only | Listings, services, events, and posts are implemented | Follow has no endpoint. Cards go to `listing` with the real id. |
+| `explore` | `Explore.tsx` | Query, filters, grid/list, suggestions | Suggestions are inline. Results come from `GET /listings`, then extra filters run in the browser | Target filters beyond `query` | "Save alert" calls `api.listings.saveSearch`. Map control navigates to `map`. |
+| `categories` | `Categories.tsx` | Category grid, trending searches, neighborhood counts, and a featured strip | Housing, Jobs, Services, and Vehicles counts come from the API. Other tile counts, trending searches, and neighborhood counts stay painted. The featured strip is live. | `GET /categories` (`listingCount`) and `GET /listings` (`status=PUBLISHED`, `limit=6`) | Loading, empty, and error lines sit under the page header and under Featured in Atlanta. Some tiles navigate to `housing`, `services`, `jobs`, `community`. This row is not a release. Docker Compose, migrate, seed, and signed-in browser e2e were not run. |
+| `map` | `MapDiscovery.tsx` | Map-style discovery | None for pins or the list. Safe spots and the mile line stay painted | `GET /listings?limit=100` | No Mapbox call. Pins use painted neighborhood centroids, not coordinates. See `docs/API_SPEC.md`. |
+| `listing` | `ListingDetail.tsx` | Live listing for a UUID id. Non-UUID ids still match `listings` | Fixtures only when the id is not a UUID | `GET /listings/:id`, `GET /listings` for similar cards (`categoryId` when present, otherwise recent published), `POST /listings/:id/favorite`, `GET /listings/favorites` to paint the saved heart, `POST /conversations` on Message send for a UUID seller | Seller card uses the public seller on the listing. "View full profile" passes that user id to `profile`. Message send for that live listing posts `participantId`, `listingId`, and the trimmed body, then keeps the painted “Message sent!” redirect. 401 shows “Sign in to continue.” Other failures stay in the modal. A non-UUID id still uses the local sent state and does not call the API. Negotiate, reserve, and share stay local. A UUID listing’s “Report this listing” calls `POST /safety/reports` (`targetType` `LISTING`, reason `OTHER`). A non-UUID id still shows “Reporting isn't available yet.” No owner archive control is painted here. There is no `GET /notifications`. |
+| `create` | `CreateListing.tsx` | Six-step wizard | Sample desk copy is the initial state | Publishes with `POST /listings`. Save draft uses `POST /listings/drafts`. | AI Review stays decorative. Composer states: [UX_REQUEST_FLOW_STATES.md](./UX_REQUEST_FLOW_STATES.md). |
+| `messages` | `Messages.tsx` | Two panes, filters, thread, offer card, safety banner | None for the thread list | Conversations API | Accept, decline, counter, and send are wired when a thread exists. |
+| `saved` | `SavedItems.tsx` | Three tabs | API for the first two tabs | Price history and alert delivery are target | Keep the empty/error cards when extending. |
+| `profile` | `Profile.tsx` | Signed-in user, or `userId` when passed | None | `GET /users/me` when no id is passed, then `GET /users/:id/profile`, `GET /users/:id/reviews`, `GET /listings?sellerId=` for published and `status=SOLD` | `App` stores the optional id from navigation. Listing detail passes the seller id. "My Profile" passes none, so the signed-in user loads. Follow stays local. Message on another profile calls `POST /conversations`. “Report this profile” calls `POST /safety/reports` (`targetType` `USER`). “Block this profile” is shown only when `userId` is passed and calls `POST /safety/blocks` and `DELETE /safety/blocks/:userId`. Reviews tab is read-only. Response time is an em dash. The avatar check means `emailVerified`, not an ID check. |
+| `dashboard` | `Dashboard.tsx` | Overview, My Listings, Offers, Activity | Trust banner and the em dashes noted above | Requests, offers, transactions, reviews, listings, conversations are implemented | Offer and review states: [UX_REQUEST_FLOW_STATES.md](./UX_REQUEST_FLOW_STATES.md). |
+| `housing` | `Housing.tsx` | Rental browsing | None | Implemented | See the implemented table. |
+| `services` | `Services.tsx` | Provider cards and quote modal | Category counts only | Implemented | Quote modal posts to the API. Address stays on the requester response. |
+| `jobs` | `Jobs.tsx` | List/detail, apply, save | Atlanta field and the responsibility fallback | Implemented | Apply and save persist. |
+| `community` | `Community.tsx` | Posts, events, lost & found, giveaways | Giveaway tips stay painted. The neighbor count is `GET /community/summary`. | Implemented | Reactions, RSVP, claim, and new posts persist. |
+
+`Navigation` (`src/components/Navigation.tsx`) highlights the current page id, pins location to a local Atlanta list, and shows `unreadMessages` from `App`. That number is the live unread-thread count from `GET /conversations`, or 0 when the caller is signed out, the list is caught up, or the list returns 401. The badge chrome is unchanged. Sign-out calls the prop. Global search is not a request. The Messages inbox row still marks a thread unread from the other participant's `lastReadAt`; the nav badge and the Dashboard "N unread" line both use the caller's `lastReadAt`.
+
+### Domain map (target bindings, existing screens only)
+
+- `landing` + `onboarding` → `User`, `Profile`, `UserPreference`, `NotificationPreference`. Verification and device-session tables are target and have no screen of their own.
+- `explore`, `home`, `categories`, `listing` → `Listing` and `Category`. Favorites → `Favorite`. Explore's save-alert control → `SavedSearch` via `POST /listings/saved-searches`.
+- `create` → `Listing` (`POST /listings` and `POST /listings/drafts`). Need requests stay on `POST /requests` for other callers. The wizard does not post a need.
+- Offer cards on `dashboard` and `messages` → `RequestOffer`, `CounterOffer`, `OfferItem`.
+- `messages` bubbles → `Conversation`, `Message`.
+- Dashboard meetups and the Messages progress strip → `Transaction`, `TransactionMilestone`, `Appointment`.
+- Dashboard "Reviews to complete" and Profile reviews → `Review`. Profile loads `GET /users/:id/reviews`. Dashboard does not call that list yet.
+- `housing`, `services`, `jobs`, `community` → `HousingListing`, `JobListing`, `ServiceListing`, `CommunityPost`, `CommunityEvent`, `LostFoundItem`, and `Giveaway`. The four pages call those routes. Field mapping is in [API_SPEC.md](./API_SPEC.md).
+
+### Controls that look done and are local
+
+- Explore suggestions, filters, sort, and view toggle.
+- Map radius subtitle ("Within 5 miles of Inman Park") and safe-spot pins. Pin selection, the list, category chips, search text, and "Search area" use the published listing payload. Closest sort is distance on the painted map.
+- Listing detail negotiate, reserve, and share. A UUID listing report calls `POST /safety/reports`. Related cards for a UUID listing navigate with the live id. Message send on a UUID listing calls `POST /conversations`. Fixture listings still use the local modal.
+- Messages filters do not include a real `transactions` predicate (`filter === 'transactions'` falls through to all).
+- Dashboard Promote. Pause and Mark sold call the listing routes.
+- Profile follow. Report and block on another profile call `/safety`.
+- Community reply, share, lost-and-found contact, and the two create buttons that have no form.
+- Categories trending searches and the neighborhood counts (`Math.random`). The featured strip reads `GET /listings`.
+
+### Request flow already on these screens
+
+Dashboard loads caller-scoped offers with `GET /requests/offers?scope=all`, then accept, reject, conversations, transactions, and review create. Messages still uses request list/get, counter, accept, and reject. Do not put fixture people back on those tabs. The remaining gaps are the TARGET controls above. The Create Listing wizard publishes a listing, not a need. This map is not a release-complete claim.
+
+Client methods to reuse, not rewrite: `api.requests.create`, `api.requests.list`, `api.requests.counterOffer`, `api.conversations.*` (including `create`), `api.transactions.list`, `api.transactions.transition`, `api.housing.list`, `api.jobs.*`, `api.services.list`, `api.services.requestQuote`, `api.community.*`.

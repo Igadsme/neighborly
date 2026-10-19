@@ -1,4 +1,7 @@
 node_modules/
+# macOS AppleDouble resource forks on the external volume
+._*
+**/._*
 dist/
 build/
 .DS_Store
@@ -6,7 +9,11 @@ build/
 **/.DS_Store
 **/._*
 .cache/
+# Real environment files hold secrets and are never committed. The templates
+# that document which variables exist contain no secrets and must be tracked,
+# or an operator cannot discover a required setting.
 .env*
+!.env.example
 !**/.env.example
 .vite/
 vite.config.*.timestamp-*
@@ -14,6 +21,42 @@ vite.config.*.timestamp-*
 *-debug.log*
 logs/
 *.log
+# Local database dumps from scripts/backup-postgres.sh. Never commit them.
+artifacts/backups/
+
+# Keep the Docker gate command output in the repo. Secrets stay out of these files.
+# The exception is narrower than `._*`, so AppleDouble forks stay ignored.
+!artifacts/docker-release-verification/*.log
+artifacts/docker-release-verification/._*
+artifacts/docker-release-verification/browser-smoke/.chrome-profile/
+
+# Milestone 10 browser verification. The JSON report is committed as the
+# record of what was measured; the screenshots are regenerable binaries of
+# more than a megabyte, so they are produced on demand rather than stored.
+# Re-create with:
+#   CHECK_OUT=artifacts/milestone10-browser node scripts/milestone10-browser-check.mjs
+artifacts/milestone10-browser/._*
+artifacts/milestone10-browser/*.png
+
+# Same policy for the authenticated pass: the JSON report is committed as the
+# record of what was measured, the screenshots are regenerable binaries.
+# Re-create with:
+#   CHECK_OUT=artifacts/milestone10-auth node scripts/milestone10-auth-check.mjs
+artifacts/milestone10-auth/._*
+artifacts/milestone10-auth/*.png
+
+# Same policy for the Milestone 11 pass: the JSON report is committed as the
+# record of what was measured, the screenshots are regenerable binaries.
+# Re-create with:
+#   CHECK_OUT=artifacts/milestone11-auth node scripts/milestone10-auth-check.mjs
+artifacts/milestone11-auth/._*
+artifacts/milestone11-auth/*.png
+
+# Same policy for the Milestone 12 verification pass.
+# Re-create with:
+#   CHECK_OUT=artifacts/milestone12-check node scripts/milestone10-auth-check.mjs
+artifacts/milestone12-check/._*
+artifacts/milestone12-check/*.png
 .claude-replay.*
 .tmp-*
 /.figma/design-context/
@@ -24,3 +67,12 @@ logs/
 # beside it.
 /.plugins/
 /.opencode-skills/
+
+# Final 12-milestone audit. Same policy as the passes above: the JSON report
+# is the record of what was measured, the screenshots are regenerable
+# binaries. Re-create with:
+#   CHECK_OUT=artifacts/final-audit-auth \
+#     APP_URL=http://localhost:4173 API_URL=http://localhost:3001/api/v1 \
+#     node scripts/milestone10-auth-check.mjs
+artifacts/final-audit-*/._*
+artifacts/final-audit-*/*.png

@@ -6,6 +6,6 @@ import { CommunityService } from './community.service'
 @Module({
   imports: [AuthModule],
   controllers: [CommunityController],
-  providers: [CommunityService],
+  providers: [CommunityService]
 })
 export class CommunityModule {}

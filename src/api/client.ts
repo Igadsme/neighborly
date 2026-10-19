@@ -1,28 +1,103 @@
 import type {
-  ApiFavorite,
-  ApiConversation,
-  ApiMessage,
-  ApiNotification,
-  ApiCommunityPost,
+  AccountPrivacyInput,
+  AccountProfileInput,
+  AccountStatus,
+  AcceptOfferResult,
+  ApiCommunityComment,
   ApiCommunityEvent,
-  ApiTransaction,
-  ApiSavedSearch,
-  AuthResponse,
-  CurrentUser,
-  ListingInput,
-  ListingQuery,
+  ApiCommunityPost,
+  ApiConversation,
+  ApiFavorite,
+  ApiGiveaway,
+  ApiHousing,
+  ApiJob,
+  ApiJobApplication,
+  ApiJobSave,
   ApiListing,
-  ApiListingImage,
-  NeedRequestRecord,
+  ApiLostFound,
+  ApiMessage,
+  ApiRequestDetail,
+  ApiRequestSummary,
+  ApiScopedOffer,
+  ApiSavedSearch,
+  ApiServiceListing,
+  ApiServiceQuote,
+  ApiTransaction,
+  AuthResponse,
+  CommunityPostInput,
+  CommunityPostQuery,
+  CommunitySummary,
+  CreateConversationInput,
+  GiveawayInput,
+  LostFoundInput,
+  NeighborhoodCount,
+  CreateConversationResult,
+  CurrentUser,
+  HousingQuery,
+  JobQuery,
+  ListingInput,
+  ListingPage,
+  ListingQueryParams,
+  BorrowAvailability,
+  PublicUserCard,
+  BorrowDispute,
+  BorrowExtension,
+  BorrowItemPage,
+  BorrowItemQuery,
+  BorrowableItem,
+  BorrowableItemInput,
+  BorrowRequest,
+  VerificationRecord,
+  BorrowRequestInput,
+  AppealRow,
+  CommunityBadgeRow,
+  ContributionRecord,
+  JoinResult,
+  MissionDetail,
+  MissionPage,
+  MissionParticipantRow,
+  MyReview,
+  NotificationPage,
+  Passport,
+  PassportPrivacy,
+  NotificationPreferences,
+  RequestMatch,
+  ReviewableExchange,
+  ReviewRow,
+  RequestPage,
+  RequestQuery,
+  RequestStatus,
+  RequestStatusEvent,
+  SavedSearchAlert,
+  StoredImage,
+  UnreadCounts,
+  HousingCreateInput,
+  JobCreateInput,
+  ServiceCreateInput,
   NeedRequestInput,
   OfferInput,
+  ProfileReview,
+  PublicProfile,
+  ReviewInput,
+  ServiceQuery,
+  ServiceQuoteInput,
 } from "./types"
 
-const API_URL = (
-  import.meta.env.VITE_API_URL ?? "http://localhost:3000/api/v1"
-).replace(/\/$/, "")
+/**
+ * Dev may call the local API when `VITE_API_URL` is unset. A production
+ * build fails in Vite before this module is emitted without the variable,
+ * and the localhost string is not part of that branch (`import.meta.env.DEV`
+ * is false), so the shipped bundle does not fall back to localhost.
+ */
+const DEV_API_URL = import.meta.env.DEV ? "http://localhost:3000/api/v1" : ""
+const API_URL = (import.meta.env.VITE_API_URL || DEV_API_URL).replace(/\/$/, "")
+/**
+ * BL-033: the access token stays in localStorage. Refresh stays in the
+ * httpOnly cookie, and logout still clears both. Moving the access token to
+ * memory is Cipher's call — an XSS bug is session compromise either way, so
+ * this lane does not relocate storage on its own.
+ */
 const ACCESS_TOKEN_KEY = "neighborly.access_token"
-let refreshPromise: Promise<string | null> | null = null
 
 export class ApiError extends Error {
   constructor(
@@ -34,56 +109,225 @@ export class ApiError extends Error {
   }
 }
 
-async function refreshAccessToken() {
-  refreshPromise ??= fetch(`${API_URL}/auth/refresh`, {
-    method: "POST",
-    credentials: "include",
-    headers: { Accept: "application/json" },
-  })
-    .then(async (response) => {
-      if (!response.ok) return null
-      const result = (await response.json()) as AuthResponse
-      window.localStorage.setItem(ACCESS_TOKEN_KEY, result.accessToken)
-      return result.accessToken
-    })
-    .finally(() => {
-      refreshPromise = null
-    })
-  return refreshPromise
+export const CSRF_COOKIE = "neighborly.csrf"
+export const CSRF_HEADER = "X-Neighborly-CSRF"
+
+function readCookie(name: string) {
+  const entry = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`))
+  if (!entry) return undefined
+  const value = entry.slice(name.length + 1)
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+/**
+ * Every call is credentialed so the HttpOnly refresh cookie rides along.
+ * The CSRF cookie is readable by design; it is echoed back in a header on
+ * state-changing requests, which a cross-site page cannot do.
+ */
+function authHeaders(headers: Headers, method: string) {
+  const token = window.localStorage.getItem(ACCESS_TOKEN_KEY)
+  if (token) headers.set("Authorization", `Bearer ${token}`)
+  if (!["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase())) {
+    const csrf = readCookie(CSRF_COOKIE)
+    if (csrf) headers.set(CSRF_HEADER, csrf)
+  }
+  return headers
+}
+
+async function readBody(response: Response) {
+  return response.json().catch(() => null) as Promise<{
+    message?: string | string[]
+  } | null>
+}
+
+type Renewal = "renewed" | "unauthorized" | "failed"
+
+let refreshInFlight: Promise<Renewal> | null = null
+
+/**
+ * Renews the access token through the HttpOnly refresh cookie. Concurrent
+ * 401s share one in-flight refresh so a burst of requests cannot rotate the
+ * cookie several times and trip reuse detection.
+ */
+function renewAccessToken(): Promise<Renewal> {
+  if (refreshInFlight) return refreshInFlight
+  refreshInFlight = (async () => {
+    try {
+      const response = await fetch(`${API_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+        headers: authHeaders(new Headers({ Accept: "application/json" }), "POST"),
+      })
+      if (!response.ok) {
+        // Only a rejection of the session itself ends it. A 5xx or a
+        // network failure is treated as transient so a blip does not sign
+        // the user out of a session the server still considers valid.
+        if (response.status === 401 || response.status === 403) {
+          window.localStorage.removeItem(ACCESS_TOKEN_KEY)
+          return "unauthorized"
+        }
+        return "failed"
+      }
+      const payload = (await response.json()) as AuthResponse
+      window.localStorage.setItem(ACCESS_TOKEN_KEY, payload.accessToken)
+      return "renewed"
+    } catch {
+      return "failed"
+    } finally {
+      refreshInFlight = null
+    }
+  })()
+  return refreshInFlight
+}
+
+export function onSessionExpired(listener: () => void) {
+  sessionExpiredListeners.add(listener)
+  return () => {
+    sessionExpiredListeners.delete(listener)
+  }
+}
+
+const sessionExpiredListeners = new Set<() => void>()
+
+function announceSessionExpired() {
+  sessionExpiredListeners.forEach(listener => listener())
 }
 
 async function request<T>(
   path: string,
   options: RequestInit = {},
-  allowRefresh = true,
+  retried = false
 ): Promise<T> {
-  const headers = new Headers(options.headers)
+  const method = options.method ?? "GET"
+  const headers = authHeaders(new Headers(options.headers), method)
   headers.set("Accept", "application/json")
   if (options.body && !headers.has("Content-Type"))
     headers.set("Content-Type", "application/json")
-  const token = window.localStorage.getItem(ACCESS_TOKEN_KEY)
-  if (token) headers.set("Authorization", `Bearer ${token}`)
 
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers,
     credentials: "include",
   })
-  if (response.status === 401 && allowRefresh && !path.startsWith("/auth/")) {
-    const refreshed = await refreshAccessToken()
-    if (refreshed) return request<T>(path, options, false)
-    window.localStorage.removeItem(ACCESS_TOKEN_KEY)
+
+  // One transparent renewal, then surface the original error. The session
+  // is only torn down when the server rejected the refresh credential.
+  if (response.status === 401 && !retried && !path.startsWith("/auth/")) {
+    const renewal = await renewAccessToken()
+    if (renewal === "renewed") return request<T>(path, options, true)
+    if (renewal === "unauthorized") announceSessionExpired()
   }
+
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as {
-      message?: string
-    } | null
+    const payload = await readBody(response)
     throw new ApiError(
-      payload?.message ?? `Request failed with status ${response.status}`,
+      readMessage(payload?.message, response.status),
       response.status,
     )
   }
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
+}
+
+function readMessage(message: string | string[] | undefined, status: number) {
+  if (Array.isArray(message)) {
+    const text = message.join(" ").trim()
+    if (text) return text
+  } else if (typeof message === "string" && message.trim()) {
+    return message
+  }
+  return `Request failed with status ${status}`
+}
+
+export function readError(cause: unknown, fallback: string) {
+  return cause instanceof ApiError && cause.message ? cause.message : fallback
+}
+
+export function readStatus(cause: unknown, fallback: string) {
+  if (cause instanceof ApiError && cause.status === 401) return "Sign in to continue."
+  return readError(cause, fallback)
+}
+
+/**
+ * XHR rather than fetch: only XHR exposes upload progress events, and the
+ * requirement is a real progress bar rather than a simulated one.
+ */
+function uploadWithProgress<T>(
+  path: string,
+  file: File,
+  onProgress?: (fraction: number) => void
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData()
+    form.append("file", file)
+
+    const xhr = new XMLHttpRequest()
+    xhr.open("POST", `${API_URL}${path}`)
+    xhr.withCredentials = true
+    const token = window.localStorage.getItem(ACCESS_TOKEN_KEY)
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`)
+    const csrf = readCookie(CSRF_COOKIE)
+    if (csrf) xhr.setRequestHeader(CSRF_HEADER, csrf)
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = event => {
+        if (event.lengthComputable && event.total > 0) onProgress(event.loaded / event.total)
+      }
+    }
+
+    xhr.onload = () => {
+      const payload = (() => {
+        try {
+          return JSON.parse(xhr.responseText) as { message?: string | string[] }
+        } catch {
+          return null
+        }
+      })()
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(1)
+        resolve(payload as T)
+        return
+      }
+      reject(new ApiError(readMessage(payload?.message, xhr.status), xhr.status))
+    }
+    xhr.onerror = () => reject(new ApiError("Upload failed. Check your connection and try again.", 0))
+    xhr.onabort = () => reject(new ApiError("Upload was cancelled.", 0))
+    xhr.send(form)
+  })
+}
+
+function queryString(query: object) {
+  const params = new URLSearchParams()
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === "") return
+    params.set(key, String(value))
+  })
+  const text = params.toString()
+  return text ? `?${text}` : ""
+}
+
+export interface StaffReport {
+  id: string
+  targetType: string
+  targetId: string
+  reason: string
+  details: string | null
+  status: string
+  createdAt: string
+  reporter?: {
+    id: string
+    profile?: {
+      displayName?: string | null
+      firstName?: string | null
+    } | null
+  } | null
 }
 
 export const api = {
@@ -112,6 +356,33 @@ export const api = {
       window.localStorage.setItem(ACCESS_TOKEN_KEY, result.accessToken)
       return result
     },
+    signOut: async () => {
+      // Clear locally first so the UI is responsive even if the network
+      // call fails, then tell the server to revoke this session.
+      window.localStorage.removeItem(ACCESS_TOKEN_KEY)
+      try {
+        await request<void>("/auth/logout", { method: "POST" })
+      } catch {
+        // A revoked-or-missing cookie is already the desired end state.
+      }
+    },
+    /** Ends every session on every device. */
+    signOutEverywhere: async () => {
+      window.localStorage.removeItem(ACCESS_TOKEN_KEY)
+      await request<void>("/auth/logout-all", { method: "POST" })
+    },
+    me: () => request<CurrentUser>("/users/me"),
+    hasSession: () => Boolean(window.localStorage.getItem(ACCESS_TOKEN_KEY)),
+    verifyEmail: (token: string) =>
+      request<{ verified: boolean; email: string }>("/auth/verify-email", {
+        method: "POST",
+        body: JSON.stringify({ token }),
+      }),
+    resendVerification: (email?: string) =>
+      request<{ sent: boolean }>("/auth/resend-verification", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
     forgotPassword: (email: string) =>
       request<{ accepted: boolean }>("/auth/forgot-password", {
         method: "POST",
@@ -122,35 +393,24 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ token, password }),
       }),
-    requestEmailVerification: () =>
-      request<{ sent: boolean; alreadyVerified: boolean }>("/auth/verify-email/request", { method: "POST" }),
-    confirmEmail: (token: string) =>
-      request<{ verified: boolean }>("/auth/verify-email/confirm", {
+    changePassword: (currentPassword: string, password: string) =>
+      request<{ changed: boolean }>("/auth/change-password", {
         method: "POST",
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ currentPassword, password }),
       }),
-    signOut: () => {
-      const token = window.localStorage.getItem(ACCESS_TOKEN_KEY)
-      window.localStorage.removeItem(ACCESS_TOKEN_KEY)
-      void fetch(`${API_URL}/auth/logout`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          Accept: "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      })
-    },
-    me: () => request<CurrentUser>("/users/me"),
-    restore: async () => {
-      if (!window.localStorage.getItem(ACCESS_TOKEN_KEY)) {
-        const token = await refreshAccessToken()
-        if (!token) return null
-      }
-      return request<CurrentUser>("/users/me")
-    },
-    hasSession: () => Boolean(window.localStorage.getItem(ACCESS_TOKEN_KEY)),
-    accessToken: () => window.localStorage.getItem(ACCESS_TOKEN_KEY),
+    sessions: () =>
+      request<
+        Array<{
+          id: string
+          userAgent: string | null
+          ipAddress: string | null
+          createdAt: string
+          lastUsedAt: string
+          expiresAt: string
+        }>
+      >("/auth/sessions"),
+    revokeSession: (id: string) =>
+      request<void>(`/auth/sessions/${id}`, { method: "DELETE" }),
     completeOnboarding: (input: {
       neighborhood?: string
       city?: string
@@ -168,114 +428,582 @@ export const api = {
         body: JSON.stringify(input),
       }),
   },
-  listings: {
-    list: (query: ListingQuery = {}) => {
-      const params = new URLSearchParams()
-      Object.entries(query).forEach(
-        ([key, value]) => value !== undefined && params.set(key, String(value)),
-      )
-      return request<ApiListing[]>(`/listings${params.size ? `?${params}` : ""}`)
-    },
-    create: (input: ListingInput) =>
-      request<{ id: string; status: string }>("/listings", {
+  users: {
+    profile: (id: string) => request<PublicProfile>(`/users/${id}/profile`),
+    reviews: (id: string) => request<ProfileReview[]>(`/users/${id}/reviews`),
+    accountStatus: () => request<AccountStatus>("/users/me/status"),
+    updateProfile: (input: AccountProfileInput) =>
+      request<CurrentUser>("/users/me/profile", {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    updatePrivacy: (input: AccountPrivacyInput) =>
+      request<CurrentUser>("/users/me/privacy", {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    requestEmailChange: (email: string, currentPassword: string) =>
+      request<{ pendingEmail: string }>("/users/me/email", {
+        method: "POST",
+        body: JSON.stringify({ email, currentPassword }),
+      }),
+    cancelEmailChange: () => request<{ pendingEmail: null }>("/users/me/email/pending", { method: "DELETE" }),
+    sessions: () =>
+      request<
+        Array<{
+          id: string
+          userAgent: string | null
+          ipAddress: string | null
+          createdAt: string
+          lastUsedAt: string
+          expiresAt: string
+        }>
+      >("/users/me/sessions"),
+    revokeSession: (id: string) => request<void>(`/users/me/sessions/${id}`, { method: "DELETE" }),
+    revokeAllSessions: () =>
+      request<void>("/users/me/sessions/revoke-all", { method: "POST" }),
+    deleteAccount: (password: string, confirm: string) =>
+      request<{ deleted: boolean; alreadyDeleted: boolean }>("/users/me", {
+        method: "DELETE",
+        body: JSON.stringify({ password, confirm }),
+      }),
+  },
+  safety: {
+    report: (input: {
+      targetType: "LISTING" | "USER" | "MESSAGE" | "COMMUNITY_POST"
+      targetId: string
+      reason: "SPAM" | "SCAM" | "HARASSMENT" | "INAPPROPRIATE" | "OTHER"
+      details?: string
+    }) =>
+      request<{ id: string; status: string }>("/safety/reports", {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    mine: () => request<ApiListing[]>("/listings/mine"),
-    publish: (id: string) =>
-      request<ApiListing>(`/listings/${id}/publish`, { method: "POST" }),
-    uploadImage: async (
-      listingId: string,
-      file: File,
-      onProgress?: (percent: number) => void,
-    ): Promise<ApiListingImage> => {
-      const grant = await request<{
-        url: string
-        fields: Record<string, string>
-        key: string
-      }>(`/listings/${listingId}/images/upload`, {
+    blocks: () => request<Array<{ userId: string; createdAt: string }>>("/safety/blocks"),
+    block: (userId: string) =>
+      request<{ blocked: boolean; userId: string }>("/safety/blocks", {
         method: "POST",
-        body: JSON.stringify({
-          contentType: file.type,
-          sizeBytes: file.size,
-        }),
-      })
-      const form = new FormData()
-      Object.entries(grant.fields).forEach(([key, value]) =>
-        form.append(key, value),
-      )
-      form.append("file", file)
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.open("POST", grant.url)
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            onProgress?.(Math.round((event.loaded / event.total) * 100))
-          }
-        }
-        xhr.onerror = () => reject(new ApiError("Image upload connection failed.", 0))
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            onProgress?.(100)
-            resolve()
-          } else {
-            reject(new ApiError(`Image storage rejected the upload (${xhr.status}).`, xhr.status))
-          }
-        }
-        xhr.send(form)
-      })
-      return request<ApiListingImage>(`/listings/${listingId}/images/complete`, {
-        method: "POST",
-        body: JSON.stringify({ key: grant.key }),
-      })
-    },
-    reorderImages: (listingId: string, imageIds: string[]) =>
-      request<ApiListingImage[]>(`/listings/${listingId}/images/reorder`, {
-        method: "POST",
-        body: JSON.stringify({ imageIds }),
+        body: JSON.stringify({ userId }),
       }),
-    deleteImage: (listingId: string, imageId: string) =>
-      request<{ deleted: boolean }>(
-        `/listings/${listingId}/images/${imageId}`,
-        { method: "DELETE" },
-      ),
+    unblock: (userId: string) =>
+      request<{ blocked: boolean; userId: string }>(`/safety/blocks/${userId}`, {
+        method: "DELETE",
+      }),
+  },
+  moderation: {
+    reports: (status?: "OPEN" | "RESOLVED" | "DISMISSED") =>
+      request<StaffReport[]>(`/moderation/reports${status ? `?status=${status}` : ""}`),
+    report: (id: string) => request<StaffReport & { preview?: unknown }>(`/moderation/reports/${id}`),
+    act: (
+      id: string,
+      input: {
+        kind: "DISMISS" | "RESOLVE" | "HIDE" | "SUSPEND_USER" | "RESTORE_USER"
+        note?: string
+      },
+    ) =>
+      request<StaffReport>(`/moderation/reports/${id}/actions`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+  },
+  listings: {
+    /**
+     * Server-side filtering, sorting, and pagination. Every filter is a query
+     * parameter so results are global rather than filtered after the page is
+     * fetched.
+     */
+    search: (query: ListingQueryParams = {}) => {
+      const params = new URLSearchParams()
+      Object.entries(query).forEach(([key, value]) => {
+        if (value === undefined || value === "" || value === null) return
+        params.set(key, String(value))
+      })
+      const text = params.toString()
+      return request<ListingPage>(`/listings${text ? `?${text}` : ""}`)
+    },
+    list: (query: ListingQueryParams = {}) => api.listings.search(query),
     get: (id: string) => request<ApiListing>(`/listings/${id}`),
+    /** Owner view: includes drafts the public route deliberately hides. */
+    manage: (id: string) => request<ApiListing>(`/listings/${id}/manage`),
+    create: (input: ListingInput) =>
+      request<ApiListing>("/listings", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    saveDraft: (input: Partial<ListingInput>) =>
+      request<ApiListing>("/listings/drafts", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    publish: (id: string) => request<ApiListing>(`/listings/${id}/publish`, { method: "POST" }),
+    pause: (id: string) => request<ApiListing>(`/listings/${id}/pause`, { method: "POST" }),
+    markSold: (id: string) => request<ApiListing>(`/listings/${id}/sold`, { method: "POST" }),
+    restore: (id: string) => request<ApiListing>(`/listings/${id}/restore`, { method: "POST" }),
     update: (id: string, input: Partial<ListingInput>) =>
       request<ApiListing>(`/listings/${id}`, {
         method: "PATCH",
         body: JSON.stringify(input),
       }),
-    archive: (id: string) =>
-      request<{ archived: boolean }>(`/listings/${id}`, { method: "DELETE" }),
-    toggleFavorite: (id: string) =>
-      request<{ saved: boolean }>(`/listings/${id}/favorite`, {
+    archive: (id: string) => request<ApiListing>(`/listings/${id}`, { method: "DELETE" }),
+    remove: (id: string) =>
+      request<{ id: string; deleted: boolean }>(`/listings/${id}/permanent`, { method: "DELETE" }),
+    mine: (status?: string) =>
+      request<ApiListing[]>(`/listings/mine${status ? `?status=${status}` : ""}`),
+    neighborhoods: () => request<NeighborhoodCount[]>("/listings/neighborhoods"),
+    storageStatus: () => request<{ configured: boolean }>("/listings/storage-status"),
+
+    /** Multipart upload with real progress, so the bar is not a fake. */
+    uploadImage: (listingId: string, file: File, onProgress?: (fraction: number) => void) =>
+      uploadWithProgress(`/listings/${listingId}/images`, file, onProgress),
+    listImages: (id: string) => request<StoredImage[]>(`/listings/${id}/manage`),
+    removeImage: (listingId: string, imageId: string) =>
+      request<StoredImage[]>(`/listings/${listingId}/images/${imageId}`, { method: "DELETE" }),
+    reorderImages: (listingId: string, imageIds: string[]) =>
+      request<StoredImage[]>(`/listings/${listingId}/images/reorder`, {
         method: "POST",
+        body: JSON.stringify({ imageIds }),
       }),
+
+    toggleFavorite: (id: string) =>
+      request<{ saved: boolean }>(`/listings/${id}/favorite`, { method: "POST" }),
     favorites: () => request<ApiFavorite[]>("/listings/favorites"),
     savedSearches: () => request<ApiSavedSearch[]>("/listings/saved-searches"),
     saveSearch: (query: string, filters: Record<string, unknown>) =>
-      request<unknown>("/listings/saved-searches", {
+      request<ApiSavedSearch>("/listings/saved-searches", {
         method: "POST",
         body: JSON.stringify({ query, filters }),
       }),
-    deleteSavedSearch: (id: string) =>
-      request<{ deleted: boolean }>(`/listings/saved-searches/${id}`, {
-        method: "DELETE",
+    updateSavedSearch: (id: string, input: { query?: string; filters?: Record<string, unknown> }) =>
+      request<ApiSavedSearch>(`/listings/saved-searches/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
       }),
+    deleteSavedSearch: (id: string) =>
+      request<void>(`/listings/saved-searches/${id}`, { method: "DELETE" }),
+  },
+  passport: {
+    member: (userId: string) => request<Passport>(`/passport/members/${userId}`),
+    me: () => request<Passport>("/passport/me"),
+    updateMe: (input: { displayName?: string; bio?: string; neighborhood?: string; city?: string }) =>
+      request<unknown>("/passport/me", { method: "PATCH", body: JSON.stringify(input) }),
+    privacy: () => request<PassportPrivacy>("/passport/privacy"),
+    updatePrivacy: (input: Partial<PassportPrivacy>) =>
+      request<PassportPrivacy>("/passport/privacy", { method: "PATCH", body: JSON.stringify(input) }),
+    auditTrail: () =>
+      request<Array<{ id: string; kind: string; detail: string; createdAt: string }>>("/passport/me/audit"),
+    leaderboard: () =>
+      request<
+        Array<{
+          userId: string
+          displayName: string
+          avatarUrl?: string | null
+          completedBorrowings: number
+          borrowingsAsLender: number
+          completedExchanges: number
+        }>
+      >("/passport/leaderboard"),
+
+    verifications: () =>
+      request<{ records: VerificationRecord[]; emailVerified: boolean }>("/passport/me/verifications"),
+    submitVerification: (input: { method: string; statement?: string }) =>
+      request<VerificationRecord>("/passport/verifications", {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+
+    myAppeals: () => request<AppealRow[]>("/passport/me/appeals"),
+    submitAppeal: (input: { subjectType: string; subjectId: string; reason: string }) =>
+      request<AppealRow>("/passport/appeals", { method: "POST", body: JSON.stringify(input) }),
+
+    reviews: {
+      mine: () => request<MyReview[]>("/reviews/mine"),
+      reviewable: () => request<ReviewableExchange[]>("/reviews/reviewable"),
+      subject: (userId: string) => request<ReviewRow[]>(`/reviews/subjects/${userId}`),
+      create: (input: { transactionId: string; subjectId: string; rating: number; body: string }) =>
+        request<MyReview>("/reviews", { method: "POST", body: JSON.stringify(input) }),
+      update: (reviewId: string, input: { rating?: number; body?: string }) =>
+        request<MyReview>(`/reviews/${reviewId}`, { method: "PATCH", body: JSON.stringify(input) }),
+      report: (reviewId: string, input: { reason: string; details?: string }) =>
+        request<unknown>(`/reviews/${reviewId}/report`, { method: "POST", body: JSON.stringify(input) })
+    },
+
+    staff: {
+      pendingVerifications: () =>
+        request<
+          Array<{
+            id: string
+            method: string
+            statement?: string | null
+            createdAt: string
+            user: PublicUserCard
+          }>
+        >("/passport/staff/verifications"),
+      reviewVerification: (recordId: string, input: { status: string; note?: string }) =>
+        request<VerificationRecord>(`/passport/staff/verifications/${recordId}`, {
+          method: "POST",
+          body: JSON.stringify(input)
+        }),
+      reviewQueue: () =>
+        request<
+          Array<{
+            id: string
+            reason: string
+            details?: string | null
+            createdAt: string
+            reporter: PublicUserCard
+            review: { id: string; rating: number; body: string; subjectId: string; status: string } | null
+          }>
+        >("/passport/staff/reviews"),
+      hideReview: (reviewId: string, reason: string) =>
+        request<unknown>(`/passport/staff/reviews/${reviewId}/hide`, {
+          method: "POST",
+          body: JSON.stringify({ reason })
+        }),
+      restoreReview: (reviewId: string, reason: string) =>
+        request<unknown>(`/passport/staff/reviews/${reviewId}/restore`, {
+          method: "POST",
+          body: JSON.stringify({ reason })
+        }),
+      appeals: () => request<Array<AppealRow & { user: PublicUserCard }>>("/passport/staff/appeals"),
+      resolveAppeal: (appealId: string, input: { status: string; resolution?: string }) =>
+        request<AppealRow>(`/passport/staff/appeals/${appealId}`, {
+          method: "POST",
+          body: JSON.stringify(input)
+        })
+    }
+  },
+  missions: {
+    list: (query: Record<string, string | number | boolean | undefined> = {}) => {
+      const search = new URLSearchParams()
+      for (const [key, value] of Object.entries(query)) {
+        if (value !== undefined && value !== "") search.set(key, String(value))
+      }
+      const suffix = search.toString()
+      return request<MissionPage>(`/missions${suffix ? `?${suffix}` : ""}`)
+    },
+    detail: (missionId: string) => request<MissionDetail>(`/missions/${missionId}`),
+    create: (input: Record<string, unknown>) =>
+      request<MissionDetail>("/missions", { method: "POST", body: JSON.stringify(input) }),
+    update: (missionId: string, input: Record<string, unknown>) =>
+      request<MissionDetail>(`/missions/${missionId}`, {
+        method: "PATCH",
+        body: JSON.stringify(input)
+      }),
+    setStatus: (missionId: string, status: string, note?: string) =>
+      request<MissionDetail>(`/missions/${missionId}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status, note })
+      }),
+    join: (missionId: string) =>
+      request<JoinResult>(`/missions/${missionId}/join`, { method: "POST" }),
+    leave: (missionId: string) =>
+      request<{ missionId: string; status: string }>(`/missions/${missionId}/leave`, {
+        method: "POST"
+      }),
+    checkIn: (missionId: string) =>
+      request<{ missionId: string; status: string }>(`/missions/${missionId}/check-in`, {
+        method: "POST"
+      }),
+    mine: (query: Record<string, string | number | boolean | undefined> = {}) =>
+      request<MissionPage>(`/missions/organizer?${new URLSearchParams(
+        Object.entries(query)
+          .filter(([, value]) => value !== undefined && value !== "")
+          .map(([key, value]) => [key, String(value)])
+      )}`),
+    joined: (query: Record<string, string | number | boolean | undefined> = {}) =>
+      request<MissionPage>(`/missions/joined?${new URLSearchParams(
+        Object.entries(query)
+          .filter(([, value]) => value !== undefined && value !== "")
+          .map(([key, value]) => [key, String(value)])
+      )}`),
+    participants: (missionId: string) =>
+      request<MissionParticipantRow[]>(`/missions/${missionId}/participants`),
+    approve: (missionId: string, participantId: string) =>
+      request<unknown>(`/missions/${missionId}/participants/${participantId}/approve`, {
+        method: "POST"
+      }),
+    markAttendance: (missionId: string, participantId: string, asStaff = false) =>
+      request<unknown>(
+        `/missions/${missionId}/participants/${participantId}/${asStaff ? "attendance-staff" : "attendance"}`,
+        { method: "POST" }
+      ),
+    complete: (missionId: string, asStaff = false) =>
+      request<{ verified: number }>(`/missions/${missionId}/${asStaff ? "complete-staff" : "complete"}`, {
+        method: "POST"
+      }),
+    revoke: (missionId: string, participantId: string, reason: string, asStaff = false) =>
+      request<unknown>(
+        `/missions/${missionId}/participants/${participantId}/revoke${asStaff ? "-staff" : ""}`,
+        { method: "POST", body: JSON.stringify({ reason }) }
+      ),
+    contributions: () => request<ContributionRecord>("/missions/contributions"),
+    badgeCatalogue: () =>
+      request<CommunityBadgeRow[]>("/missions/badges"),
+    report: (missionId: string, reason: string, details?: string) =>
+      request<unknown>(`/missions/${missionId}/report`, {
+        method: "POST",
+        body: JSON.stringify({ reportReason: reason, details })
+      }),
+    staffQueue: () =>
+      request<
+        Array<{
+          id: string
+          targetType: string
+          reason: string
+          details?: string | null
+          createdAt: string
+          reporter: PublicUserCard
+          mission: {
+            id: string
+            title: string
+            status: string
+            confirmedCount: number
+            capacity: number
+            organizer: PublicUserCard
+          } | null
+        }>
+      >("/missions/staff/queue"),
+    staffModerate: (missionId: string, action: "hide" | "restore", note: string) =>
+      request<unknown>(`/missions/staff/${missionId}/moderate`, {
+        method: "POST",
+        body: JSON.stringify({ action, note })
+      })
+  },
+
+  borrow: {
+    listItems: (query: BorrowItemQuery = {}) => {
+      const params = new URLSearchParams()
+      Object.entries(query).forEach(([key, value]) => {
+        if (value === undefined || value === "" || value === null) return
+        params.set(key, String(value))
+      })
+      const text = params.toString()
+      return request<BorrowItemPage>(`/borrow/items${text ? `?${text}` : ""}`)
+    },
+    item: (listingId: string) => request<BorrowableItem>(`/borrow/items/${listingId}`),
+    myItems: () => request<BorrowableItem[]>("/borrow/items/mine"),
+    createItem: (input: BorrowableItemInput) =>
+      request<BorrowableItem>("/borrow/items", { method: "POST", body: JSON.stringify(input) }),
+    updateItem: (listingId: string, input: Partial<BorrowableItemInput>) =>
+      request<BorrowableItem>(`/borrow/items/${listingId}`, {
+        method: "PATCH",
+        body: JSON.stringify(input)
+      }),
+    publish: (listingId: string) =>
+      request<BorrowableItem>(`/borrow/items/${listingId}/publish`, { method: "POST" }),
+    unpublish: (listingId: string) =>
+      request<BorrowableItem>(`/borrow/items/${listingId}/unpublish`, { method: "POST" }),
+    archive: (listingId: string) =>
+      request<BorrowableItem>(`/borrow/items/${listingId}/archive`, { method: "POST" }),
+
+    availability: (listingId: string) =>
+      request<BorrowAvailability>(`/borrow/items/${listingId}/availability`),
+    addWindow: (listingId: string, input: { kind: string; startsAt: string; endsAt: string; note?: string }) =>
+      request<unknown>(`/borrow/items/${listingId}/availability`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    removeWindow: (listingId: string, windowId: string) =>
+      request<unknown>(`/borrow/items/${listingId}/availability/${windowId}`, { method: "DELETE" }),
+
+    listRequests: (query: { scope?: "borrowed" | "lent" | "all"; status?: string; overdueOnly?: boolean } = {}) => {
+      const params = new URLSearchParams()
+      Object.entries(query).forEach(([key, value]) => {
+        if (value === undefined || value === "" || value === null) return
+        params.set(key, String(value))
+      })
+      const text = params.toString()
+      return request<BorrowRequest[]>(`/borrow/requests${text ? `?${text}` : ""}`)
+    },
+    request: (requestId: string) => request<BorrowRequest>(`/borrow/requests/${requestId}`),
+    createRequest: (listingId: string, input: BorrowRequestInput) =>
+      request<BorrowRequest>(`/borrow/items/${listingId}/requests`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    updateRequest: (requestId: string, input: Partial<BorrowRequestInput>) =>
+      request<BorrowRequest>(`/borrow/requests/${requestId}`, {
+        method: "PATCH",
+        body: JSON.stringify(input)
+      }),
+    approve: (requestId: string, note?: string) =>
+      request<BorrowRequest>(`/borrow/requests/${requestId}/approve`, {
+        method: "POST",
+        body: JSON.stringify({ note })
+      }),
+    decline: (requestId: string, note?: string) =>
+      request<BorrowRequest>(`/borrow/requests/${requestId}/decline`, {
+        method: "POST",
+        body: JSON.stringify({ note })
+      }),
+    cancel: (requestId: string) =>
+      request<BorrowRequest>(`/borrow/requests/${requestId}/cancel`, { method: "POST" }),
+
+    schedulePickup: (requestId: string, input: { scheduledAt: string; locationNote?: string }) =>
+      request<unknown>(`/borrow/requests/${requestId}/pickup`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    confirmPickup: (requestId: string, input: { condition?: string; notes?: string } = {}) =>
+      request<{ completed: boolean; awaiting?: string }>(`/borrow/requests/${requestId}/pickup/confirm`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    cancelPickup: (requestId: string) =>
+      request<unknown>(`/borrow/requests/${requestId}/pickup/cancel`, { method: "POST" }),
+
+    requestReturn: (requestId: string, scheduledAt?: string) =>
+      request<BorrowRequest>(`/borrow/requests/${requestId}/return`, {
+        method: "POST",
+        body: JSON.stringify({ scheduledAt })
+      }),
+    confirmReturn: (requestId: string, input: { condition?: string; notes?: string } = {}) =>
+      request<{ completed: boolean; awaiting?: string }>(`/borrow/requests/${requestId}/return/confirm`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    complete: (requestId: string) =>
+      request<BorrowRequest>(`/borrow/requests/${requestId}/complete`, { method: "POST" }),
+    recordCondition: (requestId: string, input: { phase: string; condition: string; notes?: string }) =>
+      request<unknown>(`/borrow/requests/${requestId}/condition`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+
+    requestExtension: (requestId: string, input: { requestedEndAt: string; reason?: string }) =>
+      request<BorrowExtension>(`/borrow/requests/${requestId}/extensions`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    approveExtension: (extensionId: string, note?: string) =>
+      request<BorrowExtension>(`/borrow/extensions/${extensionId}/approve`, {
+        method: "POST",
+        body: JSON.stringify({ note })
+      }),
+    rejectExtension: (extensionId: string, note?: string) =>
+      request<BorrowExtension>(`/borrow/extensions/${extensionId}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ note })
+      }),
+
+    listDisputes: () => request<BorrowDispute[]>("/borrow/disputes"),
+    dispute: (disputeId: string) =>
+      request<BorrowDispute & { events: Array<{ toStatus: string; createdAt: string }> }>(
+        `/borrow/disputes/${disputeId}`
+      ),
+    openDispute: (requestId: string, input: { reason: string; summary: string }) =>
+      request<BorrowDispute>(`/borrow/requests/${requestId}/disputes`, {
+        method: "POST",
+        body: JSON.stringify(input)
+      }),
+    listEvidence: (disputeId: string) =>
+      request<Array<{ id: string; note?: string | null; contentType: string; createdAt: string; uploadedBy: PublicUserCard }>>(
+        `/borrow/disputes/${disputeId}/evidence`
+      ),
+    uploadEvidenceUrl: (disputeId: string, evidenceId: string) =>
+      `/api/v1/borrow/evidence/${evidenceId}/file`,
+  },
+  notifications: {
+    list: (query: { unreadOnly?: boolean; limit?: number; offset?: number } = {}) => {
+      const params = new URLSearchParams()
+      if (query.unreadOnly) params.set("unreadOnly", "true")
+      if (query.limit !== undefined) params.set("limit", String(query.limit))
+      if (query.offset !== undefined) params.set("offset", String(query.offset))
+      const text = params.toString()
+      return request<NotificationPage>(`/notifications${text ? `?${text}` : ""}`)
+    },
+    unreadCount: () => request<UnreadCounts>("/notifications/unread-count"),
+    markRead: (id: string) =>
+      request<unknown>(`/notifications/${id}/read`, { method: "PATCH" }),
+    markAllRead: () => request<{ updated: number }>("/notifications/read-all", { method: "PATCH" }),
+    preferences: () => request<NotificationPreferences>("/notifications/preferences"),
+    updatePreferences: (input: Partial<NotificationPreferences>) =>
+      request<NotificationPreferences>("/notifications/preferences", {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    savedSearchAlerts: () =>
+      request<SavedSearchAlert[]>("/notifications/saved-search-alerts"),
+    markSavedSearchAlertRead: (id: string) =>
+      request<unknown>(`/notifications/saved-search-alerts/${id}/read`, { method: "PATCH" }),
   },
   categories: {
     list: () =>
-      request<Array<{ id: string; name: string; slug: string }>>("/categories"),
+      request<
+        Array<{ id: string; name: string; slug: string; listingCount?: number }>
+      >("/categories"),
   },
   requests: {
-    list: () => request<NeedRequestRecord[]>("/requests"),
+    /** Server-side filtering, sorting, and pagination. */
+    list: (query: RequestQuery = {}) => {
+      const params = new URLSearchParams()
+      Object.entries(query).forEach(([key, value]) => {
+        if (value === undefined || value === "" || value === null) return
+        params.set(key, String(value))
+      })
+      const text = params.toString()
+      return request<RequestPage>(`/requests${text ? `?${text}` : ""}`)
+    },
+    mine: (query: { status?: string; limit?: number; offset?: number } = {}) => {
+      const params = new URLSearchParams()
+      Object.entries(query).forEach(([key, value]) => {
+        if (value === undefined || value === "" || value === null) return
+        params.set(key, String(value))
+      })
+      const text = params.toString()
+      return request<ApiRequestSummary[]>(`/requests/mine${text ? `?${text}` : ""}`)
+    },
+    get: (id: string) => request<ApiRequestDetail>(`/requests/${id}`),
+    statusHistory: (id: string) =>
+      request<RequestStatusEvent[]>(`/requests/${id}/status-history`),
     create: (input: NeedRequestInput) =>
-      request<unknown>("/requests", {
+      request<ApiRequestSummary>("/requests", {
         method: "POST",
         body: JSON.stringify(input),
       }),
+    saveDraft: (input: Partial<NeedRequestInput>) =>
+      request<ApiRequestSummary>("/requests/drafts", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    update: (id: string, input: Partial<NeedRequestInput>) =>
+      request<ApiRequestSummary>(`/requests/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    /**
+     * One endpoint for every legal status move. The API's state machine
+     * decides what is allowed, so the client never invents a transition.
+     */
+    transition: (id: string, status: RequestStatus, note?: string) =>
+      request<ApiRequestSummary>(`/requests/${id}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status, note }),
+      }),
+    publish: (id: string) => request<ApiRequestSummary>(`/requests/${id}/publish`, { method: "POST" }),
+    pause: (id: string) => request<ApiRequestSummary>(`/requests/${id}/pause`, { method: "POST" }),
+    resume: (id: string) => request<ApiRequestSummary>(`/requests/${id}/resume`, { method: "POST" }),
+    fulfill: (id: string) => request<ApiRequestSummary>(`/requests/${id}/fulfill`, { method: "POST" }),
+    cancel: (id: string) => request<ApiRequestSummary>(`/requests/${id}/cancel`, { method: "POST" }),
+
+    /** Ranked, explainable matches for the caller's own request. */
+    matches: (id: string, limit = 20) =>
+      request<RequestMatch[]>(`/requests/${id}/matches?limit=${limit}`),
+
+    offers: (scope: "received" | "sent" | "all" = "received") =>
+      request<ApiScopedOffer[]>(`/requests/offers?scope=${scope}`),
+    offersForRequest: (id: string) =>
+      request<ApiScopedOffer[]>(`/requests/${id}/offers`),
+    getOffer: (offerId: string) => request<ApiScopedOffer>(`/requests/offers/${offerId}`),
+    editOffer: (offerId: string, input: Partial<OfferInput>) =>
+      request<ApiScopedOffer>(`/requests/offers/${offerId}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    withdrawOffer: (offerId: string) =>
+      request<ApiScopedOffer>(`/requests/offers/${offerId}/withdraw`, { method: "POST" }),
     createOffer: (requestId: string, input: OfferInput) =>
-      request<unknown>(`/requests/${requestId}/offers`, {
+      request<ApiScopedOffer>(`/requests/${requestId}/offers`, {
         method: "POST",
         body: JSON.stringify(input),
       }),
@@ -283,14 +1011,19 @@ export const api = {
       offerId: string,
       input: { amountCents?: number; message: string },
     ) =>
-      request<unknown>(`/requests/offers/${offerId}/counter`, {
+      request<ApiScopedOffer>(`/requests/offers/${offerId}/counter`, {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    acceptOffer: (offerId: string) =>
-      request<unknown>(`/requests/offers/${offerId}/accept`, { method: "PATCH" }),
-    rejectOffer: (offerId: string) =>
-      request<unknown>(`/requests/offers/${offerId}/reject`, { method: "PATCH" }),
+    acceptOffer: (requestId: string, offerId: string) =>
+      request<AcceptOfferResult>(
+        `/requests/${requestId}/offers/${offerId}/accept`,
+        { method: "POST" },
+      ),
+    rejectOffer: (requestId: string, offerId: string) =>
+      request<ApiScopedOffer>(`/requests/${requestId}/offers/${offerId}/reject`, {
+        method: "POST",
+      }),
   },
   transactions: {
     list: () => request<ApiTransaction[]>("/transactions"),
@@ -299,32 +1032,39 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify({ status }),
       }),
-    schedule: (
-      transactionId: string,
-      input: { startsAt: string; locationNote?: string },
-    ) =>
-      request<unknown>(`/transactions/${transactionId}/appointments`, {
-        method: "POST",
-        body: JSON.stringify(input),
-      }),
-    review: (
-      transactionId: string,
-      input: { subjectId: string; rating: number; body: string },
-    ) =>
-      request<unknown>(`/transactions/${transactionId}/reviews`, {
+  },
+  reviews: {
+    create: (input: ReviewInput) =>
+      request<unknown>("/reviews", {
         method: "POST",
         body: JSON.stringify(input),
       }),
   },
   conversations: {
-    list: () => request<ApiConversation[]>("/conversations"),
-    create: (participantId: string) =>
-      request<Pick<ApiConversation, "id" | "updatedAt" | "participants">>("/conversations", {
+    create: (input: CreateConversationInput) =>
+      request<CreateConversationResult>("/conversations", {
         method: "POST",
-        body: JSON.stringify({ participantId }),
+        body: JSON.stringify(input),
       }),
-    messages: (conversationId: string) =>
-      request<ApiMessage[]>(`/conversations/${conversationId}/messages`),
+    list: () => request<ApiConversation[]>("/conversations"),
+    /**
+     * A page of history, oldest first. `before` is a message id rather than
+     * an offset, so a message sent mid-scroll cannot make a later page skip
+     * or repeat a row.
+     */
+    messages: (conversationId: string, options: { limit?: number; before?: string } = {}) => {
+      const params = new URLSearchParams()
+      if (options.limit !== undefined) params.set("limit", String(options.limit))
+      if (options.before) params.set("before", options.before)
+      const text = params.toString()
+      return request<ApiMessage[]>(
+        `/conversations/${conversationId}/messages${text ? `?${text}` : ""}`
+      )
+    },
+    hasMoreMessages: (conversationId: string, before?: string) =>
+      request<{ hasMore: boolean }>(
+        `/conversations/${conversationId}/messages/more${before ? `?before=${before}` : ""}`
+      ),
     send: (conversationId: string, body: string) =>
       request<ApiMessage>(`/conversations/${conversationId}/messages`, {
         method: "POST",
@@ -335,84 +1075,83 @@ export const api = {
         method: "PATCH",
       }),
   },
-  notifications: {
-    list: () => request<ApiNotification[]>("/notifications"),
-    unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
-    markRead: (id: string) =>
-      request<ApiNotification>(`/notifications/${id}/read`, { method: "PATCH" }),
-    markAllRead: () =>
-      request<{ updated: number }>("/notifications/read-all", {
-        method: "PATCH",
+  housing: {
+    list: (query: HousingQuery = {}) =>
+      request<ApiHousing[]>(`/housing${queryString(query)}`),
+    create: (input: HousingCreateInput) =>
+      request<ApiHousing>("/housing", { method: "POST", body: JSON.stringify(input) }),
+    get: (id: string) => request<ApiHousing>(`/housing/${id}`),
+  },
+  jobs: {
+    list: (query: JobQuery = {}) => request<ApiJob[]>(`/jobs${queryString(query)}`),
+    saved: () => request<ApiJobSave[]>("/jobs/saved"),
+    applications: () => request<ApiJobApplication[]>("/jobs/applications"),
+    apply: (id: string, message?: string) =>
+      request<unknown>(`/jobs/${id}/apply`, {
+        method: "POST",
+        body: JSON.stringify(message ? { message } : {}),
+      }),
+    toggleSave: (id: string) =>
+      request<{ saved: boolean }>(`/jobs/${id}/save`, { method: "POST" }),
+    create: (input: JobCreateInput) =>
+      request<ApiJob>("/jobs", { method: "POST", body: JSON.stringify(input) }),
+    get: (id: string) => request<ApiJob>(`/jobs/${id}`),
+  },
+  services: {
+    list: (query: ServiceQuery = {}) =>
+      request<ApiServiceListing[]>(`/services${queryString(query)}`),
+    create: (input: ServiceCreateInput) =>
+      request<ApiServiceListing>("/services", { method: "POST", body: JSON.stringify(input) }),
+    get: (id: string) => request<ApiServiceListing>(`/services/${id}`),
+    requestQuote: (id: string, input: ServiceQuoteInput) =>
+      request<ApiServiceQuote>(`/services/${id}/quotes`, {
+        method: "POST",
+        body: JSON.stringify(input),
       }),
   },
   community: {
-    posts: (neighborhood?: string) => {
-      const params = neighborhood ? `?neighborhood=${encodeURIComponent(neighborhood)}` : ""
-      return request<ApiCommunityPost[]>(`/community/posts${params}`)
-    },
-    createPost: (body: string, neighborhood?: string) =>
-      request<ApiCommunityPost>("/community/posts", {
-        method: "POST",
-        body: JSON.stringify({ body, neighborhood }),
-      }),
-    comment: (postId: string, body: string) =>
-      request<unknown>(`/community/posts/${postId}/comments`, {
+    summary: () => request<CommunitySummary>("/community/summary"),
+    posts: (query: CommunityPostQuery = {}) =>
+      request<ApiCommunityPost[]>(`/community/posts${queryString(query)}`),
+    comments: (id: string) =>
+      request<ApiCommunityComment[]>(`/community/posts/${id}/comments`),
+    comment: (id: string, body: string) =>
+      request<ApiCommunityComment>(`/community/posts/${id}/comments`, {
         method: "POST",
         body: JSON.stringify({ body }),
       }),
-    react: (postId: string, type: "LIKE" | "HELPFUL" | "CELEBRATE") =>
-      request<{ active: boolean; type: string }>(`/community/posts/${postId}/reactions`, {
+    createPost: (input: CommunityPostInput) =>
+      request<ApiCommunityPost>("/community/posts", {
         method: "POST",
-        body: JSON.stringify({ type }),
+        body: JSON.stringify(input),
       }),
-    deletePost: (postId: string) =>
-      request<{ deleted: boolean }>(`/community/posts/${postId}`, { method: "DELETE" }),
-    events: (neighborhood?: string) => {
-      const params = neighborhood ? `?neighborhood=${encodeURIComponent(neighborhood)}` : ""
-      return request<ApiCommunityEvent[]>(`/community/events${params}`)
-    },
-    createEvent: (input: {
-      title: string
-      description: string
-      location: string
-      startsAt: string
-      endsAt?: string
-      capacity?: number
-      neighborhood?: string
-    }) => request<ApiCommunityEvent>("/community/events", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
-    rsvp: (eventId: string, status: "GOING" | "INTERESTED" | "NOT_GOING") =>
-      request<unknown>(`/community/events/${eventId}/rsvp`, {
+    react: (id: string, emoji: "👍" | "❤️" | "😮") =>
+      request<ApiCommunityPost>(`/community/posts/${id}/reactions`, {
         method: "POST",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ emoji }),
       }),
-  },
-  users: {
-    updateProfile: (input: Record<string, string>) =>
-      request<CurrentUser>("/users/me", { method: "PATCH", body: JSON.stringify(input) }),
-    exportData: () => request<unknown>("/users/me/export"),
-    deleteAccount: (password: string) =>
-      request<{ deleted: boolean }>("/users/me", { method: "DELETE", body: JSON.stringify({ password }) }),
-    publicProfile: (id: string) => request<unknown>(`/users/${id}/profile`),
-  },
-  safety: {
-    blocks: () => request<unknown[]>("/safety/blocks"),
-    block: (userId: string) => request<{ blocked: boolean }>(`/safety/blocks/${userId}`, { method: "POST" }),
-    unblock: (userId: string) => request<{ blocked: boolean }>(`/safety/blocks/${userId}`, { method: "DELETE" }),
-    report: (input: { targetType: string; targetId: string; reason: string; details?: string }) =>
-      request<unknown>("/safety/reports", { method: "POST", body: JSON.stringify(input) }),
-  },
-  realtime: {
-    connect: () => {
-      const token = window.localStorage.getItem(ACCESS_TOKEN_KEY)
-      if (!token) throw new ApiError("Sign in to connect to messages.", 401)
-      return io(`${new URL(API_URL).origin}/realtime`, {
-        auth: { token },
-        transports: ["websocket", "polling"],
-      })
-    },
+    events: () => request<ApiCommunityEvent[]>("/community/events"),
+    rsvp: (id: string) =>
+      request<{ attending: boolean; attendingCount: number }>(
+        `/community/events/${id}/rsvp`,
+        { method: "POST" },
+      ),
+    lostFound: () => request<ApiLostFound[]>("/community/lost-found"),
+    createLostFound: (input: LostFoundInput) =>
+      request<ApiLostFound>("/community/lost-found", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    giveaways: () => request<ApiGiveaway[]>("/community/giveaways"),
+    createGiveaway: (input: GiveawayInput) =>
+      request<ApiGiveaway>("/community/giveaways", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    claim: (id: string) =>
+      request<{ claimed: boolean; giveaway: ApiGiveaway }>(
+        `/community/giveaways/${id}/claim`,
+        { method: "POST" },
+      ),
   },
 }
-import { io } from "socket.io-client"

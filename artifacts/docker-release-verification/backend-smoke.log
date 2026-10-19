@@ -1,0 +1,41 @@
+=== tsc ===
+tsc_exit:0
+=== jest ===
+
+> neighborly-api@1.0.0 test /Volumes/T7 Shield/Projects/neighborly/backend
+> jest --config jest.config.cjs --runInBand
+
+PASS src/messaging/messaging.http.spec.ts (6.543 s)
+PASS src/messaging/messaging.service.spec.ts
+PASS src/users/user-profiles.http.spec.ts
+PASS src/community/community.http.spec.ts
+PASS src/jobs/jobs.http.spec.ts
+PASS src/housing/housing.http.spec.ts
+PASS src/services/services.http.spec.ts
+PASS src/listings/listings.draft-http.spec.ts
+PASS src/requests/requests.offers-http.spec.ts
+PASS src/categories/categories.http.spec.ts
+PASS src/listings/listings.public-http.spec.ts
+PASS src/messaging/messaging.gateway.realtime.spec.ts
+PASS src/transactions/transactions.service.spec.ts
+PASS src/messaging/messaging.gateway.spec.ts
+PASS src/auth/auth.jwt.spec.ts
+PASS src/common/config/env.validation.spec.ts
+PASS src/requests/requests.service.spec.ts
+PASS src/listings/listings.service.spec.ts
+PASS src/auth/auth.guard.spec.ts
+PASS src/reviews/reviews.service.spec.ts
+PASS src/transactions/transaction-state.spec.ts
+
+Test Suites: 21 passed, 21 total
+Tests:       124 passed, 124 total
+Snapshots:   0 total
+Time:        10.991 s
+Ran all test suites.
+jest_exit:0
+=== nest build ===
+
+> neighborly-api@1.0.0 build /Volumes/T7 Shield/Projects/neighborly/backend
+> nest build
+
+build_exit:0

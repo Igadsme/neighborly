@@ -1,303 +1,377 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react"
-import { api, ApiError } from "../api/client"
-import type { ApiListing, ApiTransaction, CurrentUser } from "../api/types"
-import { mapApiListing } from "../api/listing-mapper"
-import { Badge, Button, ListingCard } from "../components/ui"
+import { useEffect, useState } from 'react'
+import { api, readStatus } from '../api/client'
+import type { ApiListing, ProfileReview, PublicProfile } from '../api/types'
+import { Avatar, Badge, Button, Icon, ListingCard, LoadState } from '../components/ui'
+import { listingFromApi, memberSince, personName, relativeTime } from '../lib/view'
 
-type ProfileTab = "listings" | "reviews"
+type Page = 'listing' | 'messages'
 
 interface ProfileProps {
-  onNavigate: (page: "listing", listingId?: string) => void
+  onNavigate: (p: Page, id?: string) => void
+  userId?: string | null
 }
 
-export default function Profile({ onNavigate }: ProfileProps) {
-  const [user, setUser] = useState<CurrentUser | null>(null)
-  const [listings, setListings] = useState<ApiListing[]>([])
-  const [transactions, setTransactions] = useState<ApiTransaction[]>([])
-  const [activeTab, setActiveTab] = useState<ProfileTab>("listings")
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [editing, setEditing] = useState(false)
-  const [notice, setNotice] = useState("")
-  const [error, setError] = useState("")
+function profileName(profile: PublicProfile) {
+  const named = [profile.firstName, profile.lastName].filter(Boolean).join(' ')
+  return profile.displayName || named || 'Neighbor'
+}
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError("")
-    try {
-      const [currentUser, availableListings, exchanges] = await Promise.all([
-        api.auth.me(),
-        api.listings.mine(),
-        api.transactions.list(),
-      ])
-      setUser(currentUser)
-      setListings(
-        availableListings.filter(
-          (listing) => listing.status === "PUBLISHED",
-        ),
-      )
-      setTransactions(exchanges)
-    } catch (cause: unknown) {
-      setError(
-        cause instanceof ApiError
-          ? cause.message
-          : "Your profile could not be loaded.",
-      )
-    } finally {
-      setLoading(false)
+function ratingLabel(value: number | null) {
+  if (value == null) return '—'
+  const text = Number.isInteger(value) ? String(value) : value.toFixed(1)
+  return `${text}★`
+}
+
+function ratingBreakdown(reviews: ProfileReview[]) {
+  return [5, 4, 3, 2, 1].map((stars) => ({
+    stars,
+    percent: reviews.length === 0 ? 0 : Math.round((reviews.filter((review) => review.rating === stars).length / reviews.length) * 100),
+  }))
+}
+
+export default function Profile({ onNavigate, userId }: ProfileProps) {
+  const [activeTab, setActiveTab] = useState<'listings' | 'reviews' | 'sold'>('listings')
+  const [profileNote, setProfileNote] = useState('')
+  const [blocked, setBlocked] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [profile, setProfile] = useState<PublicProfile | null>(null)
+  const [reviews, setReviews] = useState<ProfileReview[]>([])
+  const [activeListings, setActiveListings] = useState<ApiListing[]>([])
+  const [soldListings, setSoldListings] = useState<ApiListing[]>([])
+
+  const messageProfile = async () => {
+    if (!userId) {
+      setProfileNote('Open Messages to continue a conversation.')
+      onNavigate('messages')
+      return
     }
-  }, [])
+    setProfileNote('')
+    try {
+      const result = await api.conversations.create({
+        participantId: userId,
+        body: 'Hi, I saw your profile on Neighborly.',
+      })
+      onNavigate('messages', result.conversation.id)
+    } catch (cause: unknown) {
+      setProfileNote(readStatus(cause, 'Unable to message this neighbor.'))
+    }
+  }
+
+  const reportProfile = async () => {
+    if (!profile) return
+    setProfileNote('')
+    try {
+      await api.safety.report({ targetType: 'USER', targetId: profile.id, reason: 'OTHER' })
+      setProfileNote('Report submitted.')
+    } catch (cause: unknown) {
+      setProfileNote(readStatus(cause, 'Unable to submit this report.'))
+    }
+  }
+
+  const toggleBlock = async () => {
+    if (!userId) return
+    setProfileNote('')
+    try {
+      if (blocked) {
+        await api.safety.unblock(userId)
+        setBlocked(false)
+        setProfileNote('Profile unblocked.')
+      } else {
+        await api.safety.block(userId)
+        setBlocked(true)
+        setProfileNote('Profile blocked. You cannot message this person.')
+      }
+    } catch (cause: unknown) {
+      setProfileNote(readStatus(cause, 'Unable to update this block.'))
+    }
+  }
 
   useEffect(() => {
-    void load()
-  }, [load])
-
-  async function saveProfile(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const data = new FormData(event.currentTarget)
-    setSaving(true)
-    setError("")
-    try {
-      const updated = await api.users.updateProfile({
-        firstName: String(data.get("firstName") ?? ""),
-        lastName: String(data.get("lastName") ?? ""),
-        displayName: String(data.get("displayName") ?? ""),
-        bio: String(data.get("bio") ?? ""),
-        neighborhood: String(data.get("neighborhood") ?? ""),
-        city: String(data.get("city") ?? ""),
-        state: String(data.get("state") ?? ""),
+    let active = true
+    setLoading(true)
+    setError('')
+    const load = async () => {
+      const id = userId || (await api.auth.me()).id
+      if (userId) {
+        const blocks = await api.safety.blocks().catch(() => [])
+        if (active) setBlocked(blocks.some((row) => row.userId === userId))
+      } else if (active) {
+        setBlocked(false)
+      }
+      const [nextProfile, nextReviews, published, sold] = await Promise.all([
+        api.users.profile(id),
+        api.users.reviews(id),
+        api.listings.list({ sellerId: id, limit: 24 }),
+        api.listings.list({ sellerId: id, status: 'SOLD', limit: 24 }),
+      ])
+      if (!active) return
+      setProfile(nextProfile)
+      setReviews(nextReviews)
+      setActiveListings(published.items ?? [])
+      setSoldListings(sold.items ?? [])
+    }
+    load()
+      .catch((cause) => {
+        if (!active) return
+        setProfile(null)
+        setError(readStatus(cause, 'Profile could not be loaded.'))
       })
-      setUser(updated)
-      setEditing(false)
-      setNotice("Your profile was updated.")
-    } catch (cause: unknown) {
-      setError(cause instanceof ApiError ? cause.message : "Your profile could not be updated.")
-    } finally {
-      setSaving(false)
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
     }
-  }
+  }, [userId])
 
-  async function exportAccount() {
-    setSaving(true)
-    setError("")
-    try {
-      const data = await api.users.exportData()
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement("a")
-      anchor.href = url
-      anchor.download = `neighborly-account-export-${new Date().toISOString().slice(0, 10)}.json`
-      anchor.click()
-      URL.revokeObjectURL(url)
-      setNotice("Your account export was downloaded.")
-    } catch (cause: unknown) {
-      setError(cause instanceof ApiError ? cause.message : "Your account export could not be created.")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const name =
-    [user?.profile?.firstName, user?.profile?.lastName]
-      .filter(Boolean)
-      .join(" ") || "Neighbor"
-  const location = [
-    user?.profile?.neighborhood,
-    user?.profile?.city,
-    user?.profile?.state,
-  ]
-    .filter(Boolean)
-    .join(", ")
-  const completedCount = transactions.filter(
-    (transaction) => transaction.status === "COMPLETED",
-  ).length
-  const reviews = transactions.flatMap((transaction) =>
-    transaction.reviews
-      .filter((review) => review.subjectId === user?.id)
-      .map((review) => ({ ...review, transactionId: transaction.id })),
-  )
+  const name = profile ? profileName(profile) : ''
+  const since = profile ? memberSince(profile.memberSince) : ''
+  const area = profile?.neighborhood || profile?.city || 'Nearby'
+  const desktopPlace = profile ? [profile.neighborhood, profile.city].filter(Boolean).join(', ') || 'Nearby' : ''
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-24 md:pb-0">
-      <div className="h-32 bg-gradient-to-br from-[#1B2A4A] via-[#2D6A4F] to-[#40916C] md:h-44" />
-      <main className="mx-auto max-w-4xl px-4 md:px-6">
-        <section className="relative -mt-14 mb-8 rounded-3xl border border-[#E8E6DF] bg-white p-5 shadow-sm md:-mt-16 md:p-7">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#8A9AB5]">
-                Neighborly profile
-              </p>
-              <h1 className="mt-1 font-display text-2xl font-semibold text-[#1B2A4A] md:text-3xl">
-                {loading ? "Loading profile…" : name}
-              </h1>
-              <p className="mt-1 text-sm text-[#8A9AB5]">
-                {location ||
-                  user?.email ||
-                  "Add your neighborhood during onboarding."}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="navy">Your account</Badge>
-              <Button variant="outline" size="xs" onClick={() => setEditing(value => !value)}>{editing ? "Cancel" : "Edit profile"}</Button>
-            </div>
-          </div>
-          <p className="mt-5 max-w-2xl text-sm leading-relaxed text-[#5C6E8A]">
-            {user?.profile?.bio || "Add a short introduction so neighbors know a little more about you."}
-          </p>
-          {editing && user && (
-            <form onSubmit={saveProfile} className="mt-5 rounded-2xl border border-[#74C69D] bg-[#F0FBF3] p-4">
-              <div className="grid gap-3 md:grid-cols-2">
-                <ProfileField name="firstName" label="First name" defaultValue={user.profile?.firstName} required />
-                <ProfileField name="lastName" label="Last name" defaultValue={user.profile?.lastName} required />
-                <ProfileField name="displayName" label="Display name" defaultValue={user.profile?.displayName} />
-                <ProfileField name="neighborhood" label="Neighborhood" defaultValue={user.profile?.neighborhood} />
-                <ProfileField name="city" label="City" defaultValue={user.profile?.city} />
-                <ProfileField name="state" label="State or region" defaultValue={user.profile?.state} />
-                <label className="text-xs font-semibold text-[#5C6E8A] md:col-span-2">Bio<textarea name="bio" maxLength={1000} rows={3} defaultValue={user.profile?.bio ?? ""} className="mt-1 block w-full rounded-xl border border-[#E8E6DF] bg-white px-3 py-2 text-sm font-normal text-[#1B2A4A]" /></label>
-              </div>
-              <div className="mt-4 flex justify-end"><Button type="submit" size="sm" loading={saving}>Save profile</Button></div>
-            </form>
-          )}
-          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3">
-            {[
-              { label: "Published listings", value: listings.length },
-              { label: "Completed exchanges", value: completedCount },
-              { label: "Received reviews", value: reviews.length },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="rounded-xl bg-[#F5F4EF] p-3 text-center"
-              >
-                <p className="font-display text-xl font-semibold text-[#1B2A4A]">
-                  {loading ? "—" : stat.value}
-                </p>
-                <p className="mt-1 text-xs text-[#8A9AB5]">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-        </section>
 
-        {notice && <div role="status" className="mb-5 rounded-xl border border-[#74C69D] bg-[#F0FBF3] p-3 text-sm text-[#1B4332]">{notice}</div>}
-        {error && (
-          <div
-            role="alert"
-            className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E8694A]/30 bg-[#FFF5F2] p-3 text-sm text-[#C4512D]"
-          >
-            <span>{error}</span>
-            <button
-              onClick={() => void load()}
-              className="font-semibold underline"
-            >
-              Retry
-            </button>
+      {/* Cover / header */}
+      <div className="h-32 md:h-44 bg-gradient-to-br from-[#1B2A4A] via-[#2D6A4F] to-[#40916C] relative">
+        <div className="absolute inset-0 opacity-10">
+          <svg viewBox="0 0 400 200" className="w-full h-full">
+            <circle cx="50" cy="50" r="80" fill="white" />
+            <circle cx="350" cy="150" r="100" fill="white" />
+            <circle cx="200" cy="200" r="60" fill="white" />
+          </svg>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 md:px-6">
+        {(loading || error || !profile) && (
+          <div className="py-8">
+            <LoadState loading={loading} error={error || (!loading ? 'Profile could not be loaded.' : '')} loadingLabel="Loading profile…" />
           </div>
         )}
 
-        <div className="mb-5 flex gap-1 rounded-xl bg-[#F5F4EF] p-1">
-          {([
-            ["listings", `Published listings (${listings.length})`],
-            ["reviews", `Received reviews (${reviews.length})`],
-          ] as const).map(([tab, label]) => (
+        {profile && !loading && !error && (
+          <>
+        {/* Profile header */}
+        <div className="relative -mt-16 md:-mt-20 mb-6">
+          <div className="flex items-end justify-between">
+            <div className="flex items-end gap-4">
+              <div className="relative">
+                <Avatar
+                  name={name}
+                  size="xl"
+                  className="border-4 border-white shadow-lg"
+                />
+                {profile.emailVerified && (
+                  <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#2D6A4F] rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                    <Icon name="check" size={12} className="text-white" />
+                  </div>
+                )}
+              </div>
+              <div className="pb-2 hidden md:block">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <h1 className="font-display text-2xl font-semibold text-[#1B2A4A]">{name}</h1>
+                </div>
+                <p className="text-[#5C6E8A] text-sm">{desktopPlace} · Member since {since}</p>
+              </div>
+            </div>
+            <div className="flex gap-2 pb-2">
+              <button
+                type="button"
+                disabled
+                className="px-4 py-2 rounded-full text-sm font-semibold border bg-white text-[#5C6E8A] border-[#E8E6DF] cursor-not-allowed"
+              >
+                Follow · Coming soon
+              </button>
+              <Button variant="primary" size="sm" onClick={() => void messageProfile()}>
+                <Icon name="message" size={13} />
+                Message
+              </Button>
+            </div>
+          </div>
+
+          {/* Mobile name */}
+          <div className="mt-4 md:hidden">
+            <div className="flex items-center gap-2 mb-0.5">
+              <h1 className="font-display text-2xl font-semibold text-[#1B2A4A]">{name}</h1>
+            </div>
+            <p className="text-[#5C6E8A] text-sm">{area} · Member since {since}</p>
+          </div>
+        </div>
+
+        {/* Trust stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          {[
+            { label: 'Rating', value: ratingLabel(profile.ratingAverage), color: 'text-[#F59E0B]', bg: 'bg-[#FEF3C7]', icon: '⭐' },
+            { label: 'Reviews', value: `${profile.reviewCount}`, color: 'text-[#1B2A4A]', bg: 'bg-[#F0FBF3]', icon: '💬' },
+            { label: 'Sales', value: `${profile.soldCount}`, color: 'text-[#1B2A4A]', bg: 'bg-[#DDEEFF]', icon: '✅' },
+            { label: 'Response', value: '—', color: 'text-[#1B2A4A]', bg: 'bg-[#FDE8E0]', icon: '⚡' },
+          ].map(stat => (
+            <div key={stat.label} className={`${stat.bg} rounded-2xl p-4 text-center`}>
+              <div className="text-2xl mb-1">{stat.icon}</div>
+              <p className={`font-bold text-lg font-display ${stat.color}`}>{stat.value}</p>
+              <p className="text-xs text-[#5C6E8A] font-medium">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Verification badges */}
+        <div className="flex flex-wrap gap-2 mb-8">
+          {profile.emailVerified && <Badge variant="green">✓ Email verified</Badge>}
+          <Badge variant="navy">👤 {profile.soldCount} completed sales</Badge>
+        </div>
+
+        {/* About */}
+        <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 mb-6">
+          <h2 className="font-semibold text-[#1B2A4A] mb-2">About</h2>
+          <p className="text-sm text-[#5C6E8A] leading-relaxed">
+            {profile.bio?.trim() || 'No bio yet.'}
+          </p>
+        </div>
+
+        {/* Safety info */}
+        <div className="bg-[#F0FBF3] border border-[#74C69D]/30 rounded-2xl p-4 mb-6 flex items-start gap-3">
+          <Icon name="shield" size={16} className="text-[#2D6A4F] mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-sm text-[#1B2A4A]">{profile.emailVerified ? 'Email verified neighbor' : 'Neighborly member'}</p>
+            <p className="text-xs text-[#5C6E8A] mt-0.5">{name} has {profile.reviewCount} {profile.reviewCount === 1 ? 'review' : 'reviews'} and has been a member since {since}.</p>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 bg-[#F5F4EF] p-1 rounded-xl mb-6">
+          {[
+            { id: 'listings', label: `Active Listings (${activeListings.length})` },
+            { id: 'reviews', label: `Reviews (${profile.reviewCount})` },
+            { id: 'sold', label: `Sold (${soldListings.length})` },
+          ].map(tab => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-                activeTab === tab
-                  ? "bg-white text-[#1B2A4A] shadow-sm"
-                  : "text-[#8A9AB5] hover:text-[#1B2A4A]"
-              }`}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as 'listings' | 'reviews' | 'sold')}
+              className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-white text-[#1B2A4A] shadow-sm' : 'text-[#5C6E8A] hover:text-[#1B2A4A]'}`}
             >
-              {label}
+              {tab.label}
             </button>
           ))}
         </div>
 
-        {loading ? (
-          <div className="listing-grid" aria-label="Loading profile data">
-            {[0, 1, 2, 3].map((item) => (
-              <div
-                key={item}
-                className="h-64 animate-pulse rounded-2xl bg-white"
-              />
-            ))}
-          </div>
-        ) : activeTab === "listings" ? (
-          listings.length ? (
+        {/* Listings tab */}
+        {activeTab === 'listings' && (
+          activeListings.length === 0 ? (
+            <p className="text-sm text-[#5C6E8A] text-center py-8">No active listings yet.</p>
+          ) : (
             <div className="listing-grid">
-              {listings.map((listing) => (
-                <ListingCard
-                  key={listing.id}
-                  listing={mapApiListing(listing)}
-                  onClick={() => onNavigate("listing", listing.id)}
-                />
+              {activeListings.map(listing => (
+                <ListingCard key={listing.id} listing={listingFromApi(listing)} onClick={() => onNavigate('listing', listing.id)} />
               ))}
             </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-10 text-center">
-              <p className="font-semibold text-[#1B2A4A]">
-                No published listings
-              </p>
-              <p className="mt-2 text-sm text-[#8A9AB5]">
-                Your published marketplace listings will show here.
-              </p>
-            </div>
           )
-        ) : reviews.length ? (
-          <div className="space-y-3">
-            {reviews.map((review) => (
-              <article
-                key={`${review.transactionId}-${review.id}`}
-                className="rounded-2xl border border-[#E8E6DF] bg-white p-5"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-sm text-[#1B2A4A]">
-                    Exchange review
-                  </p>
-                  <span className="text-sm font-semibold text-[#D97706]">
-                    {"★".repeat(Math.max(0, Math.min(5, review.rating)))}
-                  </span>
+        )}
+
+        {/* Reviews tab */}
+        {activeTab === 'reviews' && (
+          <div>
+            {/* Rating summary */}
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-5 mb-6">
+              <div className="flex items-center gap-6">
+                <div className="text-center">
+                  <p className="text-5xl font-bold font-display text-[#1B2A4A]">{profile.ratingAverage ?? '—'}</p>
+                  <div className="flex my-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span key={star} className={profile.ratingAverage != null && star <= Math.round(profile.ratingAverage) ? 'text-[#F59E0B]' : 'text-[#E8E6DF]'}>★</span>
+                    ))}
+                  </div>
+                  <p className="text-xs text-[#5C6E8A]">{profile.reviewCount} reviews</p>
                 </div>
-                <p className="mt-2 text-sm text-[#5C6E8A]">
-                  {review.body || "No written comment was provided."}
-                </p>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-10 text-center">
-            <p className="font-semibold text-[#1B2A4A]">No reviews yet</p>
-            <p className="mt-2 text-sm text-[#8A9AB5]">
-              Reviews will appear after completed exchanges.
-            </p>
+                <div className="flex-1">
+                  {ratingBreakdown(reviews).map(({ stars, percent }) => (
+                    <div key={stars} className="flex items-center gap-2 mb-1">
+                      <span className="text-xs text-[#5C6E8A] w-4">{stars}</span>
+                      <span className="text-[#F59E0B] text-xs">★</span>
+                      <div className="flex-1 h-2 bg-[#F5F4EF] rounded-full overflow-hidden">
+                        <div className="h-full bg-[#F59E0B] rounded-full" style={{ width: `${percent}%` }} />
+                      </div>
+                      <span className="text-xs text-[#5C6E8A] w-8 text-right">{percent}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {reviews.length === 0 ? (
+              <p className="text-sm text-[#5C6E8A] text-center py-8">No reviews yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {reviews.map((review) => (
+                  <div key={review.id} className="bg-white rounded-2xl border border-[#E8E6DF] p-5">
+                    <div className="flex items-start gap-3">
+                      <Avatar name={personName(review.author)} size="sm" />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-semibold text-sm text-[#1B2A4A]">{personName(review.author)}</p>
+                          <span className="text-xs text-[#5C6E8A]">{relativeTime(review.createdAt)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="flex">
+                            {[...Array(review.rating)].map((_, j) => <span key={j} className="text-[#F59E0B] text-xs">★</span>)}
+                          </div>
+                          {review.itemTitle && (
+                            <>
+                              <span className="text-xs text-[#5C6E8A]">·</span>
+                              <span className="text-xs text-[#5C6E8A]">{review.itemTitle}</span>
+                            </>
+                          )}
+                        </div>
+                        <p className="text-sm text-[#5C6E8A] leading-relaxed">{review.body}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        <section className="my-8 rounded-2xl border border-[#E8E6DF] bg-white p-5">
-          <h2 className="font-semibold text-[#1B2A4A]">
-            Trust and safety status
-          </h2>
-          <p className="mt-2 text-sm text-[#5C6E8A]">
-            Reporting and blocking protections are active across messages,
-            requests, and community activity. Email, phone, and identity
-            verification are not enabled, so Neighborly does not display an
-            unverified badge or invented trust score.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {!user?.profile?.emailVerified && <Button variant="soft" size="xs" loading={saving} onClick={async () => {
-              setSaving(true); setError("")
-              try { await api.auth.requestEmailVerification(); setNotice("Verification email sent. Check your inbox.") }
-              catch (cause: unknown) { setError(cause instanceof ApiError ? cause.message : "Verification email could not be sent.") }
-              finally { setSaving(false) }
-            }}>Verify my email</Button>}
-            {user?.profile?.emailVerified && <Badge variant="verified">Email verified</Badge>}
-            <Button variant="ghost" size="xs" loading={saving} onClick={() => void exportAccount()}>Download my account data</Button>
-          </div>
-        </section>
-      </main>
+        {/* Sold tab */}
+        {activeTab === 'sold' && (
+          soldListings.length === 0 ? (
+            <p className="text-sm text-[#5C6E8A] text-center py-8">No sold listings yet.</p>
+          ) : (
+            <div className="listing-grid">
+              {soldListings.map(listing => (
+                <div key={listing.id} className="relative">
+                  <ListingCard listing={{ ...listingFromApi(listing), saved: false }} onClick={() => {}} />
+                  <div className="absolute inset-0 bg-white/70 rounded-2xl flex items-center justify-center">
+                    <Badge variant="navy">Sold</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* Report */}
+        <div className="text-center mt-8">
+          <button
+            onClick={() => void reportProfile()}
+            className="text-xs font-medium transition-colors text-[#5C6E8A] hover:text-[#5C6E8A]"
+          >
+            Report this profile
+          </button>
+          {userId && (
+            <button
+              onClick={() => void toggleBlock()}
+              className="block mx-auto mt-2 text-xs font-medium transition-colors text-[#5C6E8A] hover:text-[#5C6E8A]"
+            >
+              {blocked ? 'Unblock this profile' : 'Block this profile'}
+            </button>
+          )}
+          {profileNote && <p className="text-xs text-[#A63D27] mt-2" role="alert">{profileNote}</p>}
+        </div>
+          </>
+        )}
+      </div>
     </div>
   )
-}
-
-function ProfileField({ name, label, defaultValue, required }: { name: string; label: string; defaultValue?: string | null; required?: boolean }) {
-  return <label className="text-xs font-semibold text-[#5C6E8A]">{label}<input name={name} required={required} maxLength={120} defaultValue={defaultValue ?? ""} className="mt-1 block h-10 w-full rounded-xl border border-[#E8E6DF] bg-white px-3 text-sm font-normal text-[#1B2A4A]" /></label>
 }

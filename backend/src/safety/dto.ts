@@ -1,17 +1,24 @@
-import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator'
-import { ReportStatus } from '@prisma/client'
+import { IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator'
+
+export const reportTargetTypes = ['LISTING', 'USER', 'MESSAGE', 'COMMUNITY_POST'] as const
+export const reportReasons = ['SPAM', 'SCAM', 'HARASSMENT', 'INAPPROPRIATE', 'OTHER'] as const
+export const reportStatuses = ['OPEN', 'REVIEWING', 'RESOLVED', 'DISMISSED'] as const
+export const moderationKinds = ['DISMISS', 'RESOLVE', 'HIDE', 'SUSPEND_USER', 'RESTORE_USER'] as const
+
+export type ReportTargetTypeName = (typeof reportTargetTypes)[number]
+export type ReportReasonName = (typeof reportReasons)[number]
+export type ReportStatusName = (typeof reportStatuses)[number]
+export type ModerationKindName = (typeof moderationKinds)[number]
 
 export class CreateReportDto {
-  @IsIn(['USER', 'LISTING', 'REQUEST', 'MESSAGE'])
-  targetType!: 'USER' | 'LISTING' | 'REQUEST' | 'MESSAGE'
+  @IsIn(reportTargetTypes)
+  targetType!: ReportTargetTypeName
 
   @IsUUID()
   targetId!: string
 
-  @IsString()
-  @MinLength(3)
-  @MaxLength(100)
-  reason!: string
+  @IsIn(reportReasons)
+  reason!: ReportReasonName
 
   @IsOptional()
   @IsString()
@@ -19,23 +26,23 @@ export class CreateReportDto {
   details?: string
 }
 
-export class ResolveReportDto {
-  @IsIn(Object.values(ReportStatus))
-  status!: ReportStatus
+export class BlockUserDto {
+  @IsUUID()
+  userId!: string
+}
 
-  @IsString()
-  @MinLength(2)
-  @MaxLength(100)
-  action!: string
+export class ListModerationQuery {
+  @IsOptional()
+  @IsIn(reportStatuses)
+  status?: ReportStatusName
+}
+
+export class ModerationActionDto {
+  @IsIn(moderationKinds)
+  kind!: ModerationKindName
 
   @IsOptional()
   @IsString()
   @MaxLength(2000)
   note?: string
-}
-
-export class ReportQueryDto {
-  @IsOptional()
-  @IsIn(Object.values(ReportStatus))
-  status?: ReportStatus
 }

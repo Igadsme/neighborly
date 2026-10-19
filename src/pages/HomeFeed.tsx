@@ -1,117 +1,221 @@
-import { useEffect, useState } from "react"
-import {
-  ListingCard,
-  SectionHeader,
-  Badge,
-  Icon,
-  Button,
-} from "../components/ui"
-import { api, ApiError } from "../api/client"
-import type { CurrentUser } from "../api/types"
-import type { Listing } from "../data"
-import { mapApiListing } from "../api/listing-mapper"
+import { useEffect, useState } from 'react'
+import { ListingCard, SectionHeader, Badge, Avatar, StarRating, Icon, Button, LoadState } from '../components/ui'
+import { type Listing } from '../data'
+import { api, readStatus } from '../api/client'
+import { hasDisplayableRating } from '../lib/ratings'
+import { listingFromApi, mediaSrc } from '../lib/view'
+import { communityEventCard, communityPostCard, serviceCard, type CommunityEventCard, type CommunityPostCard, type ServiceCard } from '../lib/verticals'
 
-type Page = "home" | "explore" | "categories" | "map" | "listing" | "create" | "messages" | "saved" | "profile" | "dashboard" | "housing" | "services" | "jobs" | "community"
+type Page = 'home' | 'explore' | 'categories' | 'map' | 'listing' | 'create' | 'messages' | 'saved' | 'profile' | 'dashboard' | 'housing' | 'services' | 'jobs' | 'community'
 
 interface HomeFeedProps {
-  onNavigate: (p: Page, entityId?: string) => void
+  onNavigate: (p: Page, id?: string) => void
+}
+
+const quickCategories: Array<{ emoji: string; label: string; page?: Page }> = [
+  { emoji: '🛋️', label: 'Furniture' },
+  { emoji: '📱', label: 'Electronics' },
+  { emoji: '🚗', label: 'Vehicles' },
+  { emoji: '🎁', label: 'Free' },
+  { emoji: '🏠', label: 'Housing', page: 'housing' },
+  { emoji: '🔧', label: 'Services', page: 'services' },
+  { emoji: '💼', label: 'Jobs', page: 'jobs' },
+  { emoji: '🌳', label: 'Community', page: 'community' },
+]
+
+interface NeighborCard {
+  userId: string
+  displayName: string
+  avatarUrl?: string | null
+  completedExchanges: number
+}
+
+function ListingThumb({ listing, free }: { listing: Listing; free?: boolean }) {
+  const src = mediaSrc(listing.images[0], 'w=160&h=160&fit=crop&auto=format')
+  return (
+    <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF] relative">
+      {src && <img src={src} alt={listing.title} className="w-full h-full object-cover" />}
+      {free && (
+        <div className="absolute top-1 left-1 bg-[#2D6A4F] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">FREE</div>
+      )}
+    </div>
+  )
 }
 
 export default function HomeFeed({ onNavigate }: HomeFeedProps) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
-  const [categories, setCategories] = useState<Array<{
-    id: string
-    name: string
-    slug: string
-  }>>([])
+  const [categoryIds, setCategoryIds] = useState<Record<string, string> | null>(null)
   const [listings, setListings] = useState<Listing[]>([])
+  const [newToday, setNewToday] = useState<Listing[]>([])
   const [listingsLoading, setListingsLoading] = useState(true)
-  const [listingsError, setListingsError] = useState("")
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
-  const loadListings = () => {
-    setListingsLoading(true)
-    setListingsError("")
-    const category = categories.find((item) => item.name === activeCategory)
-    Promise.all([
-      api.listings.list({
-        limit: 24,
-        ...(activeCategory === "Free" ? { freeOnly: true } : {}),
-        ...(category ? { categoryId: category.id } : {}),
-      }),
-      api.listings.favorites(),
-    ])
-      .then(([data, favorites]) => {
-        const savedIds = new Set(
-          favorites.map((favorite) => favorite.listing.id),
-        )
-        setListings(
-          data.map((listing) =>
-            mapApiListing(listing, savedIds.has(listing.id)),
-          ),
-        )
-      })
-      .catch((cause: unknown) =>
-        setListingsError(
-          cause instanceof ApiError
-            ? cause.message
-            : "Could not load marketplace listings.",
-        ),
-      )
-      .finally(() => setListingsLoading(false))
-  }
+  const [listingsError, setListingsError] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [neighborhood, setNeighborhood] = useState('')
+  const [services, setServices] = useState<ServiceCard[]>([])
+  const [events, setEvents] = useState<CommunityEventCard[]>([])
+  const [posts, setPosts] = useState<CommunityPostCard[]>([])
+  const [verticalsLoading, setVerticalsLoading] = useState(true)
+  const [verticalsError, setVerticalsError] = useState('')
+  const [neighbors, setNeighbors] = useState<NeighborCard[] | null>(null)
+  const [neighborsError, setNeighborsError] = useState('')
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+
   useEffect(() => {
+    let active = true
     api.categories
       .list()
-      .then(setCategories)
-      .catch(() => setCategories([]))
+      .then((items) => {
+        if (!active) return
+        const ids: Record<string, string> = {}
+        for (const item of items) ids[item.name.toLowerCase()] = item.id
+        setCategoryIds(ids)
+      })
+      .catch(() => {
+        if (active) setCategoryIds({})
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const selectedCategory =
+    activeCategory && activeCategory !== 'Free' ? activeCategory.toLowerCase() : null
+  const categoryGate = !selectedCategory
+    ? "all"
+    : categoryIds === null
+      ? "loading"
+      : categoryIds[selectedCategory] ?? "missing"
+
+  useEffect(() => {
+    let active = true
+    if (categoryGate === "loading") {
+      setListingsLoading(true)
+      return () => {
+        active = false
+      }
+    }
+    if (categoryGate === "missing") {
+      setListings([])
+      setNewToday([])
+      setListingsError('That category is not available.')
+      setListingsLoading(false)
+      return () => {
+        active = false
+      }
+    }
+    const categoryId = categoryGate === "all" ? undefined : categoryGate
+    setListingsLoading(true)
+    setListingsError('')
+    api.listings
+      .list({ limit: 24, ...(categoryId ? { categoryId } : {}) })
+      .then((page) => {
+        if (!active) return
+        const rows = page.items
+        const cards = rows.map((row) => listingFromApi(row))
+        const dayAgo = Date.now() - 24 * 60 * 60 * 1000
+        const fresh = new Set(
+          rows
+            .filter((row) => row.createdAt && new Date(row.createdAt).getTime() >= dayAgo)
+            .map((row) => row.id),
+        )
+        setListings(cards)
+        setNewToday(cards.filter((card) => fresh.has(card.id)).slice(0, 4))
+      })
+      .catch((cause: unknown) => {
+        if (active) setListingsError(readStatus(cause, 'Listings could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setListingsLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [categoryGate])
+
+  useEffect(() => {
+    let active = true
     api.auth
       .me()
-      .then(setCurrentUser)
-      .catch(() => setCurrentUser(null))
+      .then((me) => {
+        if (!active) return
+        setFirstName(me.profile?.firstName?.trim() || '')
+        setNeighborhood(
+          [me.profile?.neighborhood, me.profile?.city].filter(Boolean).join(' · '),
+        )
+      })
+      .catch(() => undefined)
+    Promise.all([api.services.list({ limit: 3 }), api.community.events(), api.community.posts({ limit: 3 })])
+      .then(([serviceRows, eventRows, postRows]) => {
+        if (!active) return
+        setServices(serviceRows.map(serviceCard))
+        setEvents(eventRows.slice(0, 3).map(communityEventCard))
+        setPosts(postRows.map(communityPostCard))
+      })
+      .catch((cause: unknown) => {
+        if (active) setVerticalsError(readStatus(cause, 'Neighborhood picks could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setVerticalsLoading(false)
+      })
+    return () => {
+      active = false
+    }
   }, [])
+
   useEffect(() => {
-    loadListings()
-  }, [activeCategory, categories])
-  const hour = new Date().getHours()
-  const greeting =
-    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
-  const firstName = currentUser?.profile?.firstName ?? "Neighbor"
-  const neighborhood = [
-    currentUser?.profile?.neighborhood,
-    currentUser?.profile?.city,
-    currentUser?.profile?.state,
-  ]
-    .filter(Boolean)
-    .join(", ")
+    let active = true
+    api.passport
+      .leaderboard()
+      .then((rows) => {
+        if (!active) return
+        setNeighbors(rows)
+        setNeighborsError('')
+      })
+      .catch((cause: unknown) => {
+        if (!active) return
+        setNeighbors([])
+        setNeighborsError(readStatus(cause, 'Neighbors could not be loaded.'))
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const scopedListings =
+    activeCategory === 'Free' ? listings.filter((listing) => listing.isFree) : listings
+  const freeListings = listings.filter((listing) => listing.isFree)
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-24 md:pb-0">
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10">
+
         {/* Greeting + Search */}
         <div className="mb-8">
           <div className="flex items-start justify-between mb-2">
             <div>
               <h1 className="font-display text-2xl md:text-3xl font-semibold text-[#1B2A4A]">
-                {greeting},{" "}
-                <em className="not-italic text-[#2D6A4F]">{firstName}</em> 👋
+                {greeting}, <em className="not-italic text-[#2D6A4F]">{firstName || 'there'}</em> 👋
               </h1>
-              <div className="flex items-center gap-1 text-sm text-[#5C6E8A] mt-1">
-                <Icon name="mapPin" size={13} className="text-[#E8694A]" />
-                {neighborhood || "Neighborhood not set"}
-              </div>
+              {/*
+                This was a button with a chevron that did nothing, and it
+                showed a hardcoded neighbourhood to every member. There is no
+                location switching behind it, so it is plain text, and it
+                states only what the signed-in member's profile actually says.
+              */}
+              {neighborhood && (
+                <p className="flex items-center gap-1 text-sm text-[#5C6E8A] mt-1">
+                  <Icon name="mapPin" size={13} className="text-[#B94C2A]" />
+                  {neighborhood}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => onNavigate("dashboard")}
-                className="hidden md:flex items-center gap-2 px-4 py-2 bg-white border border-[#E8E6DF] rounded-xl text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A] transition-colors"
-              >
+              <button onClick={() => onNavigate('dashboard')} className="hidden md:flex items-center gap-2 px-4 py-2 bg-white border border-[#E8E6DF] rounded-xl text-sm font-medium text-[#5C6E8A] hover:text-[#1B2A4A] transition-colors">
                 <Icon name="trendingUp" size={14} />
                 My Dashboard
               </button>
-              <button
-                onClick={() => onNavigate("create")}
-                className="flex items-center gap-2 px-4 py-2 bg-[#2D6A4F] text-white rounded-xl text-sm font-semibold hover:bg-[#1B4332] transition-colors"
-              >
+              <button onClick={() => onNavigate('create')} className="flex items-center gap-2 px-4 py-2 bg-[#2D6A4F] text-white rounded-xl text-sm font-semibold hover:bg-[#1B4332] transition-colors">
                 <Icon name="plus" size={14} />
                 Post
               </button>
@@ -120,307 +224,353 @@ export default function HomeFeed({ onNavigate }: HomeFeedProps) {
 
           {/* Main search */}
           <div className="relative mt-4">
-            <Icon
-              name="search"
-              size={18}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-[#C5CCDA] pointer-events-none"
-            />
-            <input
-              type="text"
-              placeholder="Search for anything nearby — furniture, services, housing..."
-              onClick={() => onNavigate("explore")}
-              readOnly
-              className="w-full h-13 pl-12 pr-4 bg-white border border-[#E8E6DF] rounded-2xl text-sm text-[#1B2A4A] placeholder:text-[#C5CCDA] focus:outline-none cursor-pointer shadow-sm hover:border-[#2D6A4F]/30 transition-colors"
-            />
+            <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5C6E8A] pointer-events-none" />
+            {/*
+              This field is a read-only shortcut into Explore rather than an
+              editable input, so it is a button with a real accessible name.
+              As an unlabelled readonly input it announced as a text field
+              that could not be typed into.
+            */}
+            <button
+              type="button"
+              onClick={() => onNavigate('explore')}
+              className="w-full h-13 pl-12 pr-4 bg-white border border-[#E8E6DF] rounded-2xl text-sm text-left text-[#1B2A4A] placeholder:text-[#5C6E8A] focus:outline-none cursor-pointer shadow-sm hover:border-[#2D6A4F]/30 transition-colors"
+            >
+              <span className="text-[#5C6E8A]">
+                Search for anything nearby — furniture, services, housing...
+              </span>
+            </button>
           </div>
 
           {/* Quick categories */}
-          <div className="flex gap-2 mt-4 overflow-x-auto scrollbar-hide pb-1">
-            {[
-              ...categories.map((category) => ({
-                label: category.name,
-                emoji: "🏷️",
-              })),
-              { label: "Free", emoji: "🎁" },
-            ].map((cat) => (
+          <div
+            className="flex gap-2 mt-4 scroll-x-focusable scrollbar-hide pb-1"
+            tabIndex={0}
+            role="group"
+            aria-label="Quick categories"
+          >
+            {quickCategories.map(cat => (
               <button
                 key={cat.label}
-                onClick={() =>
-                  setActiveCategory(
-                    activeCategory === cat.label ? null : cat.label,
-                  )
-                }
+                type="button"
+                onClick={() => {
+                  if (cat.page) {
+                    onNavigate(cat.page)
+                    return
+                  }
+                  setActiveCategory(activeCategory === cat.label ? null : cat.label)
+                }}
                 className={`flex items-center gap-1.5 flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium border transition-all ${
                   activeCategory === cat.label
-                    ? "bg-[#2D6A4F] text-white border-[#2D6A4F]"
-                    : "bg-white text-[#5C6E8A] border-[#E8E6DF] hover:border-[#2D6A4F]/50 hover:text-[#1B2A4A]"
+                    ? 'bg-[#2D6A4F] text-white border-[#2D6A4F]'
+                    : 'bg-white text-[#5C6E8A] border-[#E8E6DF] hover:border-[#2D6A4F]/50 hover:text-[#1B2A4A]'
                 }`}
               >
                 <span>{cat.emoji}</span>
                 {cat.label}
               </button>
             ))}
-            <button
-              onClick={() => onNavigate("categories")}
-              className="flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium border border-[#E8E6DF] text-[#8A9AB5] hover:text-[#1B2A4A] bg-white whitespace-nowrap"
-            >
+            <button onClick={() => onNavigate('categories')} className="flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium border border-[#E8E6DF] text-[#5C6E8A] hover:text-[#1B2A4A] bg-white whitespace-nowrap">
               All →
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 p-4 bg-[#F5F4EF] border border-[#E8E6DF] rounded-2xl mb-8">
-          <span className="text-2xl">🔔</span>
+        {/* Alert: Free items nearby */}
+        <button
+          type="button"
+          onClick={() => setActiveCategory(activeCategory === 'Free' ? null : 'Free')}
+          className="flex w-full items-center gap-3 p-4 bg-[#D8F3DC] border border-[#74C69D] rounded-2xl mb-8 cursor-pointer hover:bg-[#B7E4C7] transition-colors text-left"
+        >
+          <span className="text-2xl">🎁</span>
           <div className="flex-1">
-            <p className="font-semibold text-[#1B2A4A] text-sm">
-              Saved-search alerts are not available yet
+            <p className="font-semibold text-[#1B4332] text-sm">
+              {listingsLoading
+                ? 'Checking free items'
+                : freeListings.length
+                  ? `${freeListings.length} free item${freeListings.length === 1 ? '' : 's'}`
+                  : 'No free items posted yet'}
             </p>
-            <p className="text-xs text-[#5C6E8A]">
-              Browse current listings or post a request to find what you need.
+            <p className="text-xs text-[#2D6A4F]">
+              {freeListings.length ? 'Give, get, reduce waste' : 'Free listings will show up here when neighbors post them'}
             </p>
           </div>
-          <Button variant="soft" size="xs" onClick={() => onNavigate("create")}>
-            Post a request
-          </Button>
-        </div>
+          <Icon name="chevronRight" size={16} className="text-[#2D6A4F] flex-shrink-0" />
+        </button>
 
         {/* Nearby listings */}
         <section className="mb-10">
           <SectionHeader
-            title="Marketplace listings"
-            subtitle="Recently available in the marketplace"
-            action={() => onNavigate("explore")}
+            title="Nearby listings"
+            subtitle={activeCategory ? `Filtered to ${activeCategory}` : "Latest published listings"}
+            action={() => onNavigate('explore')}
             actionLabel="See all"
           />
           {listingsLoading ? (
-            <div className="listing-grid">
-              {Array.from({ length: 4 }, (_, index) => (
-                <div
-                  key={index}
-                  className="h-64 animate-pulse rounded-2xl bg-[#E8E6DF]"
-                />
-              ))}
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
+              Loading listings…
             </div>
           ) : listingsError ? (
-            <div className="rounded-2xl border border-[#E8E6DF] bg-white p-5 text-sm text-[#5C6E8A]">
+            <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D]">
               {listingsError}
-              <Button
-                variant="soft"
-                size="xs"
-                className="ml-3"
-                onClick={loadListings}
-              >
-                Retry
-              </Button>
             </div>
-          ) : listings.length ? (
-            <div className="listing-grid">
-              {listings.slice(0, 8).map((listing) => (
-                <ListingCard
-                  key={listing.id}
-                  listing={listing}
-                  onClick={() => onNavigate("listing", listing.id)}
-                />
-              ))}
+          ) : scopedListings.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
+              No listings nearby yet.
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-8 text-center text-sm text-[#5C6E8A]">
-              No active listings yet. Be the first to offer something nearby.
+            <div className="listing-grid">
+              {scopedListings.slice(0, 8).map(listing => (
+                <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing', listing.id)} />
+              ))}
             </div>
           )}
         </section>
 
         {/* Two-column layout: Recommended + Free */}
         <div className="grid md:grid-cols-2 gap-6 mb-10">
-          {/* Additional marketplace listings */}
+          {/* Recommended for you */}
           <div>
-            <SectionHeader
-              title="More listings"
-              subtitle="Continue browsing the marketplace"
-              action={() => onNavigate("explore")}
-              actionLabel="Explore"
-            />
+            <SectionHeader title="Recommended for you" subtitle="More published listings" action={() => onNavigate('explore')} actionLabel="More" />
+            {listingsLoading ? (
+              <LoadState loading loadingLabel="Loading listings…" />
+            ) : scopedListings.slice(0, 3).length === 0 ? (
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No recommendations yet.</div>
+            ) : (
             <div className="space-y-3">
-              {listings.slice(2, 5).map((listing) => (
-                <div
-                  key={listing.id}
-                  onClick={() => onNavigate("listing", listing.id)}
-                  className="flex gap-3 bg-white rounded-2xl border border-[#E8E6DF] p-3 cursor-pointer hover:border-[#2D6A4F]/30 transition-all card-hover"
-                >
-                  <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF]">
-                    {listing.images[0] && (
-                      <img
-                        src={listing.images[0]}
-                        alt={listing.title}
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                  </div>
+              {scopedListings.slice(0, 3).map(listing => (
+                <div key={listing.id} onClick={() => onNavigate('listing', listing.id)} className="flex gap-3 bg-white rounded-2xl border border-[#E8E6DF] p-3 cursor-pointer hover:border-[#2D6A4F]/30 transition-all card-hover">
+                  <ListingThumb listing={listing} />
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-1">
-                      {listing.title}
-                    </p>
-                    <p className="text-xs text-[#8A9AB5] mt-0.5">
-                      {listing.neighborhood} · {listing.distance}
-                    </p>
+                    <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-1">{listing.title}</p>
+                    <p className="text-xs text-[#5C6E8A] mt-0.5">{listing.neighborhood} · {listing.distance}</p>
                     <div className="flex items-center justify-between mt-2">
                       <span className="font-bold text-sm text-[#1B2A4A]">
-                        {listing.isFree ? (
-                          <span className="text-[#2D6A4F]">Free</span>
-                        ) : (
-                          `$${listing.price?.toLocaleString()}`
-                        )}
+                        {listing.isFree ? <span className="text-[#2D6A4F]">Free</span> : `$${listing.price?.toLocaleString()}`}
                       </span>
-                      <Badge variant="navy" size="sm">
-                        {listing.condition}
-                      </Badge>
+                      {listing.condition && <Badge variant="navy" size="sm">{listing.condition}</Badge>}
                     </div>
                   </div>
                 </div>
               ))}
             </div>
+            )}
           </div>
 
-          {/* Free near you */}
+          {/* Free items */}
           <div>
-            <SectionHeader
-              title="Free near you"
-              subtitle="Give, get, reduce waste"
-              action={() => onNavigate("explore")}
-              actionLabel="More"
-            />
+            <SectionHeader title="Free items" subtitle="Give, get, reduce waste" action={() => onNavigate('explore')} actionLabel="More" />
+            {listingsLoading ? (
+              <LoadState loading loadingLabel="Loading listings…" />
+            ) : freeListings.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No free listings yet.</div>
+            ) : (
             <div className="space-y-3">
-              {listings
-                .filter((l) => l.isFree)
-                .slice(0, 3)
-                .map((listing, i) => (
-                  <div
-                    key={listing.id + i}
-                    onClick={() => onNavigate("listing", listing.id)}
-                    className="flex gap-3 bg-white rounded-2xl border border-[#E8E6DF] p-3 cursor-pointer hover:border-[#74C69D]/50 transition-all card-hover"
-                  >
-                    <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF] relative">
-                      {listing.images[0] && (
-                        <img
-                          src={listing.images[0]}
-                          alt={listing.title}
-                          className="w-full h-full object-cover"
-                        />
-                      )}
-                      <div className="absolute top-1 left-1 bg-[#2D6A4F] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">
-                        FREE
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-2">
-                        {listing.title}
-                      </p>
-                      <p className="text-xs text-[#8A9AB5] mt-0.5">
-                        {listing.neighborhood} · {listing.distance}
-                      </p>
-                      <p className="text-xs text-[#E8694A] font-medium mt-1">
-                        {listing.postedAt}
-                      </p>
-                    </div>
+              {freeListings.map((listing) => (
+                <div key={listing.id} onClick={() => onNavigate('listing', listing.id)} className="flex gap-3 bg-white rounded-2xl border border-[#E8E6DF] p-3 cursor-pointer hover:border-[#74C69D]/50 transition-all card-hover">
+                  <ListingThumb listing={listing} free />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-2">{listing.title}</p>
+                    <p className="text-xs text-[#5C6E8A] mt-0.5">{listing.neighborhood} · {listing.distance}</p>
+                    <p className="text-xs text-[#B94C2A] font-medium mt-1">{listing.postedAt}</p>
                   </div>
-                ))}
+                </div>
+              ))}
             </div>
+            )}
           </div>
         </div>
 
         {/* Local Services */}
         <section className="mb-10">
-          <SectionHeader
-            title="Local services"
-            subtitle="Service profiles are not available yet"
-            action={() => onNavigate("explore")}
-            actionLabel="Browse listings"
-          />
-          <div className="rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-6 text-sm text-[#5C6E8A]">
-            Provider profiles, availability, and background-check status are not
-            connected. Service listings can still be discovered in the
-            marketplace.
+          <SectionHeader title="Local services" subtitle="Trusted providers in your area" action={() => onNavigate('services')} actionLabel="Browse all" />
+          {verticalsLoading ? (
+            <LoadState loading loadingLabel="Loading services…" />
+          ) : verticalsError ? (
+            <LoadState error={verticalsError} loadingLabel="Loading services…" />
+          ) : services.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No local services yet.</div>
+          ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {services.slice(0, 3).map(svc => {
+              const photo = mediaSrc(svc.image, 'w=400&h=300&fit=crop&auto=format')
+              return (
+              <div key={svc.id} onClick={() => onNavigate('services')} className="bg-white rounded-2xl border border-[#E8E6DF] overflow-hidden cursor-pointer card-hover">
+                <div className="h-28 overflow-hidden bg-[#F5F4EF]">
+                  {photo && <img src={photo} alt={svc.title} className="w-full h-full object-cover" />}
+                </div>
+                <div className="p-3">
+                  <p className="font-semibold text-sm text-[#1B2A4A]">{svc.title}</p>
+                  <p className="text-xs text-[#5C6E8A] mt-0.5">from ${svc.startingPrice.toLocaleString()}</p>
+                  {(hasDisplayableRating(svc.rating, svc.reviews) || svc.backgroundCheck) && (
+                  <div className="flex items-center justify-between mt-2">
+                    {hasDisplayableRating(svc.rating, svc.reviews) && (
+                      <StarRating rating={svc.rating} count={svc.reviews ?? undefined} size="xs" />
+                    )}
+                    {svc.backgroundCheck && <Badge variant="green" size="sm">BG Check</Badge>}
+                  </div>
+                  )}
+                </div>
+              </div>
+              )
+            })}
           </div>
+          )}
         </section>
 
         {/* Community Events */}
         <section className="mb-10">
-          <SectionHeader
-            title="Community events"
-            subtitle="Event publishing is not connected yet"
-            action={() => onNavigate("community")}
-            actionLabel="Community"
-          />
-          <div className="rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-6 text-sm text-[#5C6E8A]">
-            Events and RSVPs will appear here once the community module is
-            backed by persisted data.
+          <SectionHeader title="Community events" subtitle="What's happening this weekend" action={() => onNavigate('community')} actionLabel="See all" />
+          {verticalsLoading ? (
+            <LoadState loading loadingLabel="Loading events…" />
+          ) : verticalsError ? null : events.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No community events yet.</div>
+          ) : (
+          <div
+            className="flex gap-4 scroll-x-focusable scrollbar-hide pb-2"
+            tabIndex={0}
+            role="group"
+            aria-label="Recommended listings"
+          >
+            {events.map(event => {
+              const photo = mediaSrc(event.image, 'w=400&h=200&fit=crop&auto=format')
+              return (
+              <div key={event.id} onClick={() => onNavigate('community')} className="flex-shrink-0 w-64 bg-white rounded-2xl border border-[#E8E6DF] overflow-hidden card-hover cursor-pointer">
+                <div className="h-32 overflow-hidden bg-[#F5F4EF]">
+                  {photo && <img src={photo} alt={event.title} className="w-full h-full object-cover" />}
+                </div>
+                <div className="p-4">
+                  <p className="font-semibold text-sm text-[#1B2A4A] leading-tight">{event.title}</p>
+                  <p className="text-xs text-[#B94C2A] font-medium mt-1">{event.date} · {event.time}</p>
+                  <p className="text-xs text-[#5C6E8A] mt-0.5">{event.neighborhood}</p>
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#F5F4EF]">
+                    <span className="text-xs text-[#5C6E8A]">👥 {event.attending} attending</span>
+                    <Badge variant="blue" size="sm">RSVP</Badge>
+                  </div>
+                </div>
+              </div>
+              )
+            })}
           </div>
+          )}
         </section>
 
         {/* Community Posts */}
         <section className="mb-10">
-          <SectionHeader
-            title="Community discussions"
-            subtitle="Community publishing is not connected yet"
-            action={() => onNavigate("community")}
-            actionLabel="Community"
-          />
-          <div className="rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-6 text-sm text-[#5C6E8A]">
-            Posts, reactions, and replies are not yet backed by community APIs.
+          <SectionHeader title="Community discussions" subtitle="What neighbors are talking about" action={() => onNavigate('community')} actionLabel="Join the conversation" />
+          {verticalsLoading ? (
+            <LoadState loading loadingLabel="Loading discussions…" />
+          ) : verticalsError ? null : posts.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">No community discussions yet.</div>
+          ) : (
+          <div className="space-y-3">
+            {posts.slice(0, 3).map(post => (
+              <div key={post.id} onClick={() => onNavigate('community')} className="bg-white rounded-2xl border border-[#E8E6DF] p-5 cursor-pointer hover:border-[#2D6A4F]/30 transition-all">
+                <div className="flex items-start gap-3">
+                  <Avatar src={post.author.avatar} name={post.author.name} size="sm" verified={post.author.verified} />
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="text-xs font-semibold text-[#5C6E8A]">{post.author.name} · {post.author.neighborhood} · {post.postedAt}</span>
+                        <h3 className="font-semibold text-sm text-[#1B2A4A] mt-0.5">{post.title}</h3>
+                      </div>
+                      <Badge variant={
+                        post.type === 'discussion' ? 'gray' :
+                        post.type === 'announcement' ? 'blue' :
+                        post.type === 'lost_found' ? 'amber' :
+                        post.type === 'giveaway' ? 'green' :
+                        post.type === 'event' ? 'coral' : 'gray'
+                      } size="sm">
+                        {post.type === 'lost_found' ? 'Lost & Found' : post.type.charAt(0).toUpperCase() + post.type.slice(1)}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-[#5C6E8A] mt-1 line-clamp-2">{post.body}</p>
+                    <div className="flex items-center gap-4 mt-3 text-xs text-[#5C6E8A]">
+                      <span>❤️ {post.reactions.love + post.reactions.like + post.reactions.wow} reactions</span>
+                      <span>💬 {post.replies} replies</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
+          )}
         </section>
 
-        {/* People to follow */}
+        {/* People who opted into the public leaderboard */}
         <section className="mb-10">
-          <SectionHeader
-            title="Neighbors to follow"
-            subtitle="Following is not available yet"
-          />
-          <div className="rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-6 text-sm text-[#5C6E8A]">
-            Neighbor discovery and following are not connected to persisted
-            profile data.
+          <SectionHeader title="Neighbors to follow" subtitle="Members who opted into the public leaderboard" />
+          {neighbors === null && !neighborsError ? (
+            <LoadState loading loadingLabel="Loading neighbors…" />
+          ) : neighborsError ? (
+            <LoadState error={neighborsError} loadingLabel="Loading neighbors…" />
+          ) : !neighbors || neighbors.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
+              No neighbors to show yet.
+            </div>
+          ) : (
+          <div
+            className="flex gap-4 scroll-x-focusable scrollbar-hide pb-2"
+            tabIndex={0}
+            role="group"
+            aria-label="Neighbors to follow"
+          >
+            {neighbors.map(person => (
+              <div key={person.userId} className="flex-shrink-0 w-48 bg-white rounded-2xl border border-[#E8E6DF] p-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => onNavigate('profile', person.userId)}
+                  className="w-full"
+                >
+                  <Avatar src={person.avatarUrl || ''} name={person.displayName} size="lg" className="mx-auto mb-3" />
+                  <p className="font-semibold text-sm text-[#1B2A4A]">{person.displayName}</p>
+                  <p className="text-xs text-[#5C6E8A] mt-0.5">
+                    {person.completedExchanges} completed exchange{person.completedExchanges === 1 ? '' : 's'}
+                  </p>
+                </button>
+                <Button variant="soft" size="xs" fullWidth disabled className="mt-3">
+                  Follow · Coming soon
+                </Button>
+              </div>
+            ))}
           </div>
+          )}
         </section>
 
         {/* New Today */}
         <section className="mb-10">
-          <SectionHeader
-            title="Recently listed"
-            subtitle="Marketplace listings, newest first"
-            action={() => onNavigate("explore")}
-            actionLabel="See all"
-          />
+          <SectionHeader title="New today" subtitle="Just posted in the last 24 hours" action={() => onNavigate('explore')} actionLabel="See all" />
+          {listingsLoading ? (
+            <LoadState loading loadingLabel="Loading listings…" />
+          ) : newToday.filter((listing) => scopedListings.some((row) => row.id === listing.id)).length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">Nothing new in the last 24 hours.</div>
+          ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {listings.slice(4, 8).map((listing) => (
-              <ListingCard
-                key={listing.id}
-                listing={listing}
-                onClick={() => onNavigate("listing", listing.id)}
-                compact
-              />
+            {newToday.filter((listing) => scopedListings.some((row) => row.id === listing.id)).map(listing => (
+              <ListingCard key={listing.id} listing={listing} onClick={() => onNavigate('listing', listing.id)} compact />
             ))}
           </div>
+          )}
         </section>
 
-        <div className="rounded-3xl border border-[#E8E6DF] bg-[#EEF0F5] p-8 md:p-10">
-          <p className="text-[#2D6A4F] text-sm font-semibold mb-1">
-            Map discovery
-          </p>
-          <h3 className="font-display text-2xl md:text-3xl font-semibold text-[#1B2A4A] mb-2">
-            Interactive maps are not connected yet
-          </h3>
-          <p className="text-[#5C6E8A] text-sm mb-4 max-w-xl">
-            Location-based radius search and map pins require geospatial
-            discovery APIs. Current marketplace listings are available in
-            Explore.
-          </p>
-          <Button
-            variant="soft"
-            size="sm"
-            onClick={() => onNavigate("explore")}
-          >
-            Browse listings
-          </Button>
+        {/* Map teaser */}
+        <div
+          onClick={() => onNavigate('map')}
+          className="relative rounded-3xl overflow-hidden cursor-pointer group h-48 md:h-64 bg-[#EEF0F5]"
+        >
+          <img
+            src="https://images.unsplash.com/photo-1524813686514-a57563d77965?w=1200&h=500&fit=crop&auto=format"
+            alt="Map view"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#1B2A4A]/80 to-transparent flex items-center p-8">
+            <div>
+              <p className="text-[#74C69D] text-sm font-semibold mb-1">Explore the map</p>
+              <h2 className="font-display text-2xl md:text-3xl font-semibold text-white mb-2">See everything nearby</h2>
+              <p className="text-white/70 text-sm mb-4 max-w-xs">Open the painted neighborhood map. Pins follow neighborhood names, not live coordinates.</p>
+              <Button variant="soft" size="sm">Open Map →</Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

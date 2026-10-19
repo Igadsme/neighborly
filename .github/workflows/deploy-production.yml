@@ -1,0 +1,88 @@
+# Manual production promote stub.
+# NOT LAUNCHED / NOT DEPLOYED.
+# workflow_dispatch only. Do not dispatch this workflow.
+# It does not run on push or pull_request.
+# It does not build an image, log in to GHCR, register a domain, or change DNS.
+#
+# Leave both repository variables unset:
+#   PRODUCTION_DEPLOY_ENABLED
+#   PRODUCTION_PUSH_IMAGES
+# PRODUCTION_PUSH_IMAGES follows the STAGING_PUSH_IMAGES pattern: the push
+# job is skipped unless that variable is the string true. The job also
+# refuses and does not log in.
+#
+# Even when PRODUCTION_DEPLOY_ENABLED is true, the gate refuses. No
+# production target is configured. See docs/PRODUCTION.md.
+
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type PROMOTE to acknowledge this stub. It still will not deploy.
+        required: true
+        type: string
+      image_tag:
+        description: Unused. Image push is refused until a reviewed job replaces this stub.
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Refuse production deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - name: Refuse before any build or remote command
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          DEPLOY_ENABLED: ${{ vars.PRODUCTION_DEPLOY_ENABLED }}
+        run: |
+          set -euo pipefail
+          echo "Phase 7 production workflow is a stub."
+          echo "It does not deploy, register a domain, change DNS, or push an image."
+          if [ "$CONFIRM" != "PROMOTE" ]; then
+            echo "confirm must be the exact string PROMOTE. Nothing was deployed." >&2
+            exit 1
+          fi
+          if [ "$DEPLOY_ENABLED" != "true" ]; then
+            echo "PRODUCTION_DEPLOY_ENABLED is not the string true." >&2
+            echo "Leave it unset until the product owner approves a host." >&2
+            echo "Nothing was deployed. No image was pushed." >&2
+            exit 1
+          fi
+          echo "PRODUCTION_DEPLOY_ENABLED is true, but this repository has no production target." >&2
+          echo "Refusing to build, push, or deploy. See docs/PRODUCTION.md." >&2
+          exit 1
+
+  push-images:
+    name: Push images to GHCR
+    needs: gate
+    if: vars.PRODUCTION_DEPLOY_ENABLED == 'true' && vars.PRODUCTION_PUSH_IMAGES == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Refuse image push
+        env:
+          PUSH_IMAGES: ${{ vars.PRODUCTION_PUSH_IMAGES }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          echo "PRODUCTION_PUSH_IMAGES=${PUSH_IMAGES}"
+          echo "image_tag=${IMAGE_TAG}"
+          echo "Phase 7 does not push images and does not log in to GHCR." >&2
+          exit 1

@@ -6,11 +6,10 @@ compose=(docker compose -p "$project" -f docker-compose.yml)
 cleanup() { "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-"${compose[@]}" up -d postgres redis minio
+"${compose[@]}" up -d postgres redis
 for attempt in {1..30}; do
   if "${compose[@]}" exec -T postgres pg_isready -U neighborly -d neighborly >/dev/null 2>&1 && \
-     "${compose[@]}" exec -T redis redis-cli ping >/dev/null 2>&1 && \
-     curl -fsS http://127.0.0.1:9000/health >/dev/null 2>&1; then
+     "${compose[@]}" exec -T redis redis-cli ping >/dev/null 2>&1; then
     break
   fi
   if [[ "$attempt" -eq 30 ]]; then

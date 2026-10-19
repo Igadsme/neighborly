@@ -380,21 +380,15 @@ jobs:
   e2e:
     name: E2E marketplace journey
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
-      DATABASE_URL: postgresql://neighborly:neighborly@localhost:5432/neighborly
-      REDIS_URL: redis://localhost:6379
+      DATABASE_URL: postgresql://neighborly:neighborly@127.0.0.1:5432/neighborly
+      REDIS_URL: redis://127.0.0.1:6379
       JWT_SECRET: qa-only-access-secret-with-more-than-32-characters
       JWT_REFRESH_SECRET: qa-only-refresh-secret-with-more-than-32-characters
       CORS_ORIGIN: http://127.0.0.1:4173
       APP_URL: http://127.0.0.1:4173
-      S3_ENDPOINT: http://127.0.0.1:9000
-      S3_BUCKET: neighborly-media
-      S3_ACCESS_KEY: neighborly
-      S3_SECRET_KEY: neighborly-local-storage-secret
-      S3_PUBLIC_URL: http://127.0.0.1:9000/neighborly-media
-      S3_FORCE_PATH_STYLE: true
-      S3_AUTO_CREATE_BUCKET: true
+      API_BASE: http://127.0.0.1:3000/api/v1
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -410,39 +404,31 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm install --frozen-lockfile
         working-directory: backend
-      - run: pnpm exec prisma generate
-        working-directory: backend
-      - run: docker compose up -d --wait postgres redis minio
-      - run: pnpm exec prisma migrate deploy && pnpm exec prisma db seed
+      - run: docker compose up -d --wait postgres redis
+      - run: pnpm exec prisma generate && pnpm exec prisma migrate deploy && pnpm prisma:seed
         working-directory: backend
       - run: pnpm build
         working-directory: backend
       - run: nohup pnpm start > /tmp/neighborly-api.log 2>&1 &
         working-directory: backend
-      - run: for i in {1..30}; do curl -fsS http://127.0.0.1:3000/api/v1/health && exit 0; sleep 1; done; exit 1
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:smoke
-        working-directory: backend
-      - run: pnpm test:frontend
-        env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+      - run: for i in {1..45}; do curl -fsS http://127.0.0.1:3000/api/v1/ready && exit 0; sleep 1; done; cat /tmp/neighborly-api.log; exit 1
+      - run: node scripts/docker-release-e2e.mjs
       - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-artifacts
           path: |
             /tmp/neighborly-api.log
-            playwright-report/
-            test-results/
+            artifacts/docker-release-verification/e2e-report.json
           if-no-files-found: ignore
 
   security:
     name: Security authorization and abuse controls
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
-      DATABASE_URL: postgresql://neighborly:neighborly@localhost:5432/neighborly
-      REDIS_URL: redis://localhost:6379
+      DATABASE_URL: postgresql://neighborly:neighborly@127.0.0.1:5432/neighborly
+      REDIS_URL: redis://127.0.0.1:6379
       JWT_SECRET: qa-only-access-secret-with-more-than-32-characters
       JWT_REFRESH_SECRET: qa-only-refresh-secret-with-more-than-32-characters
       CORS_ORIGIN: http://127.0.0.1:4173
@@ -459,33 +445,38 @@ jobs:
           cache-dependency-path: backend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: backend
-      - run: pnpm exec prisma generate
+      - run: pnpm exec prisma generate && pnpm exec prisma migrate deploy && pnpm prisma:seed
         working-directory: backend
       - run: docker compose up -d --wait postgres redis
-      - run: pnpm exec prisma migrate deploy && pnpm exec prisma db seed
-        working-directory: backend
       - run: pnpm build && nohup pnpm start > /tmp/neighborly-security-api.log 2>&1 &
         working-directory: backend
-      - run: for i in {1..30}; do curl -fsS http://127.0.0.1:3000/api/v1/health && exit 0; sleep 1; done; exit 1
+      - run: for i in {1..45}; do curl -fsS http://127.0.0.1:3000/api/v1/ready && exit 0; sleep 1; done; cat /tmp/neighborly-security-api.log; exit 1
       - run: pnpm test:security
       - if: always()
         uses: actions/upload-artifact@v4
-        with: { name: security-artifacts, path: /tmp/neighborly-security-api.log, if-no-files-found: ignore }
+        with:
+          name: security-artifacts
+          path: /tmp/neighborly-security-api.log
+          if-no-files-found: ignore
 
-  backend-integration:
-    name: Backend migrations and integrity
+  backend-qa:
+    name: Backend migrations and integrity QA
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       postgres:
         image: postgis/postgis:16-3.4
-        env: { POSTGRES_DB: neighborly, POSTGRES_USER: neighborly, POSTGRES_PASSWORD: neighborly }
-        ports: ['5432:5432']
+        env:
+          POSTGRES_DB: neighborly
+          POSTGRES_USER: neighborly
+          POSTGRES_PASSWORD: neighborly
+        ports:
+          - 5432:5432
         options: >-
           --health-cmd "pg_isready -U neighborly -d neighborly"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      DATABASE_URL: postgresql://neighborly:neighborly@localhost:5432/neighborly
+      DATABASE_URL: postgresql://neighborly:neighborly@127.0.0.1:5432/neighborly
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -498,7 +489,7 @@ jobs:
           cache-dependency-path: backend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: backend
-      - run: pnpm exec prisma migrate deploy && pnpm exec prisma validate && pnpm exec prisma generate
+      - run: pnpm exec prisma generate && pnpm exec prisma migrate deploy && pnpm exec prisma validate
         working-directory: backend
       - run: pnpm test --coverage
         working-directory: backend
@@ -506,7 +497,10 @@ jobs:
         working-directory: backend
       - if: always()
         uses: actions/upload-artifact@v4
-        with: { name: backend-coverage, path: backend/src/coverage/, if-no-files-found: error }
+        with:
+          name: backend-coverage
+          path: backend/src/coverage/
+          if-no-files-found: error
 
   devops:
     name: DevOps Docker health and restore
@@ -519,4 +513,7 @@ jobs:
         run: docker compose -p "neighborly-qa-${GITHUB_RUN_ID}" -f docker-compose.yml logs --no-color > /tmp/neighborly-docker.log || true
       - if: always()
         uses: actions/upload-artifact@v4
-        with: { name: devops-logs, path: /tmp/neighborly-docker.log, if-no-files-found: ignore }
+        with:
+          name: devops-logs
+          path: /tmp/neighborly-docker.log
+          if-no-files-found: ignore

@@ -1,5 +1,7 @@
-import { useState, type ReactNode, type ButtonHTMLAttributes } from "react"
+import { useId, useState, type ReactNode, type ButtonHTMLAttributes } from "react"
 import { api, ApiError } from "../api/client"
+import { hasDisplayableRating } from "../lib/ratings"
+import { mediaSrc } from "../lib/view"
 
 // ─── Button ────────────────────────────────────────────────────────────────────
 
@@ -105,7 +107,9 @@ export function Badge({
 }: BadgeProps) {
   const variants: Record<BadgeVariant, string> = {
     green: "bg-[#D8F3DC] text-[#1B4332]",
-    coral: "bg-[#FDE8E0] text-[#C4512D]",
+    // #C4512D on #FDE8E0 measured 3.9:1, below the 4.5:1 AA minimum for this
+    // badge's small text. #9C3A1B keeps the hue and clears it at 5.9:1.
+    coral: "bg-[#FDE8E0] text-[#9C3A1B]",
     blue: "bg-[#DDEEFF] text-[#2B5F8E]",
     navy: "bg-[#EEF0F5] text-[#1B2A4A]",
     amber: "bg-[#FEF3C7] text-[#92400E]",
@@ -166,16 +170,32 @@ export function Avatar({
       .slice(0, 2)
       .toUpperCase() || "??"
 
+  // A bare Unsplash photo id is expanded to a sized image; an absolute URL
+  // (a member's real uploaded avatar) is used as-is. Resizing is applied via
+  // query parameters for Unsplash and left to the stored asset for uploads.
+  const resolved = !src
+    ? null
+    : /^https?:\/\//.test(src)
+      ? src
+      : `https://images.unsplash.com/${src}?w=80&h=80&fit=crop&auto=format`
+
   return (
     <div className={`relative flex-shrink-0 ${className}`}>
-      {src ? (
+      {resolved ? (
         <img
-          src={`https://images.unsplash.com/${src}?w=80&h=80&fit=crop&auto=format`}
-          alt={name}
+          src={resolved}
+          alt={name ?? ""}
+          loading="lazy"
+          decoding="async"
           className={`${sizes[size]} rounded-full object-cover bg-[#EEF0F5]`}
         />
       ) : (
         <div
+          // The initials are decorative when an image is absent only if a name
+          // is also rendered nearby; they are the sole content otherwise, so
+          // the group is named rather than left as unlabelled initials.
+          role={name ? "img" : undefined}
+          aria-label={name ? `${name}'s avatar` : undefined}
           className={`${sizes[size]} rounded-full bg-[#D8F3DC] text-[#2D6A4F] flex items-center justify-center font-semibold`}
         >
           {initials}
@@ -183,7 +203,11 @@ export function Avatar({
       )}
       {verified && (
         <span
+          data-verified-badge=""
           className={`absolute -bottom-0.5 -right-0.5 ${badgeSizes[size]} bg-[#2D6A4F] rounded-full flex items-center justify-center`}
+          // The tick is decorative: the surrounding context already states
+          // that the member is verified.
+          aria-hidden="true"
         >
           <svg viewBox="0 0 10 10" fill="white" className="w-2/3 h-2/3">
             <path
@@ -213,12 +237,19 @@ export function StarRating({
   size?: "xs" | "sm" | "md"
 }) {
   const sizes = { xs: "text-xs", sm: "text-sm", md: "text-base" }
-  const starSizes = { xs: 10, sm: 12, md: 14 }
   return (
-    <div className={`flex items-center gap-1 ${sizes[size]}`}>
-      <span className="text-[#F59E0B]">★</span>
+    <div
+      className={`flex items-center gap-1 ${sizes[size]}`}
+      // The star glyph is decorative; the accessible name states the rating in
+      // words so the value is not conveyed by shape or colour alone.
+      role="img"
+      aria-label={`Rated ${rating.toFixed(1)} out of 5${count !== undefined ? ` from ${count} reviews` : ""}`}
+    >
+      <span className="text-[#B45309]" aria-hidden="true">
+        ★
+      </span>
       <span className="font-semibold text-[#1B2A4A]">{rating.toFixed(1)}</span>
-      {count !== undefined && <span className="text-[#8A9AB5]">({count})</span>}
+      {count !== undefined && <span className="text-[#5C6E8A]">({count})</span>}
     </div>
   )
 }
@@ -283,29 +314,39 @@ export function Input({
     md: "h-11 text-sm px-4",
     lg: "h-13 text-base px-5",
   }
+  const inputId = useId()
   return (
     <div className={`relative ${className}`}>
       {label && (
-        <label className="block text-xs font-semibold text-[#5C6E8A] mb-1.5 uppercase tracking-wide">
+        // Associated by id: a bare <label> does not name the input, so the
+        // field was announced with no accessible name.
+        <label
+          htmlFor={inputId}
+          className="block text-xs font-semibold text-[#5C6E8A] mb-1.5 uppercase tracking-wide"
+        >
           {label}
         </label>
       )}
       {icon && (
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9AB5] pointer-events-none">
+        <span
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5C6E8A] pointer-events-none"
+          aria-hidden="true"
+        >
           {icon}
         </span>
       )}
       <input
+        id={inputId}
         type={type}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         className={`w-full ${sizes[size]} ${icon ? "pl-10" : ""} ${
           iconRight ? "pr-10" : ""
-        } bg-white border border-[#E8E6DF] rounded-xl text-[#1B2A4A] placeholder:text-[#C5CCDA] focus:outline-none focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10 transition-all`}
+        } bg-white border border-[#E8E6DF] rounded-xl text-[#1B2A4A] placeholder:text-[#5C6E8A] focus:outline-none focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10 transition-all`}
       />
       {iconRight && (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A9AB5]">
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5C6E8A]">
           {iconRight}
         </span>
       )}
@@ -317,6 +358,7 @@ export function Input({
 
 export function SearchBar({
   placeholder = "Search...",
+  label,
   value,
   onChange,
   onSearch,
@@ -324,6 +366,8 @@ export function SearchBar({
   className = "",
 }: {
   placeholder?: string
+  /** Accessible name. Falls back to the placeholder. */
+  label?: string
   value?: string
   onChange?: (v: string) => void
   onSearch?: () => void
@@ -331,9 +375,10 @@ export function SearchBar({
   className?: string
 }) {
   const heights = { md: "h-12", lg: "h-14" }
+  const inputId = useId()
   return (
     <div className={`relative flex items-center ${className}`}>
-      <span className="absolute left-4 text-[#8A9AB5] pointer-events-none">
+      <span className="absolute left-4 text-[#5C6E8A] pointer-events-none" aria-hidden="true">
         <svg
           width="18"
           height="18"
@@ -348,15 +393,25 @@ export function SearchBar({
           <path d="m21 21-4.35-4.35" />
         </svg>
       </span>
-      <input
-        type="text"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange?.(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && onSearch?.()}
-        className={`w-full ${heights[size]} pl-11 pr-28 bg-white border border-[#E8E6DF] rounded-full text-[#1B2A4A] placeholder:text-[#C5CCDA] focus:outline-none focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10 transition-all text-sm shadow-[0_2px_8px_rgba(27,42,74,0.06)]`}
-      />
+      {/*
+          The field previously had only a placeholder, which is not a reliable
+          accessible name. The label is visually hidden so the design is
+          unchanged while the control gains a proper name.
+        */}
+        <label htmlFor={inputId} className="sr-only">
+          {label ?? placeholder ?? "Search"}
+        </label>
+        <input
+          id={inputId}
+          type="search"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange?.(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && onSearch?.()}
+          className={`w-full ${heights[size]} pl-11 pr-28 bg-white border border-[#E8E6DF] rounded-full text-[#1B2A4A] placeholder:text-[#5C6E8A] focus:outline-none focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10 transition-all text-sm shadow-[0_2px_8px_rgba(27,42,74,0.06)]`}
+        />
       <button
+        type="button"
         onClick={onSearch}
         className="absolute right-2 bg-[#2D6A4F] text-white rounded-full px-4 py-2 text-sm font-semibold hover:bg-[#1B4332] transition-colors"
       >
@@ -379,25 +434,37 @@ export function Chip({
   onClick?: () => void
   onRemove?: () => void
 }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
-        active
-          ? "bg-[#2D6A4F] text-white border-[#2D6A4F]"
-          : "bg-white text-[#1B2A4A] border-[#E8E6DF] hover:border-[#2D6A4F] hover:text-[#2D6A4F]"
-      }`}
-    >
-      {children}
-      {onRemove && (
-        <span
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove()
-          }}
-          className="w-3.5 h-3.5 rounded-full flex items-center justify-center hover:opacity-70"
+  // min-height keeps the chip a usable tap target; the visual padding stays
+  // small so the pill keeps its original proportions.
+  const shell = `inline-flex items-center gap-1.5 min-h-11 px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
+    active
+      ? "bg-[#2D6A4F] text-white border-[#2D6A4F]"
+      : "bg-white text-[#1B2A4A] border-[#E8E6DF] hover:border-[#2D6A4F] hover:text-[#2D6A4F]"
+  }`
+
+  /*
+   * A removable chip needs two separate controls: selecting the chip and
+   * removing it. They cannot be nested buttons, so when `onRemove` is present
+   * the chip is rendered as a span holding a select button and a remove button.
+   * Previously the remove control was a <span onClick>, which could not be
+   * focused or activated by keyboard at all.
+   */
+  if (onRemove) {
+    return (
+      <span className={`${shell} pr-1.5`}>
+        {/* The minimum height goes on the buttons themselves: they are the
+            focusable targets, and the wrapper does not size them. */}
+        <button type="button" onClick={onClick} aria-pressed={active} className="min-h-11">
+          {children}
+        </button>
+        <button
+          type="button"
+          aria-label={`Remove ${typeof children === "string" ? children : "filter"}`}
+          onClick={onRemove}
+          className="w-6 h-6 shrink-0 -mr-1 rounded-full flex items-center justify-center hover:opacity-70"
         >
           <svg
+            aria-hidden="true"
             viewBox="0 0 10 10"
             width="10"
             height="10"
@@ -408,8 +475,14 @@ export function Chip({
             <line x1="2" y1="2" x2="8" y2="8" />
             <line x1="8" y1="2" x2="2" y2="8" />
           </svg>
-        </span>
-      )}
+        </button>
+      </span>
+    )
+  }
+
+  return (
+    <button type="button" onClick={onClick} aria-pressed={active} className={shell}>
+      {children}
     </button>
   )
 }
@@ -439,7 +512,7 @@ interface ListingCardProps {
     views?: number
   }
   onClick?: () => void
-  onSavedChange?: (saved: boolean) => void | Promise<void>
+  onSavedChange?: (saved: boolean) => void
   compact?: boolean
 }
 
@@ -464,19 +537,15 @@ export function ListingCard({
           compact ? "h-36" : "h-48"
         }`}
       >
-        {!imgErr && listing.images[0] ? (
+        {!imgErr && mediaSrc(listing.images[0], "w=500&h=400&fit=crop&auto=format") ? (
           <img
-            src={`${
-              listing.images[0].startsWith("http")
-                ? listing.images[0]
-                : `https://images.unsplash.com/${listing.images[0]}`
-            }?w=500&h=400&fit=crop&auto=format`}
+            src={mediaSrc(listing.images[0], "w=500&h=400&fit=crop&auto=format")!}
             alt={listing.title}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             onError={() => setImgErr(true)}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-[#C5CCDA]">
+          <div className="w-full h-full flex items-center justify-center text-[#5C6E8A]">
             <svg
               width="32"
               height="32"
@@ -496,19 +565,10 @@ export function ListingCard({
           onClick={async (e) => {
             e.stopPropagation()
             const nextSaved = !saved
+            setSaved(nextSaved)
             setSaveError("")
             if (onSavedChange) {
-              try {
-                await onSavedChange(nextSaved)
-                setSaved(nextSaved)
-              } catch (cause: unknown) {
-                setSaved(saved)
-                setSaveError(
-                  cause instanceof ApiError
-                    ? cause.message
-                    : "Saving this listing is unavailable.",
-                )
-              }
+              onSavedChange(nextSaved)
               return
             }
             try {
@@ -523,9 +583,13 @@ export function ListingCard({
               )
             }
           }}
-          title={
-            saveError || (saved ? "Remove from saved items" : "Save listing")
-          }
+          title={saveError || (saved ? "Remove from saved items" : "Save listing")}
+          // `title` alone is not an accessible name that every screen reader
+          // reliably announces, and the control is icon-only, so the state is
+          // stated explicitly and the listing is named so the button is
+          // distinguishable when several are on one page.
+          aria-label={`${saved ? "Remove from saved items" : "Save listing"}: ${listing.title}`}
+          aria-pressed={saved}
           className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
         >
           <svg
@@ -537,6 +601,7 @@ export function ListingCard({
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            aria-hidden="true"
           >
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
           </svg>
@@ -585,7 +650,7 @@ export function ListingCard({
           </span>
         </div>
 
-        <div className="flex items-center gap-1 text-xs text-[#8A9AB5] mb-3">
+        <div className="flex items-center gap-1 text-xs text-[#5C6E8A] mb-3">
           <svg
             width="10"
             height="10"
@@ -613,11 +678,13 @@ export function ListingCard({
                 <p className="text-xs font-medium text-[#1B2A4A]">
                   {listing.seller.name}
                 </p>
-                <StarRating
-                  rating={listing.seller.rating}
-                  count={listing.seller.reviews}
-                  size="xs"
-                />
+                {hasDisplayableRating(listing.seller.rating, listing.seller.reviews) && (
+                  <StarRating
+                    rating={listing.seller.rating}
+                    count={listing.seller.reviews}
+                    size="xs"
+                  />
+                )}
               </div>
             </div>
             {listing.seller.idVerified && (
@@ -652,7 +719,7 @@ export function TabBar({
           className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             active === tab
               ? "bg-white text-[#1B2A4A] shadow-sm"
-              : "text-[#8A9AB5] hover:text-[#1B2A4A]"
+              : "text-[#5C6E8A] hover:text-[#1B2A4A]"
           }`}
         >
           {tab}
@@ -684,13 +751,18 @@ export function SectionHeader({
           {title}
         </h2>
         {subtitle && (
-          <p className="text-sm text-[#8A9AB5] mt-0.5">{subtitle}</p>
+          <p className="text-sm text-[#5C6E8A] mt-0.5">{subtitle}</p>
         )}
       </div>
       {action && actionLabel && (
         <button
+          type="button"
           onClick={action}
-          className="text-sm font-semibold text-[#2D6A4F] hover:text-[#1B4332] transition-colors"
+          // The section title is already in the heading, so the link names the
+          // section it leads to. Without this a screen reader announces only
+          // "See all", which is meaningless out of context.
+          aria-label={`${actionLabel} ${title.toLowerCase()}`}
+          className="min-h-11 px-2 -mr-2 text-sm font-semibold text-[#2D6A4F] hover:text-[#1B4332] transition-colors"
         >
           {actionLabel} →
         </button>
@@ -714,14 +786,21 @@ export function Select({
   label?: string
   className?: string
 }) {
+  const selectId = useId()
   return (
     <div className={className}>
       {label && (
-        <label className="block text-xs font-semibold text-[#5C6E8A] mb-1.5 uppercase tracking-wide">
+        // Associated by id: a <label> with no htmlFor does not name the
+        // select, so the control announced as an unlabelled combo box.
+        <label
+          htmlFor={selectId}
+          className="block text-xs font-semibold text-[#5C6E8A] mb-1.5 uppercase tracking-wide"
+        >
           {label}
         </label>
       )}
       <select
+        id={selectId}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full h-11 px-4 bg-white border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] focus:outline-none focus:border-[#2D6A4F] appearance-none cursor-pointer"
@@ -742,37 +821,51 @@ export function Toggle({
   checked,
   onChange,
   label,
-  disabled = false,
+  id,
 }: {
   checked: boolean
   onChange: (v: boolean) => void
   label?: string
-  disabled?: boolean
+  /** Associate the control with an external <label htmlFor>. */
+  id?: string
 }) {
+  /*
+   * This was a <label> wrapping a clickable <div>. The div is not focusable
+   * and cannot be operated by keyboard, so the control was invisible to a
+   * keyboard or screen-reader user. It is now a real <input type="checkbox">
+   * visually replaced by the switch graphic, which keeps the native
+   * semantics, the keyboard behaviour and the form association for free.
+   */
   return (
-    <div
-      className={`flex items-center gap-3 ${
-        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
-      }`}
-    >
-      {label && <span className="text-sm text-[#1B2A4A]">{label}</span>}
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-          checked ? "bg-[#2D6A4F]" : "bg-[#E8E6DF]"
-        }`}
-      >
-        <div
-          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
-            checked ? "translate-x-5" : "translate-x-0"
-          }`}
+    <span className="inline-flex items-center gap-3">
+      {label && (
+        <label htmlFor={id} className="text-sm text-[#1B2A4A] cursor-pointer">
+          {label}
+        </label>
+      )}
+      <span className="relative inline-flex">
+        <input
+          id={id}
+          type="checkbox"
+          role="switch"
+          checked={checked}
+          onChange={event => onChange(event.target.checked)}
+          className="peer sr-only"
         />
-      </button>
-    </div>
+        <span
+          aria-hidden="true"
+          className={`relative w-11 h-6 rounded-full transition-colors duration-200 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[#1B4332] cursor-pointer ${
+            checked ? "bg-[#2D6A4F]" : "bg-[#E8E6DF]"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+              checked ? "translate-x-5" : "translate-x-0"
+            }`}
+          />
+        </span>
+      </span>
+    </span>
   )
 }
 
@@ -838,7 +931,7 @@ export function StatCard({
 }) {
   const colors = {
     green: "bg-[#D8F3DC] text-[#2D6A4F]",
-    coral: "bg-[#FDE8E0] text-[#E8694A]",
+    coral: "bg-[#FDE8E0] text-[#B94C2A]",
     blue: "bg-[#DDEEFF] text-[#4A7FB5]",
     amber: "bg-[#FEF3C7] text-[#D97706]",
   }
@@ -855,10 +948,10 @@ export function StatCard({
         <p className="text-2xl font-bold font-display text-[#1B2A4A]">
           {value}
         </p>
-        <p className="text-xs font-semibold text-[#8A9AB5] uppercase tracking-wide">
+        <p className="text-xs font-semibold text-[#5C6E8A] uppercase tracking-wide">
           {label}
         </p>
-        {sub && <p className="text-xs text-[#8A9AB5] mt-0.5">{sub}</p>}
+        {sub && <p className="text-xs text-[#5C6E8A] mt-0.5">{sub}</p>}
       </div>
     </Card>
   )
@@ -882,21 +975,65 @@ export function EmptyState({
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       {icon && (
-        <div className="w-14 h-14 rounded-2xl bg-[#F5F4EF] flex items-center justify-center mb-4 text-[#C5CCDA]">
+        <div className="w-14 h-14 rounded-2xl bg-[#F5F4EF] flex items-center justify-center mb-4 text-[#5C6E8A]">
           {icon}
         </div>
       )}
-      <h3 className="font-display text-lg font-semibold text-[#1B2A4A] mb-2">
+      {/*
+        An empty state is the page's main message, so it is a level-two
+        heading directly under the page's <h1>. It was an <h3>, which skipped
+        a level on screens that have no <h2> before it.
+      */}
+      <h2 className="font-display text-lg font-semibold text-[#1B2A4A] mb-2">
         {title}
-      </h3>
+      </h2>
       {description && (
-        <p className="text-sm text-[#8A9AB5] max-w-xs">{description}</p>
+        <p className="text-sm text-[#5C6E8A] max-w-xs">{description}</p>
       )}
       {action && actionLabel && (
         <Button variant="primary" size="sm" className="mt-5" onClick={action}>
           {actionLabel}
         </Button>
       )}
+    </div>
+  )
+}
+
+/** Same loading and error shells Saved Items, Dashboard, and Messages already use. */
+export function LoadState({
+  loading,
+  error,
+  loadingLabel,
+}: {
+  loading?: boolean
+  error?: string
+  loadingLabel: string
+}) {
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">
+        {loadingLabel}
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D]">
+        {error}
+      </div>
+    )
+  }
+  return null
+}
+
+export function InlineAlert({ message }: { message?: string }) {
+  if (!message) return null
+  return (
+    <div
+      className="rounded-xl border border-[#E8694A]/30 bg-[#FFF5F2] px-4 py-3 text-sm text-[#A63D27]"
+      role="alert"
+    >
+      {message}
     </div>
   )
 }

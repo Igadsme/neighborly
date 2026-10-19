@@ -1,643 +1,610 @@
-import { useCallback, useEffect, useState } from "react"
-import { api, ApiError } from "../api/client"
-import type {
-  ApiConversation,
-  ApiListing,
-  ApiTransaction,
-  CurrentUser,
-  NeedRequestRecord,
-} from "../api/types"
-import { mapApiListing } from "../api/listing-mapper"
+import { useEffect, useState } from 'react'
+import { Card, StatCard, Badge, Button, Icon, SectionHeader, TabBar, EmptyState, LoadState } from '../components/ui'
+import { api, readError, readStatus } from '../api/client'
+import type { ApiConversation, ApiTransaction, PublicProfile } from '../api/types'
+import { activityItems, unreadConversations, type ActivityItem } from '../lib/activity'
 import {
-  Badge,
-  Button,
-  Icon,
-  ListingCard,
-  SectionHeader,
-  TabBar,
-} from "../components/ui"
+  dollars,
+  firstName,
+  indexOffers,
+  listingFromApi,
+  matchesOfferChip,
+  requestDetailsFromOffers,
+  mediaSrc,
+  offerBadge,
+  offerRowsForUser,
+  relativeTime,
+  type OfferRow,
+} from '../lib/view'
+import type { Listing } from '../data'
 
-type Page = "create" | "listing" | "messages" | "requests"
+type Page = 'create' | 'listing' | 'messages'
 
 interface DashboardProps {
-  onNavigate: (page: Page, entityId?: string, conversationId?: string) => void
+  onNavigate: (p: Page, id?: string) => void
 }
 
-type DashboardTab = "Overview" | "My Listings" | "Offers" | "Activity"
+const alertClass = 'rounded-xl border border-[#E8694A]/30 bg-[#FFF5F2] px-4 py-3 text-sm text-[#A63D27]'
+
+type ReviewPrompt = {
+  transactionId: string
+  subjectId: string
+  subjectName: string | null
+  title: string
+  status: string
+}
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<DashboardTab>("Overview")
-  const [user, setUser] = useState<CurrentUser | null>(null)
-  const [listings, setListings] = useState<ApiListing[]>([])
-  const [requests, setRequests] = useState<NeedRequestRecord[]>([])
+  const [activeTab, setActiveTab] = useState('Overview')
+  const [offerChip, setOfferChip] = useState('Received')
+  const [userId, setUserId] = useState('')
+  const [profileLabel, setProfileLabel] = useState('Neighbor')
+  const [offerRows, setOfferRows] = useState<OfferRow[]>([])
   const [transactions, setTransactions] = useState<ApiTransaction[]>([])
   const [conversations, setConversations] = useState<ApiConversation[]>([])
-  const [loading, setLoading] = useState(true)
-  const [busyOffer, setBusyOffer] = useState("")
-  const [busyListing, setBusyListing] = useState("")
-  const [editingListing, setEditingListing] = useState<ApiListing | null>(null)
-  const [editTitle, setEditTitle] = useState("")
-  const [editDescription, setEditDescription] = useState("")
-  const [editPrice, setEditPrice] = useState("")
-  const [editCondition, setEditCondition] = useState("")
-  const [editError, setEditError] = useState("")
-  const [error, setError] = useState("")
-  const [notice, setNotice] = useState("")
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError("")
-    try {
-      const [currentUser, allListings, openRequests, exchanges, threads] =
-        await Promise.all([
-          api.auth.me(),
-          api.listings.mine(),
-          api.requests.list(),
-          api.transactions.list(),
-          api.conversations.list(),
-        ])
-      setUser(currentUser)
-      setListings(allListings)
-      setRequests(openRequests)
-      setTransactions(exchanges)
-      setConversations(threads)
-    } catch (cause: unknown) {
-      setError(
-        cause instanceof ApiError
-          ? cause.message
-          : "Dashboard data could not be loaded.",
-      )
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const [myListings, setMyListings] = useState<Listing[]>([])
+  const [offerIndex, setOfferIndex] = useState<ReturnType<typeof indexOffers>>(new Map())
+  const [offersLoading, setOffersLoading] = useState(true)
+  const [offersError, setOffersError] = useState('')
+  const [cardErrors, setCardErrors] = useState<Record<string, string>>({})
+  const [actingId, setActingId] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
+  const [skippedReviews, setSkippedReviews] = useState<string[]>([])
+  const [reviewing, setReviewing] = useState<ReviewPrompt | null>(null)
+  const [rating, setRating] = useState(0)
+  const [reviewBody, setReviewBody] = useState('')
+  const [reviewError, setReviewError] = useState('')
+  const [reviewSubmitted, setReviewSubmitted] = useState(false)
+  const [submittingReview, setSubmittingReview] = useState(false)
+  const [trust, setTrust] = useState<PublicProfile | null>(null)
+  const [listingStatus, setListingStatus] = useState<Record<string, string>>({})
+  const [listingNotes, setListingNotes] = useState<Record<string, string>>({})
+  const [actingListingId, setActingListingId] = useState<string | null>(null)
 
   useEffect(() => {
-    void load()
-  }, [load])
+    let active = true
+    setOffersLoading(true)
+    setOffersError('')
+    ;(async () => {
+      const me = await api.auth.me()
+      const [offerFeed, txs, convos, listingRows, profile] = await Promise.all([
+        api.requests.offers("all"),
+        api.transactions.list(),
+        api.conversations.list(),
+        api.listings.mine(),
+        api.users.profile(me.id).catch(() => null),
+      ])
+      const details = requestDetailsFromOffers(offerFeed)
+      if (!active) return
+      const name = [me.profile?.firstName, me.profile?.lastName].filter(Boolean).join(' ')
+      const place = me.profile?.neighborhood
+      setUserId(me.id)
+      setProfileLabel(place ? `${name || 'Neighbor'} · ${place}` : name || 'Neighbor')
+      setTransactions(txs)
+      setConversations(convos)
+      setTrust(profile && typeof profile.reviewCount === 'number' ? profile : null)
+      setListingStatus(Object.fromEntries(listingRows.map((row) => [row.id, row.status ?? 'PUBLISHED'])))
+      setMyListings(listingRows.map((row) => listingFromApi(row)))
+      setOfferIndex(indexOffers(details))
+      setOfferRows(offerRowsForUser(details, me.id))
+    })()
+      .catch((cause: unknown) => {
+        if (!active) return
+        setOffersError(readStatus(cause, 'Offers could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setOffersLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [reloadKey])
 
-  const incomingOffers = requests
-    .filter((request) => request.requesterId === user?.id)
-    .flatMap((request) =>
-      (request.offers ?? [])
-        .filter((offer) => ["PENDING", "COUNTERED"].includes(offer.status))
-        .map((offer) => ({ request, offer })),
-    )
-  const scheduledExchanges = transactions.filter((transaction) =>
-    ["ACCEPTED", "SCHEDULED", "IN_PROGRESS"].includes(transaction.status),
+  const pendingOffers = offerRows.filter(
+    (offer) => offer.status === 'PENDING' && offer.requester.id === userId,
+  )
+  const filteredOffers = offerRows.filter((offer) => matchesOfferChip(offer, offerChip, userId))
+
+  const reviewPrompts: ReviewPrompt[] = transactions
+    .filter((tx) => tx.status === 'COMPLETED' && tx.participants.some((p) => p.userId === userId))
+    .filter((tx) => !skippedReviews.includes(tx.id))
+    .map((tx) => {
+      const other = tx.participants.find((p) => p.userId !== userId)
+      const linked = tx.offerId ? offerIndex.get(tx.offerId) : undefined
+      const person = linked && other
+        ? other.userId === linked.offer.offerer.id
+          ? linked.offer.offerer
+          : linked.request.requester
+        : null
+      return {
+        transactionId: tx.id,
+        subjectId: other?.userId ?? '',
+        subjectName: person?.profile?.firstName ?? null,
+        title: linked?.request.title ?? 'Completed exchange',
+        status: tx.status,
+      }
+    })
+
+  const activity: ActivityItem[] = activityItems({
+    offers: offerRows,
+    transactions,
+    conversations,
+    userId,
+    titles: new Map(offerRows.map((offer) => [offer.offerId, offer.requestTitle])),
+  })
+
+  const setOfferError = (offerId: string, message: string) => {
+    setCardErrors((prev) => ({ ...prev, [offerId]: message }))
+  }
+
+  const runOfferAction = async (offer: OfferRow, action: 'accept' | 'reject') => {
+    setActingId(offer.offerId)
+    setOfferError(offer.offerId, '')
+    try {
+      if (action === 'accept') await api.requests.acceptOffer(offer.requestId, offer.offerId)
+      else await api.requests.rejectOffer(offer.requestId, offer.offerId)
+      setReloadKey((key) => key + 1)
+    } catch (cause: unknown) {
+      setOfferError(offer.offerId, readError(cause, action === 'accept' ? 'Unable to accept this offer.' : 'Unable to decline this offer.'))
+    } finally {
+      setActingId(null)
+    }
+  }
+
+  const counterFromDashboard = (offer: OfferRow) => {
+    const conversationId = transactions.find((tx) => tx.offerId === offer.offerId)?.conversationId
+    if (conversationId) onNavigate('messages', conversationId)
+    else setOfferError(offer.offerId, "Open Messages isn't available for this offer yet.")
+  }
+
+  const openReview = (prompt: ReviewPrompt) => {
+    setReviewing(prompt)
+    setRating(0)
+    setReviewBody('')
+    setReviewError('')
+    setReviewSubmitted(false)
+  }
+
+  const submitReview = async () => {
+    if (!reviewing || !rating || !reviewBody.trim()) return
+    if (reviewing.status !== 'COMPLETED') {
+      setReviewError('Reviews are only allowed when the transaction is COMPLETED')
+      return
+    }
+    if (!reviewing.subjectId) {
+      setReviewError('Unable to submit this review. Please try again.')
+      return
+    }
+    setSubmittingReview(true)
+    setReviewError('')
+    try {
+      await api.reviews.create({
+        transactionId: reviewing.transactionId,
+        subjectId: reviewing.subjectId,
+        rating,
+        body: reviewBody.trim(),
+      })
+      setReviewSubmitted(true)
+      const finishedId = reviewing.transactionId
+      window.setTimeout(() => {
+        setSkippedReviews((ids) => [...ids, finishedId])
+        setReviewing(null)
+        setSubmittingReview(false)
+      }, 1600)
+    } catch (cause: unknown) {
+      setReviewError(readError(cause, 'Unable to submit this review. Please try again.'))
+      setSubmittingReview(false)
+    }
+  }
+
+  const noteListing = (id: string, message: string) => {
+    setListingNotes((prev) => ({ ...prev, [id]: message }))
+  }
+
+  const runListingAction = async (id: string, action: 'pause' | 'resume' | 'sold') => {
+    setActingListingId(id)
+    noteListing(id, '')
+    try {
+      if (action === 'pause') await api.listings.pause(id)
+      else if (action === 'resume') await api.listings.publish(id)
+      else await api.listings.markSold(id)
+      setReloadKey((key) => key + 1)
+    } catch (cause: unknown) {
+      const fallback = action === 'sold' ? 'Unable to mark this listing sold.' : action === 'resume' ? 'Unable to resume this listing.' : 'Unable to pause this listing.'
+      noteListing(id, readStatus(cause, fallback))
+    } finally {
+      setActingListingId(null)
+    }
+  }
+
+  const completedExchanges = transactions.filter(
+    (tx) => tx.status === 'COMPLETED' && tx.participants.some((p) => p.userId === userId),
+  ).length
+  const ratingLabel = trust?.ratingAverage == null ? 'No reviews yet' : `${trust.ratingAverage} from ${trust.reviewCount} review${trust.reviewCount === 1 ? '' : 's'}`
+  const emailLabel = trust ? (trust.emailVerified ? 'Email confirmed' : 'Email not confirmed') : offersLoading ? '…' : 'Email status unavailable'
+  const soldLabel = trust ? `${trust.soldCount} sold` : offersLoading ? '…' : '—'
+
+  const offerThumb = (offer: OfferRow) => (
+    <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF]">
+      {offer.imageUrl && <img src={offer.imageUrl} alt="" className="w-full h-full object-cover" />}
+    </div>
   )
 
-  async function decideOffer(offerId: string, decision: "accept" | "reject") {
-    setBusyOffer(offerId)
-    setError("")
-    setNotice("")
-    try {
-      if (decision === "accept") {
-        await api.requests.acceptOffer(offerId)
-        setNotice(
-          "Offer accepted. The exchange and private conversation are ready.",
-        )
-      } else {
-        await api.requests.rejectOffer(offerId)
-        setNotice("Offer declined.")
-      }
-      await load()
-    } catch (cause: unknown) {
-      setError(
-        cause instanceof ApiError
-          ? cause.message
-          : "The offer could not be updated.",
-      )
-    } finally {
-      setBusyOffer("")
-    }
-  }
-
-  function beginEdit(listing: ApiListing) {
-    setEditingListing(listing)
-    setEditTitle(listing.title)
-    setEditDescription(listing.description)
-    setEditPrice(listing.priceCents == null ? "" : (listing.priceCents / 100).toFixed(2))
-    setEditCondition(listing.condition ?? "")
-    setEditError("")
-    setError("")
-  }
-
-  async function saveListingEdits() {
-    if (!editingListing) return
-    if (editTitle.trim().length < 3 || editDescription.trim().length < 10) {
-      setEditError("Title must be at least 3 characters and description at least 10.")
-      return
-    }
-    const priceCents = editPrice.trim() ? Math.round(Number(editPrice) * 100) : undefined
-    if (priceCents !== undefined && (!Number.isFinite(priceCents) || priceCents < 0)) {
-      setEditError("Enter a valid non-negative price.")
-      return
-    }
-    setBusyListing(editingListing.id)
-    setEditError("")
-    try {
-      await api.listings.update(editingListing.id, {
-        title: editTitle.trim(),
-        description: editDescription.trim(),
-        priceCents,
-        condition: editCondition || undefined,
-      })
-      setEditingListing(null)
-      setNotice("Listing changes saved.")
-      await load()
-    } catch (cause: unknown) {
-      setEditError(
-        cause instanceof ApiError
-          ? cause.message
-          : "Listing changes could not be saved.",
-      )
-    } finally {
-      setBusyListing("")
-    }
-  }
-
-  async function archiveListing(listing: ApiListing) {
-    if (!window.confirm(`Archive “${listing.title}”? It will no longer appear in marketplace search.`)) return
-    setBusyListing(listing.id)
-    setError("")
-    try {
-      await api.listings.archive(listing.id)
-      setListings((current) => current.filter((item) => item.id !== listing.id))
-      setNotice("Listing archived.")
-    } catch (cause: unknown) {
-      setError(
-        cause instanceof ApiError
-          ? cause.message
-          : "Listing could not be archived.",
-      )
-    } finally {
-      setBusyListing("")
-    }
-  }
-
-  async function publishListing(listing: ApiListing) {
-    setBusyListing(listing.id)
-    setError("")
-    try {
-      await api.listings.publish(listing.id)
-      setNotice("Draft published to the marketplace.")
-      await load()
-    } catch (cause: unknown) {
-      setError(cause instanceof ApiError ? cause.message : "Draft could not be published.")
-    } finally {
-      setBusyListing("")
-    }
-  }
-
-  const displayName = [user?.profile?.firstName, user?.profile?.lastName]
-    .filter(Boolean)
-    .join(" ")
-  const neighborhood = [user?.profile?.neighborhood, user?.profile?.city]
-    .filter(Boolean)
-    .join(" · ")
+  const offerAlert = (offerId: string) =>
+    cardErrors[offerId] ? (
+      <div className={alertClass} role="alert">{cardErrors[offerId]}</div>
+    ) : null
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] pb-24 md:pb-0">
-      <div className="mx-auto max-w-7xl px-4 py-8 md:px-6">
-        <div className="mb-8 flex items-start justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
+
+        <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="font-display text-3xl font-semibold text-[#1B2A4A]">
-              My dashboard
-            </h1>
-            <p className="mt-1 text-[#8A9AB5]">
-              {displayName || user?.email || "Your Neighborly account"}
-              {neighborhood ? ` · ${neighborhood}` : ""}
-            </p>
+            <h1 className="font-display text-3xl font-semibold text-[#1B2A4A]">My dashboard</h1>
+            <p className="text-[#5C6E8A] mt-1">{profileLabel}</p>
           </div>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => onNavigate("create")}
-          >
+          <Button variant="primary" size="sm" onClick={() => onNavigate('create')}>
             <Icon name="plus" size={13} />
             Post listing
           </Button>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-8">
           <TabBar
-            tabs={["Overview", "My Listings", "Offers", "Activity"]}
+            tabs={['Overview', 'My Listings', 'Offers', 'Activity']}
             active={activeTab}
-            onChange={(tab) => setActiveTab(tab as DashboardTab)}
+            onChange={setActiveTab}
           />
         </div>
 
-        {notice && (
-          <div
-            role="status"
-            className="mb-4 rounded-xl border border-[#74C69D] bg-[#F0FBF3] p-3 text-sm text-[#1B4332]"
-          >
-            {notice}
-          </div>
+        {activeTab === 'Overview' && (
+          <>
+            <div className="bg-gradient-to-r from-[#1B2A4A] to-[#2D6A4F] rounded-3xl p-6 mb-8 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-white/70 mb-1 uppercase tracking-wide font-semibold">Account trust level</p>
+                  <h2 className="font-display text-3xl font-semibold mb-2">Your record</h2>
+                  <p className="text-white/70 text-sm">{emailLabel} · {completedExchanges} completed {completedExchanges === 1 ? 'exchange' : 'exchanges'} · {ratingLabel}</p>
+                </div>
+                <div className="text-right hidden md:block">
+                  <div className="w-20 h-20 rounded-full border-4 border-white/30 flex items-center justify-center bg-white/10 text-2xl font-bold">
+                    {trust?.ratingAverage == null ? '—' : trust.ratingAverage}
+                  </div>
+                  <p className="text-xs text-white/60 mt-1">Avg rating</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-4">
+                <Badge variant={trust?.emailVerified ? 'green' : 'gray'}>{trust == null ? 'Email status unavailable' : trust.emailVerified ? '✓ Email confirmed' : 'Email not confirmed'}</Badge>
+                <Badge variant="blue">{trust?.ratingAverage == null ? 'No reviews yet' : `⭐ ${trust.ratingAverage} star rating`}</Badge>
+                <Badge variant="amber">🏅 {soldLabel}</Badge>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <StatCard label="Active Listings" value={offersLoading ? '…' : String(myListings.length)} sub="Published" icon={<Icon name="tag" size={18} />} color="green" />
+              <StatCard label="Total Views" value="—" sub="Not tracked yet" icon={<Icon name="eye" size={18} />} color="blue" />
+              <StatCard label="Messages" value={offersLoading ? '…' : String(conversations.length)} sub={offersLoading ? 'In your inbox' : `${unreadConversations(conversations, userId)} unread`} icon={<Icon name="message" size={18} />} color="coral" />
+              <StatCard label="Earned" value="—" sub="Payments are not connected" icon={<Icon name="dollar" size={18} />} color="amber" />
+            </div>
+
+            <SectionHeader title="Pending offers" subtitle="Respond within 24 hours to keep your response rate high" />
+            <div className="space-y-3 mb-8">
+              {offersLoading ? (
+                <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">Loading offers…</div>
+              ) : offersError ? (
+                <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D]">
+                  Offers could not be loaded. {offersError}
+                </div>
+              ) : offerRows.length === 0 ? (
+                <EmptyState
+                  title="No offers yet"
+                  description="When neighbors respond to a request you posted, their offers will show up here."
+                  action={() => onNavigate('create')}
+                  actionLabel="Post a request"
+                  icon={<Icon name="dollar" size={24} />}
+                />
+              ) : (
+                pendingOffers.map((offer) => (
+                  <Card key={offer.offerId} className="flex flex-col gap-3">
+                    <div className="flex items-center gap-4">
+                      {offerThumb(offer)}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-1">{offer.requestTitle}</p>
+                        <p className="text-xs text-[#5C6E8A]">
+                          {firstName(offer.offerer)} offered{' '}
+                          {offer.amountCents == null ? (
+                            offer.message
+                          ) : (
+                            <strong className="text-[#1B2A4A]">${dollars(offer.amountCents)}</strong>
+                          )}
+                          {offer.budgetCents != null && <> · asking ${dollars(offer.budgetCents)}</>}
+                          {' · '}
+                          {relativeTime(offer.createdAt)}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button disabled={actingId === offer.offerId} onClick={() => void runOfferAction(offer, 'accept')} className="px-3 py-1.5 bg-[#2D6A4F] text-white text-xs font-semibold rounded-lg hover:bg-[#1B4332] transition-colors disabled:opacity-40">Accept</button>
+                        <button disabled={actingId === offer.offerId} onClick={() => counterFromDashboard(offer)} className="px-3 py-1.5 bg-white border border-[#E8E6DF] text-[#5C6E8A] text-xs font-semibold rounded-lg hover:bg-[#F5F4EF] transition-colors disabled:opacity-40">Counter</button>
+                        <button disabled={actingId === offer.offerId} onClick={() => void runOfferAction(offer, 'reject')} className="px-3 py-1.5 bg-white border border-[#E8E6DF] text-[#B94C2A] text-xs font-semibold rounded-lg hover:bg-[#FDE8E0] transition-colors disabled:opacity-40">Decline</button>
+                      </div>
+                    </div>
+                    {offerAlert(offer.offerId)}
+                  </Card>
+                ))
+              )}
+            </div>
+
+            <SectionHeader title="Reviews to complete" subtitle="Leave reviews for recent transactions" />
+            <div className="space-y-3">
+              {offersLoading ? (
+                <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">Loading offers…</div>
+              ) : reviewPrompts.length === 0 ? (
+                <EmptyState
+                  title="No reviews waiting"
+                  description="After a completed exchange, you can rate your neighbor from here."
+                  action={() => setActiveTab('Offers')}
+                  actionLabel="View offers"
+                  icon={<Icon name="star" size={24} />}
+                />
+              ) : (
+                reviewPrompts.map((prompt) => (
+                  <Card key={prompt.transactionId} className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-[#F5F4EF]" />
+                    <div className="flex-1">
+                      <p className="text-xs text-[#5C6E8A]">Transaction complete</p>
+                      <p className="font-semibold text-sm text-[#1B2A4A]">{prompt.title}</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <Button variant="soft" size="xs" onClick={() => openReview(prompt)}>
+                        {prompt.subjectName ? `Rate ${prompt.subjectName}` : 'Rate neighbor'}
+                      </Button>
+                      <button
+                        onClick={() => setSkippedReviews((ids) => [...ids, prompt.transactionId])}
+                        className="text-sm text-[#5C6E8A] hover:text-[#1B2A4A]"
+                      >
+                        Skip
+                      </button>
+                    </div>
+                  </Card>
+                ))
+              )}
+            </div>
+          </>
         )}
-        {error && (
-          <div
-            role="alert"
-            className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E8694A]/30 bg-[#FFF5F2] p-3 text-sm text-[#C4512D]"
-          >
-            <span>{error}</span>
-            <button
-              onClick={() => void load()}
-              className="font-semibold underline"
-            >
-              Retry
+
+        {activeTab === 'My Listings' && (
+          <div className="space-y-4">
+            {offersLoading ? (
+              <LoadState loading loadingLabel="Loading listings…" />
+            ) : offersError ? (
+              <LoadState error={offersError} loadingLabel="Loading listings…" />
+            ) : myListings.length === 0 ? (
+              <EmptyState
+                title="No listings yet"
+                description="Listings you publish will show up here."
+                action={() => onNavigate('create')}
+                actionLabel="Post a listing"
+                icon={<Icon name="tag" size={24} />}
+              />
+            ) : myListings.map(listing => {
+              const photo = mediaSrc(listing.images[0], 'w=160&h=160&fit=crop&auto=format')
+              return (
+              <Card key={listing.id} padding="none">
+                <div className="flex gap-4 p-4">
+                  <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 bg-[#F5F4EF] cursor-pointer" onClick={() => onNavigate('listing', listing.id)}>
+                    {photo && <img src={photo} alt={listing.title} className="w-full h-full object-cover" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-sm text-[#1B2A4A] line-clamp-1 cursor-pointer hover:text-[#2D6A4F]" onClick={() => onNavigate('listing', listing.id)}>{listing.title}</p>
+                      <span className="font-bold text-[#1B2A4A] flex-shrink-0">{listing.isFree ? 'Free' : listing.price == null ? '—' : `$${listing.price.toLocaleString()}`}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 mb-3">
+                      <Badge variant={listingStatus[listing.id] === 'SOLD' ? 'gray' : listingStatus[listing.id] === 'ARCHIVED' ? 'amber' : listingStatus[listing.id] === 'DRAFT' ? 'blue' : 'green'} size="sm">
+                        {listingStatus[listing.id] === 'ARCHIVED' ? 'Paused' : listingStatus[listing.id] === 'SOLD' ? 'Sold' : listingStatus[listing.id] === 'DRAFT' ? 'Draft' : 'Active'}
+                      </Badge>
+                      <span className="text-xs text-[#5C6E8A]">Posted {listing.postedAt}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { label: 'Views', value: '—', icon: 'eye', color: 'text-[#4A7FB5]' },
+                        { label: 'Saves', value: '—', icon: 'heart', color: 'text-[#B94C2A]' },
+                        { label: 'Messages', value: '—', icon: 'message', color: 'text-[#2D6A4F]' },
+                        { label: 'Offers', value: '—', icon: 'dollar', color: 'text-[#D97706]' },
+                      ].map(stat => (
+                        <div key={stat.label} title="Not tracked yet" className="bg-[#F5F4EF] rounded-xl p-2 text-center">
+                          <Icon name={stat.icon} size={12} className={`mx-auto mb-0.5 ${stat.color}`} />
+                          <p className="font-bold text-sm text-[#1B2A4A]">{stat.value}</p>
+                          <p className="text-[9px] text-[#5C6E8A]">{stat.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="border-t border-[#F5F4EF] px-4 py-3">
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="xs" onClick={() => onNavigate('listing', listing.id)}>View</Button>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      disabled={actingListingId === listing.id || listingStatus[listing.id] === 'SOLD' || listingStatus[listing.id] === 'DRAFT'}
+                      onClick={() => void runListingAction(listing.id, listingStatus[listing.id] === 'ARCHIVED' ? 'resume' : 'pause')}
+                    >
+                      {listingStatus[listing.id] === 'ARCHIVED' ? 'Resume' : 'Pause'}
+                    </Button>
+                    <Button variant="secondary" size="xs" onClick={() => noteListing(listing.id, "Promotion isn't available yet. Payments are not connected.")}>🚀 Promote</Button>
+                    <button
+                      disabled={actingListingId === listing.id || listingStatus[listing.id] === 'SOLD' || listingStatus[listing.id] === 'DRAFT'}
+                      onClick={() => void runListingAction(listing.id, 'sold')}
+                      className="ml-auto text-xs text-[#5C6E8A] hover:text-[#B94C2A] transition-colors disabled:opacity-40"
+                    >
+                      {listingStatus[listing.id] === 'SOLD' ? 'Sold' : 'Mark sold'}
+                    </button>
+                  </div>
+                  {listingNotes[listing.id] && <p className="text-xs text-[#A63D27] mt-2" role="alert">{listingNotes[listing.id]}</p>}
+                </div>
+              </Card>
+              )
+            })}
+            <button onClick={() => onNavigate('create')} className="w-full py-4 border-2 border-dashed border-[#E8E6DF] rounded-2xl text-sm text-[#5C6E8A] hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-all flex items-center justify-center gap-2">
+              <Icon name="plus" size={16} />
+              Post a new listing
             </button>
           </div>
         )}
 
-        {loading ? (
-          <div
-            className="grid gap-4 md:grid-cols-2"
-            aria-label="Loading dashboard"
-          >
-            {[0, 1, 2, 3].map((item) => (
-              <div
-                key={item}
-                className="h-36 animate-pulse rounded-2xl bg-white"
+        {activeTab === 'Offers' && (
+          <div className="space-y-4">
+            <div className="flex gap-2 mb-2">
+              {['Received', 'Sent', 'Accepted', 'Declined'].map(t => (
+                <button
+                  key={t}
+                  onClick={() => setOfferChip(t)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${offerChip === t ? 'bg-[#2D6A4F] text-white border-[#2D6A4F]' : 'border-[#E8E6DF] text-[#5C6E8A] hover:border-[#2D6A4F] hover:text-[#2D6A4F] bg-white'}`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            {offersLoading ? (
+              <div className="bg-white rounded-2xl border border-[#E8E6DF] p-8 text-center text-sm text-[#5C6E8A]">Loading offers…</div>
+            ) : offersError ? (
+              <div className="bg-[#FFF5F2] border border-[#E8694A]/20 rounded-2xl p-5 text-sm text-[#C4512D]">
+                Offers could not be loaded. {offersError}
+              </div>
+            ) : filteredOffers.length === 0 ? (
+              <EmptyState
+                title="No offers yet"
+                description="When neighbors respond to a request you posted, their offers will show up here."
+                action={() => onNavigate('create')}
+                actionLabel="Post a request"
+                icon={<Icon name="dollar" size={24} />}
               />
+            ) : (
+              filteredOffers.map((offer) => {
+                const badge = offerBadge(offer.status)
+                return (
+                  <Card key={offer.offerId} className="flex items-center gap-4">
+                    {offerThumb(offer)}
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm text-[#1B2A4A]">{offer.requestTitle}</p>
+                      <p className="text-xs text-[#5C6E8A]">{firstName(offer.offerer)} · {relativeTime(offer.createdAt)}</p>
+                      {offer.amountCents == null ? (
+                        <p className="text-xs text-[#5C6E8A] mt-1">{offer.message}</p>
+                      ) : (
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="font-bold text-[#1B2A4A]">${dollars(offer.amountCents)}</span>
+                          {offer.budgetCents != null && (
+                            <>
+                              <span className="text-xs text-[#5C6E8A]">of</span>
+                              <span className="text-sm text-[#5C6E8A]">${dollars(offer.budgetCents)}</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <Badge variant={badge.variant}>{badge.label}</Badge>
+                  </Card>
+                )
+              })
+            )}
+          </div>
+        )}
+
+        {activeTab === 'Activity' && (
+          <div className="space-y-3">
+            {offersLoading ? (
+              <LoadState loading loadingLabel="Loading activity…" />
+            ) : offersError ? (
+              <LoadState error={offersError} loadingLabel="Loading activity…" />
+            ) : activity.length === 0 ? (
+              <EmptyState
+                title="No activity yet"
+                description="Messages, offers, and exchanges will show up here."
+                action={() => onNavigate('create')}
+                actionLabel="Post a request"
+                icon={<Icon name="trendingUp" size={24} />}
+              />
+            ) : activity.map((item) => (
+              <div key={item.id} className="flex items-start gap-3 p-4 bg-white rounded-2xl border border-[#E8E6DF]">
+                <span className="text-xl flex-shrink-0">{item.icon}</span>
+                <div className="flex-1">
+                  <p className="text-sm text-[#1B2A4A]">{item.text}</p>
+                  <p className="text-xs text-[#5C6E8A] mt-0.5">{item.time}</p>
+                </div>
+                {item.type === 'message' && <button onClick={() => onNavigate('messages')} className="text-xs text-[#4A7FB5] font-medium flex-shrink-0">Reply →</button>}
+                {item.type === 'offer' && <button onClick={() => setActiveTab('Offers')} className="text-xs text-[#2D6A4F] font-medium flex-shrink-0">View offer →</button>}
+              </div>
             ))}
           </div>
-        ) : activeTab === "Overview" ? (
-          <>
-            <div className="mb-8 rounded-3xl bg-gradient-to-r from-[#1B2A4A] to-[#2D6A4F] p-6 text-white">
-              <p className="text-sm font-semibold uppercase tracking-wide text-white/70">
-                Neighborly trust
-              </p>
-              <h2 className="mt-1 font-display text-2xl font-semibold">
-                Trust metrics are not available yet
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm text-white/75">
-                Verification, response rates, and review summaries are not yet
-                backed by trust records. No score or badge is shown until it can
-                be explained with real data.
-              </p>
-            </div>
-
-            <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
-              {[
-                {
-                  label: "Published listings",
-                  value: listings.filter(listing => listing.status === "PUBLISHED").length,
-                  color: "green",
-                },
-                {
-                  label: "Offers to review",
-                  value: incomingOffers.length,
-                  color: "amber",
-                },
-                {
-                  label: "Active exchanges",
-                  value: scheduledExchanges.length,
-                  color: "blue",
-                },
-                {
-                  label: "Conversations",
-                  value: conversations.length,
-                  color: "coral",
-                },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-2xl border border-[#E8E6DF] bg-white p-4"
-                >
-                  <p className="text-xs font-medium text-[#8A9AB5]">
-                    {stat.label}
-                  </p>
-                  <p className="mt-1 font-display text-2xl font-semibold text-[#1B2A4A]">
-                    {stat.value}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <SectionHeader
-              title="Offers to review"
-              subtitle="Offers on your published requests"
-              action={() => onNavigate("requests")}
-              actionLabel="Open requests"
-            />
-            {incomingOffers.length ? (
-              <div className="mb-8 space-y-3">
-                {incomingOffers.slice(0, 5).map(({ request, offer }) => (
-                  <article
-                    key={offer.id}
-                    className="flex flex-wrap items-center gap-4 rounded-2xl border border-[#E8E6DF] bg-white p-4"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-sm text-[#1B2A4A]">
-                        {request.title}
-                      </p>
-                      <p className="mt-1 text-xs text-[#5C6E8A]">
-                        {offer.offerer?.profile?.firstName ?? "A neighbor"}{" "}
-                        offered{" "}
-                        {offer.amountCents == null
-                          ? "to help"
-                          : `$${(offer.amountCents / 100).toFixed(2)}`}
-                        {" · "}
-                        {offer.message}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="primary"
-                        size="xs"
-                        disabled={Boolean(busyOffer)}
-                        onClick={() => void decideOffer(offer.id, "accept")}
-                      >
-                        {busyOffer === offer.id ? "Updating…" : "Accept"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        disabled={Boolean(busyOffer)}
-                        onClick={() => void decideOffer(offer.id, "reject")}
-                      >
-                        Decline
-                      </Button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className="mb-8 rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-6 text-sm text-[#8A9AB5]">
-                No offers need a decision right now.
-              </p>
-            )}
-
-            <SectionHeader
-              title="Your exchanges"
-              action={() => onNavigate("requests")}
-              actionLabel="Manage exchanges"
-            />
-            {scheduledExchanges.length ? (
-              <div className="space-y-3">
-                {scheduledExchanges.slice(0, 5).map((transaction) => (
-                  <article
-                    key={transaction.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#E8E6DF] bg-white p-4"
-                  >
-                    <div>
-                      <p className="font-semibold text-sm text-[#1B2A4A]">
-                        Neighbor exchange
-                      </p>
-                      <p className="mt-1 text-xs text-[#8A9AB5]">
-                        {transaction.status.replace(/_/g, " ")}
-                        {transaction.appointments[0]
-                          ? ` · ${new Date(transaction.appointments[0].startsAt).toLocaleString()}`
-                          : ""}
-                      </p>
-                    </div>
-                    <Badge variant="blue">
-                      {transaction.status.replace(/_/g, " ")}
-                    </Badge>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className="rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-6 text-sm text-[#8A9AB5]">
-                No active exchanges yet.
-              </p>
-            )}
-          </>
-        ) : activeTab === "My Listings" ? (
-          listings.length ? (
-            <div className="listing-grid">
-              {listings.map((listing) => (
-                <div key={listing.id}>
-                  <div className="mb-2 flex justify-between"><Badge variant={listing.status === "DRAFT" ? "amber" : "green"}>{listing.status === "DRAFT" ? "Draft" : "Published"}</Badge></div>
-                  <ListingCard
-                    listing={mapApiListing(listing)}
-                    onClick={listing.status === "PUBLISHED" ? () => onNavigate("listing", listing.id) : undefined}
-                  />
-                  <div className="mt-2 flex justify-end gap-2">
-                    {listing.status === "DRAFT" && <Button variant="primary" size="xs" disabled={Boolean(busyListing)} onClick={() => void publishListing(listing)}>Publish</Button>}
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      disabled={Boolean(busyListing)}
-                      onClick={() => beginEdit(listing)}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      disabled={Boolean(busyListing)}
-                      onClick={() => void archiveListing(listing)}
-                    >
-                      Archive
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {editingListing && (
-                <div
-                  className="fixed inset-0 z-[60] flex items-center justify-center bg-[#1B2A4A]/40 p-4"
-                  role="presentation"
-                  onMouseDown={(event) => {
-                    if (event.target === event.currentTarget) setEditingListing(null)
-                  }}
-                >
-                  <section
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="edit-listing-title"
-                    className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl"
-                  >
-                    <h2
-                      id="edit-listing-title"
-                      className="font-display text-xl font-semibold text-[#1B2A4A]"
-                    >
-                      Edit listing
-                    </h2>
-                    <div className="mt-5 space-y-4">
-                      {editError && (
-                        <p role="alert" className="rounded-xl bg-[#FFF5F2] p-3 text-sm text-[#C4512D]">
-                          {editError}
-                        </p>
-                      )}
-                      <label className="block text-sm font-medium text-[#5C6E8A]">
-                        Title
-                        <input
-                          value={editTitle}
-                          onChange={(event) => setEditTitle(event.target.value)}
-                          maxLength={140}
-                          className="mt-1 h-11 w-full rounded-xl border border-[#E8E6DF] px-3 text-[#1B2A4A]"
-                        />
-                      </label>
-                      <label className="block text-sm font-medium text-[#5C6E8A]">
-                        Description
-                        <textarea
-                          value={editDescription}
-                          onChange={(event) => setEditDescription(event.target.value)}
-                          rows={4}
-                          className="mt-1 w-full rounded-xl border border-[#E8E6DF] p-3 text-[#1B2A4A]"
-                        />
-                      </label>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <label className="block text-sm font-medium text-[#5C6E8A]">
-                          Price in dollars
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={editPrice}
-                            onChange={(event) => setEditPrice(event.target.value)}
-                            placeholder="Leave blank to keep current"
-                            className="mt-1 h-11 w-full rounded-xl border border-[#E8E6DF] px-3 text-[#1B2A4A]"
-                          />
-                        </label>
-                        <label className="block text-sm font-medium text-[#5C6E8A]">
-                          Condition
-                          <input
-                            value={editCondition}
-                            onChange={(event) => setEditCondition(event.target.value)}
-                            className="mt-1 h-11 w-full rounded-xl border border-[#E8E6DF] px-3 text-[#1B2A4A]"
-                          />
-                        </label>
-                      </div>
-                    </div>
-                    <div className="mt-6 flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={Boolean(busyListing)}
-                        onClick={() => setEditingListing(null)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        loading={busyListing === editingListing.id}
-                        disabled={Boolean(busyListing) && busyListing !== editingListing.id}
-                        onClick={() => void saveListingEdits()}
-                      >
-                        Save changes
-                      </Button>
-                    </div>
-                  </section>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-10 text-center">
-              <p className="font-semibold text-[#1B2A4A]">
-                No listings or drafts yet
-              </p>
-              <p className="mt-2 text-sm text-[#8A9AB5]">
-                Saved drafts and published listings will appear here.
-              </p>
-              <Button
-                variant="primary"
-                size="sm"
-                className="mt-5"
-                onClick={() => onNavigate("create")}
-              >
-                Create a listing
-              </Button>
-            </div>
-          )
-        ) : activeTab === "Offers" ? (
-          incomingOffers.length ? (
-            <div className="space-y-3">
-              {incomingOffers.map(({ request, offer }) => (
-                <article
-                  key={offer.id}
-                  className="rounded-2xl border border-[#E8E6DF] bg-white p-5"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-[#1B2A4A]">
-                        {request.title}
-                      </p>
-                      <p className="mt-1 text-sm text-[#5C6E8A]">
-                        {offer.message}
-                      </p>
-                      <p className="mt-2 text-xs text-[#8A9AB5]">
-                        {offer.offerer?.profile?.firstName ?? "A neighbor"} ·{" "}
-                        {offer.amountCents == null
-                          ? "No amount specified"
-                          : `$${(offer.amountCents / 100).toFixed(2)}`}
-                      </p>
-                    </div>
-                    <Badge variant="amber">{offer.status}</Badge>
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    <Button
-                      variant="primary"
-                      size="xs"
-                      disabled={Boolean(busyOffer)}
-                      onClick={() => void decideOffer(offer.id, "accept")}
-                    >
-                      Accept
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      disabled={Boolean(busyOffer)}
-                      onClick={() => void decideOffer(offer.id, "reject")}
-                    >
-                      Decline
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      disabled
-                      title="Counteroffers are managed from the Requests page"
-                    >
-                      Counteroffer unavailable here
-                    </Button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p className="rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-8 text-center text-sm text-[#8A9AB5]">
-              No pending offers on your requests.
-            </p>
-          )
-        ) : conversations.length ? (
-          <div className="space-y-3">
-            {conversations.map((conversation) => {
-              const message = conversation.messages[0]
-              return (
-                <button
-                  key={conversation.id}
-                  onClick={() =>
-                    onNavigate("messages", undefined, conversation.id)
-                  }
-                  className="flex w-full items-center gap-3 rounded-2xl border border-[#E8E6DF] bg-white p-4 text-left hover:border-[#2D6A4F]/40"
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F0FBF3] text-[#2D6A4F]">
-                    <Icon name="message" size={17} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-[#1B2A4A]">
-                      Neighbor conversation
-                    </span>
-                    <span className="mt-1 block truncate text-xs text-[#8A9AB5]">
-                      {message?.body ?? "No messages yet"}
-                    </span>
-                  </span>
-                  <span className="text-xs font-semibold text-[#2D6A4F]">
-                    Open →
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        ) : (
-          <p className="rounded-2xl border border-dashed border-[#E8E6DF] bg-white p-8 text-center text-sm text-[#8A9AB5]">
-            No conversations yet.
-          </p>
         )}
       </div>
+
+      {reviewing && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display text-lg font-semibold text-[#1B2A4A]">Rate {reviewing.subjectName ?? 'neighbor'}</h3>
+              <button
+                onClick={() => setReviewing(null)}
+                className="w-8 h-8 rounded-full bg-[#F5F4EF] flex items-center justify-center hover:bg-[#E8E6DF] transition-colors"
+              >
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+            <div className="flex gap-3 p-3 bg-[#F5F4EF] rounded-xl mb-4">
+              <div className="w-12 h-12 rounded-lg bg-[#E8E6DF] flex-shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-[#1B2A4A] line-clamp-1">{reviewing.title}</p>
+                <p className="text-xs text-[#5C6E8A]">Transaction complete</p>
+              </div>
+            </div>
+            {reviewSubmitted ? (
+              <div className="text-center py-4">
+                <div className="text-3xl mb-2">✅</div>
+                <p className="font-semibold text-[#1B2A4A]">Review submitted</p>
+                <p className="text-sm text-[#5C6E8A]">Thanks for rating your neighbor.</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-2 mb-3">
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setRating(value)}
+                      className={`text-2xl ${rating >= value ? 'text-[#F59E0B]' : 'text-[#E8E6DF]'}`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+                {reviewError && (
+                  <div className={`${alertClass} mb-3`} role="alert">{reviewError}</div>
+                )}
+                <textarea
+                  value={reviewBody}
+                  onChange={(event) => setReviewBody(event.target.value)}
+                  placeholder="How did the exchange go?"
+                  rows={3}
+                  className="w-full p-3 bg-[#F5F4EF] border border-[#E8E6DF] rounded-xl text-sm text-[#1B2A4A] resize-none focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-all"
+                />
+                <div className="flex justify-end mt-3">
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={() => void submitReview()}
+                    disabled={!rating || !reviewBody.trim() || submittingReview}
+                  >
+                    Submit review
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

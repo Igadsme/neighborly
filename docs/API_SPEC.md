@@ -1,132 +1,505 @@
-# API specification
+# API Specification
 
-This document records implemented routes only. The live OpenAPI document is served at `/docs`; the API base path is `/api/v1`.
+Base URL: `/api/v1`. Swagger UI: `/docs` (outside the global prefix).
+
+This document replaces the mixed "initial production contract" that listed planned routes as if they were live. **IMPLEMENTED** means a controller method exists under `backend/src`. **TARGET** means v1 follow-on work that is not in the tree. The typed client in `src/api/client.ts` mirrors auth, listings, requests, conversations, transactions, reviews, housing, jobs, services, and community. Page wiring is in `docs/FRONTEND_BACKEND_MAP.md`. This specification is not a release-complete claim. Docker Compose, migrate, seed, and signed-in browser e2e are still blocked on this Mac.
+
+v1 excludes OpenAI, embeddings, and semantic search. Do not add those routes.
 
 ## Conventions
 
-- JSON REST API. Authenticated operations accept `Authorization: Bearer <access-token>`.
-- DTOs are validated by NestJS validation pipes.
-- Pagination for listing search uses `limit` and `offset`.
-- `DATABASE_URL`, `JWT_SECRET`, and `CORS_ORIGIN` are required by the backend. Redis and S3-compatible storage are required for production.
-- Short-lived access tokens are paired with rotated, revocable HTTP-only refresh sessions. Redis-backed route rate limiting is global.
+### IMPLEMENTED
 
-## Health and authentication
+- Auth header: `Authorization: Bearer <accessToken>` on guarded routes. `AuthGuard` rejects a missing or invalid JWT.
+- Validation: global `ValidationPipe` with `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`. DTOs use `class-validator` / `class-transformer`.
+- Errors: Nest default exception JSON. Typical validation failure is HTTP 400 with `message` as a string array. The frontend `ApiError` reads `message` only.
+- Listing pagination: `limit` (1–100, default 24) and `offset` (default 0). No cursor.
+- Listing text filter: case-insensitive `contains` on `title` and `description`. Not full-text, not vector, not geo.
+- IDs: UUID strings.
+- Money: integer cents (`priceCents`, `budgetCents`, `amountCents`).
 
-| Method | Path | Auth | Purpose |
+### TARGET
+
+Not built. Do not code the UI against these as if they return today.
+
+- Refresh-token rotation and a `POST /auth/refresh` body.
+- A single error envelope `{ code, message, details, timestamp }`.
+- Cursor pagination and shared filter operators (`distance`, `verified`, `sort`) on every collection.
+- Zod schemas at the boundary. The server uses class-validator; a second schema library is not required for v1 wiring.
+
+## IMPLEMENTED
+
+### Health
+
+| Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
-| GET | `/health` | No | Process health |
-| GET | `/ready` | No | Database readiness check |
-| POST | `/auth/register` | No | Create account and issue access token |
-| POST | `/auth/login` | No | Authenticate and issue access token |
-| POST | `/auth/refresh` | Refresh cookie | Rotate refresh session and issue access token |
-| POST | `/auth/logout` | Refresh cookie | Revoke the current device session |
-| POST | `/auth/logout-all` | Yes | Revoke all device sessions |
-| GET | `/users/me` | Yes | Current user and profile |
-| PATCH | `/users/me/onboarding` | Yes | Persist neighborhood, interests, capabilities, and notification preferences |
-| PATCH | `/users/me` | Yes | Edit the caller's profile |
-| GET | `/users/me/export` | Yes | Export account data without credentials |
-| DELETE | `/users/me` | Yes + password | Anonymize the account and revoke sessions |
-| GET | `/users/:id/profile` | Yes | Read a minimized active public profile |
+| `GET` | `/health` | No | `{ status: "ok", service: "neighborly-api", timestamp }` |
+| `GET` | `/ready` | No | `{ status: "ready", dependencies: { postgres: "up" } }` or 503 when Postgres fails. Redis is not checked. |
 
-## Categories and listings
+### Auth
 
-| Method | Path | Auth | Purpose |
+`POST /auth/register`
+
+```json
+{
+  "email": "user@example.com",
+  "password": "at-least-12-chars",
+  "firstName": "Gad",
+  "lastName": "Miller",
+  "neighborhood": "Inman Park",
+  "city": "Atlanta",
+  "state": "GA"
+}
+```
+
+`neighborhood`, `city`, and `state` are optional. Email is stored lowercased. Duplicate email is 409 `"An account already exists for this email"`.
+
+`POST /auth/login` body: `{ "email", "password" }`. Unknown user, non-`ACTIVE` status, or bad password is 401 `"Invalid email or password"`.
+
+Both return:
+
+```json
+{
+  "user": { "id": "uuid", "email": "user@example.com" },
+  "accessToken": "jwt"
+}
+```
+
+There is no `refreshToken` field.
+
+### Users
+
+Guarded.
+
+- `GET /users/me` — user without `passwordHash`, plus `profile`, `preference`, `notificationPreference`, and `staffRoles`. `staffRoles` is `StaffRole[]` (`MODERATOR`, `ADMIN`) from `StaffRoleAssignment`, sorted, and `[]` when the caller has no assignment. It is informational. `GET` and `POST` under `/moderation/**` still return 403 unless the server finds a `StaffRoleAssignment` for that caller.
+- `PATCH /users/me/onboarding` — optional `neighborhood`, `city`, `state`, `interests[]`, `capabilities[]`, `newListings`, `priceDrops`, `messages`, `events`, `community`. Upserts preference (`completedAt` set) and notification preference. Returns the same shape as `GET /users/me`.
+
+Not implemented: `PATCH /users/me/profile`. The Profile screen has no edit control. Follow stays local. Message on another profile calls `POST /conversations`. Report and block call `/safety` (see Safety).
+
+### Public profile
+
+No auth. These reads do not return `passwordHash`, `email`, account `status`, profile `latitude` / `longitude`, or listing coordinates.
+
+- `GET /users/:id/profile` — active user with `deletedAt` null and a profile row. Body: `id`, `displayName`, `firstName`, `lastName`, `bio`, `neighborhood`, `city`, `memberSince` (user `createdAt`), `emailVerified`, `ratingAverage`, `reviewCount`, `soldCount`. `ratingAverage` is the mean rating of reviews about this user, rounded to one decimal, or null when there are none. `soldCount` counts listings with status `SOLD` and `deletedAt` null. Missing, suspended, or deleted users are 404 `"Profile not found"`. A non-UUID id is 400. `emailVerified` is the stored profile flag. It is not an identity check, and there is no response-time field.
+- `GET /users/:id/reviews` — reviews whose `subjectId` is that user, newest first. Each row is `id`, `rating`, `body`, `createdAt`, `itemTitle`, and `author`. `author` is the public card (`id` plus profile `displayName`, `firstName`, `neighborhood`, `city`). `itemTitle` is the first listing title on the review's transaction offer, or null. Same 404 and 400 rules as the profile read.
+
+### Categories
+
+`GET /categories` — public. `{ id, name, slug, listingCount }[]` ordered by name. `listingCount` is published, non-deleted listings in that category. Seeded in `backend/prisma/seed.ts`: Furniture, Electronics, Clothing & Accessories, Vehicles, Sports & Outdoors, Toys & Games, Books & Media, Home & Garden, Tools & Equipment, Musical Instruments, Art & Collectibles, Housing, Services, Jobs, Other.
+
+The Create Listing `<select>` uses a shorter hardcoded name list and resolves `categoryId` by matching `name`.
+
+### Listings
+
+| Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
-| GET | `/categories` | No | List available categories |
-| GET | `/listings` | No | Search listings |
-| GET | `/listings/mine` | Yes | List caller's published listings and private drafts |
-| GET | `/listings/:id` | No | Read a listing |
-| POST | `/listings` | Yes | Create a private draft listing |
-| POST | `/listings/:id/publish` | Yes, owner | Publish a draft listing |
-| PATCH | `/listings/:id` | Yes, owner | Edit a listing |
-| DELETE | `/listings/:id` | Yes, owner | Archive a listing |
-| POST | `/listings/:id/images/upload` | Yes, owner | Get a short-lived S3-compatible signed form for one image |
-| POST | `/listings/:id/images/complete` | Yes, owner | Verify uploaded object metadata and persist its listing image |
-| POST | `/listings/:id/images/reorder` | Yes, owner | Set the cover image and order for all attached images |
-| DELETE | `/listings/:id/images/:imageId` | Yes, owner | Remove a listing image |
-| POST | `/listings/:id/favorite` | Yes | Toggle favorite; response reports resulting `saved` state |
-| GET | `/listings/favorites` | Yes | List the caller's saved listings |
-| GET | `/listings/saved-searches` | Yes | List saved searches |
-| POST | `/listings/saved-searches` | Yes | Persist query and filter JSON |
-| DELETE | `/listings/saved-searches/:id` | Yes, owner | Delete a saved search |
+| `GET` | `/listings` | No | Published listings by default. Query: `query`, `categoryId` (UUID), `sellerId` (UUID), `status` (`PUBLISHED` default, or `SOLD`), `limit`, `offset`. `SOLD` also requires `deletedAt` null. Includes `images`, `category`, `seller.profile`. Newest first. Latitude and longitude are not selected. |
+| `GET` | `/listings/:id` | No | Non-deleted listing that is not `DRAFT`, with images (sort order), category, seller profile. Drafts are 404. 404 `"Listing not found"`. Latitude, longitude, email, and `passwordHash` are not selected. |
+| `POST` | `/listings` | Yes | Creates `PUBLISHED`. Does not accept image keys. Does not write `PriceHistory`. |
+| `POST` | `/listings/drafts` | Yes | Same body as create. Stores `DRAFT`. Omitted from `GET /listings` and `GET /listings/:id`. |
+| `POST` | `/listings/:id/publish` | Yes | Owner only. `DRAFT` becomes `PUBLISHED`. Already published returns the row. Any other status is 409 `"Only a draft can be published"`. 403 if not owner. |
+| `PATCH` | `/listings/:id` | Yes | Owner only. Optional title, description, price, condition, pickup, delivery, shipping. 403 if not owner. |
+| `DELETE` | `/listings/:id` | Yes | Owner only. Sets `ARCHIVED` and `deletedAt`. |
+| `POST` | `/listings/:id/favorite` | Yes | Toggle. `{ saved: true \| false }`. |
+| `GET` | `/listings/favorites` | Yes | Favorites for the caller, newest first, listing included. |
+| `POST` | `/listings/saved-searches` | Yes | `{ query, filters? }`. `filters` is an optional object. Empty query is 409. |
+| `GET` | `/listings/saved-searches` | Yes | Caller's rows, `updatedAt` desc. |
 
-Listing search currently supports query, category ID, price bounds, condition, free-only, delivery availability, sort (`newest`, `price_asc`, `price_desc`), limit, and offset. Verified-only and radius filtering are not supported. Unknown query fields are rejected by request validation.
+`POST /listings` body (unknown fields are rejected):
 
-Image uploads use short-lived presigned POST forms; the server checks ownership, image count, object size, declared MIME type, and image file signature before persisting the image. JPEG, PNG, and WebP are supported, up to 10 MB each and 5 images per listing. Storage routes return service-unavailable until the S3 endpoint, bucket, credentials, and public read URL are configured.
+```json
+{
+  "categoryId": "uuid",
+  "title": "3 to 140 characters",
+  "description": "string",
+  "priceCents": 48000,
+  "condition": "Good",
+  "neighborhood": "Inman Park",
+  "city": "Atlanta",
+  "latitude": 33.76,
+  "longitude": -84.35,
+  "radiusMiles": 10,
+  "pickupAvailable": true,
+  "deliveryAvailable": false,
+  "shippingAvailable": false
+}
+```
 
-## Need requests and offers
+`title` is `@MinLength(3)` and `@MaxLength(140)`. `description` is `@MinLength(10)`. The same body is used for `POST /listings/drafts`. No new Prisma migration: `ListingStatus.DRAFT` already exists in `0001_init`. The Create Listing page sends category, title, description, `priceCents` when the dollar field is filled, condition, pickup, and delivery. It does not send photos, tags, shipping, neighborhood, city, or coordinates. The AI Review step stays on screen and does not call a model.
 
-| Method | Path | Auth | Purpose |
+Listing detail uses the routes above. It does not add endpoints. For a UUID id, the page calls `GET /listings/:id` and does not fill the main body from `src/data` fixtures. Similar cards call `GET /listings` with `categoryId` when the listing has one (`limit` 8). If that category has no other published row, the client calls `GET /listings?limit=8` and drops the current id. The seller block uses the public seller card on the listing (`id`, display name or first name, neighborhood). It does not render email, `passwordHash`, last name, or coordinates. `POST /listings/:id/favorite` still toggles save for a signed-in caller. A 401 on that toggle shows "Sign in to continue." There is no mark-sold, promote, or archive control on this screen, so `PATCH /listings/:id` and `DELETE /listings/:id` are not called from it. Negotiate, reserve, report, and share stay on the painted controls and do not call the API. The "Fast replies" badge stays painted. It is not a response-time field.
+
+Not implemented on this module: condition/price/distance/verified/free/delivery query params, image presign, price-drop feed, saved-search alerts.
+
+Map pins are not a new route and not a radius query. `GET /listings` still omits `latitude` and `longitude`. The Map screen loads up to 100 published listings and places each pin on a painted neighborhood centroid. Unknown neighborhood names use a coarse hash of the public neighborhood and city strings. The small offset comes from the listing id. Profile coordinates are not read. The "Within 5 miles of Inman Park" line and the safe-spot markers stay painted. "Search area" keeps listings whose neighborhood matches a painted label. Category chips and the search box filter that list in the browser. "Sort: Closest first" orders by distance to the Inman Park label on that painted map. "Sort: Most popular" keeps newest-first, because no popularity field exists.
+
+### Requests and offers
+
+| Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
-| GET | `/requests` | Yes | List visible requests; offer data is restricted to request participants |
-| POST | `/requests` | Yes | Create a need request |
-| POST | `/requests/:id/offers` | Yes | Submit an offer |
-| POST | `/requests/offers/:id/counter` | Yes | Counter an offer |
-| PATCH | `/requests/offers/:id/accept` | Yes, request owner | Accept offer, close request, create transaction and private conversation |
-| PATCH | `/requests/offers/:id/reject` | Yes, request owner | Reject offer |
+| `GET` | `/requests` | No | `PUBLISHED` and `deletedAt: null`. Includes category, a public requester card, and `offers: { id, status }[]`. Newest first. Not limited to the caller. |
+| `GET` | `/requests/offers` | Yes | Offers the caller can act on. Query `scope`: `received` (default; `request.requesterId` is the caller), `sent` (`offererId` is the caller), or `all` (either). The request must be published and not deleted. Each row includes the offer, a public offerer card, listing items (`id`, `title`, `priceCents`, `status`), and the parent request with a public requester card. |
+| `GET` | `/requests/:id` | No | One published request. Same public requester card. Offers include `amountCents`, `message`, `status`, `items` (listing id, title, price, status), and the offerer's public card. 404 `"Request not found"`. |
+| `POST` | `/requests` | Yes | Creates `PUBLISHED`. Ignores any attempt to save `DRAFT` because status is hardcoded. |
+| `POST` | `/requests/:id/offers` | Yes | Offer on a published request. Offerer cannot be the requester (400). Optional `listingIds` must all be the offerer's published listings (403 otherwise). |
+| `POST` | `/requests/offers/:id/counter` | Yes | Requester or offerer only, and only while status is `PENDING` or `COUNTERED`. Sets the offer to `COUNTERED` and inserts a counter row. The handler returns the Prisma transaction array `[offer, counterOffer]`. |
+| `POST` | `/requests/:id/offers/:offerId/accept` | Yes | Requester only, and only while the offer is `PENDING` or `COUNTERED`. Sets `ACCEPTED`. Creates one conversation (requester and offerer), one transaction linked by `offerId` (`status: ACCEPTED`, roles `REQUESTER` and `OFFERER`), and the first milestone (`toStatus: ACCEPTED`). |
+| `POST` | `/requests/:id/offers/:offerId/reject` | Yes | Requester only, same negotiable statuses. Sets `REJECTED`. Does not create a conversation or transaction. |
 
-There is no standalone request detail, matching, nearby radius discovery, attachment, or expiration endpoint yet.
+The public requester card is `id` plus profile `displayName`, `firstName`, `neighborhood`, and `city`. It does not include `passwordHash`, `email`, coordinates, account status, or verification flags. The same card is used for the offerer on `GET /requests/:id`.
 
-## Conversations and messages
+`POST /requests` body:
 
-| Method | Path | Auth | Purpose |
+```json
+{
+  "categoryId": "uuid",
+  "title": "at least 3 characters",
+  "description": "at least 10 characters",
+  "budgetCents": 50000,
+  "latitude": 33.7756,
+  "longitude": -84.3963,
+  "radiusMiles": 10,
+  "deadline": "2026-10-01T00:00:00.000Z",
+  "urgency": "this-week",
+  "mode": "BUY"
+}
+```
+
+`mode` is required: `BUY`, `BORROW`, `RENT`, `HIRE`, `TRADE`, `SKILL_SWAP`, `FREE`. `radiusMiles` defaults to 10 in the service and, when sent, must be 1–100. `budgetCents` is an optional integer ≥ 0.
+
+`POST /requests/:id/offers` body: `message` (min length 2), optional `amountCents` ≥ 0, optional `listingIds` (UUID array).
+
+`POST /requests/offers/:id/counter` body: `message` (min length 2), optional `amountCents` ≥ 0.
+
+Not implemented: `GET /requests/:id/matches`, withdraw. `GET /requests/offers` is the caller-scoped list; it does not replace the public `GET /requests` feed. `RequestMatch` rows are never created. Matching is not semantic search and is not a hidden implemented feature.
+
+### Conversations
+
+All guarded. Caller must already be a `ConversationParticipant` or the service throws 403 `"You are not a participant in this conversation"`.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| `GET` | `/conversations` | Caller's conversations, `updatedAt` desc. Includes participants with profile and the latest message. |
+| `POST` | `/conversations` | Create or reuse a pairwise thread and write the first message. See the body and rules below. |
+| `GET` | `/conversations/:id/messages` | Messages ascending by `createdAt`. |
+| `POST` | `/conversations/:id/messages` | Body `{ "body": "min length 1" }`. Persists the message, then `publishMessage` emits `message.created` on `/realtime` room `conversation:{id}`. A non-participant is 403 and nothing is published. |
+| `PATCH` | `/conversations/:id/read` | Sets that participant's `lastReadAt`. |
+
+`POST /conversations` body:
+
+```json
+{
+  "participantId": "22222222-2222-4222-8222-222222222222",
+  "body": "Is this still available?",
+  "listingId": "33333333-3333-4333-8333-333333333333"
+}
+```
+
+`participantId` is the other user (UUID). `body` is a string, trimmed, minimum length 1. `listingId` is optional and is not stored. There is no `listingId` column on `Conversation`.
+
+Rules:
+
+- Same `AuthGuard` as the other conversation routes. Missing or invalid JWT is 401.
+- `participantId` equal to the caller is 400 `"You cannot message yourself"`.
+- Unknown user, `deletedAt` set, or `UserStatus.DELETED` is 404 `"User not found"`. Any other non-`ACTIVE` status is 400 `"This person cannot receive messages"`.
+- When `listingId` is present: missing, `deletedAt` set, or `ListingStatus.DELETED` is 404 `"Listing not found"`. `DRAFT` is 400 `"This listing is not available"`. `PUBLISHED`, `SOLD`, and `ARCHIVED` (when not deleted) are allowed. If `participantId` is not that listing's `sellerId`, the response is 403 `"You can only message the seller of this listing"`.
+- Dedupe: load the newest conversation (`updatedAt` desc) whose participants are exactly the caller and `participantId`. A thread that also includes anyone else is left alone. If that pairwise thread exists, reuse it and do not insert another `Conversation`. Offer-accept threads with those two people are reused. Then the first message is written with the same path as `POST /conversations/:id/messages` (trimmed body, `Message` row, `Conversation.updatedAt`, `publishMessage`).
+- If none exists, insert `Conversation` plus two `ConversationParticipant` rows (caller and the other user, same shape as offer accept) and then send that first message.
+- Two requests that both pass the lookup before either insert can still create two pairwise threads. There is no unique constraint and no migration in this route. The next send reuses the newest of those threads.
+
+Response `201`:
+
+```json
+{
+  "conversation": { "id": "44444444-4444-4444-8444-444444444444" },
+  "message": {
+    "id": "55555555-5555-4555-8555-555555555555",
+    "conversationId": "44444444-4444-4444-8444-444444444444",
+    "senderId": "11111111-1111-4111-8111-111111111111",
+    "body": "Is this still available?",
+    "createdAt": "2026-09-23T18:00:00.000Z"
+  },
+  "reused": false
+}
+```
+
+`reused` is `true` when an existing pairwise thread received the message. Listing Detail treats both values as success and keeps the painted “Message sent!” state. It does not call `GET /notifications`.
+
+`MessagingGateway` listens on namespace `/realtime`. `publishMessage` emits `message.created` to `conversation:{id}` after a participant sends a message, including the first message from `POST /conversations`. The handshake requires a JWT, and `conversation.join` puts a participant in `conversation:{id}`. No screen opens that socket.
+
+Not implemented: typing, attachments, read receipts per message, and a Messages header control that starts a thread with no listing. Fixture listing ids (not UUIDs) still use the local modal and do not call this route. This route is not a release-complete claim. Docker Compose, migrate, seed, and signed-in browser e2e were not run.
+
+The signed-in nav badge does not call a notification route. It counts rows from this `GET /conversations` response: the latest message (`messages[0]`, the list takes one) was sent by someone else, and the caller's `lastReadAt` is missing or earlier than that message's `createdAt`. Zero, signed-out, and 401 paint no badge. `GET /notifications` is not implemented.
+
+### Transactions
+
+Guarded. Caller must be a `TransactionParticipant`, except staff resolving a dispute (below).
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| `GET` | `/transactions` | Includes participants, milestones (asc), appointments. Does not include reviews. Each participant may include `completionConfirmedAt` (null until that person confirms completion). |
+| `PATCH` | `/transactions/:id/status` | Body is unchanged: `{ "status": "<TransactionStatus>" }`. Illegal edges are 400 `Invalid transaction transition: FROM -> TO`. A legal edge other than the two below updates the row and inserts `TransactionMilestone`. |
+
+**Completion is two-sided (BL-003).** `IN_PROGRESS` → `COMPLETED` does not finish on one call. The first participant's `PATCH` with `{ "status": "COMPLETED" }` returns **200** with `status` still `IN_PROGRESS`, `awaitingConfirmation: true`, and `completionConfirmedBy` (user ids who have confirmed). The other participant sends the same body. When every participant has confirmed, the response `status` is `COMPLETED` and one milestone is written. A single participant cannot complete the exchange. `POST /reviews` still requires `status === COMPLETED`, so a one-sided confirm cannot create a review (400 `You can review once the exchange is complete`).
+
+**Disputes are staff-only.** A participant cannot move `DISPUTED` to `COMPLETED`, `REFUNDED`, or `CANCELLED` (403 `Only staff can take that action`). Staff — any `StaffRoleAssignment`, the same gate as borrow dispute review — may send that `PATCH` even when they are not a participant. The body stays `{ "status": "REFUNDED" }` (or `COMPLETED` or `CANCELLED`).
+
+Frontend follow-up: do not treat HTTP 200 from `api.transactions.transition(id, "COMPLETED")` as finished. Branch on `status === "COMPLETED"` versus `awaitingConfirmation === true`. Do not offer dispute resolution to participants. Review prompts already key off `COMPLETED` from `GET /transactions`; keep that.
+
+Allowed edges (`backend/src/transactions/transaction-state.ts`):
+
+| From | To |
+| --- | --- |
+| `DRAFT` | `PUBLISHED`, `CANCELLED` |
+| `PUBLISHED` | `OFFER_RECEIVED`, `CANCELLED`, `EXPIRED` |
+| `OFFER_RECEIVED` | `NEGOTIATING`, `ACCEPTED`, `CANCELLED`, `EXPIRED` |
+| `NEGOTIATING` | `OFFER_RECEIVED`, `ACCEPTED`, `CANCELLED`, `EXPIRED` |
+| `ACCEPTED` | `SCHEDULED`, `CANCELLED`, `DISPUTED` |
+| `SCHEDULED` | `IN_PROGRESS`, `CANCELLED`, `DISPUTED` |
+| `IN_PROGRESS` | `COMPLETED`, `DISPUTED` |
+| `DISPUTED` | `REFUNDED`, `COMPLETED`, `CANCELLED` |
+| `COMPLETED`, `CANCELLED`, `REFUNDED`, `EXPIRED` | none |
+
+Accepting an offer inserts the first transaction at `ACCEPTED` with one milestone. Later changes go through this state machine.
+
+### Reviews
+
+Guarded. `POST /reviews`
+
+```json
+{
+  "transactionId": "uuid",
+  "subjectId": "uuid",
+  "rating": 5,
+  "body": "at least 1 character"
+}
+```
+
+`rating` is an integer from 1 to 5. `body` is stored trimmed. The caller must be a `TransactionParticipant` (403 otherwise). Status must be `COMPLETED`, or the response is 400 `"Reviews are only allowed when the transaction is COMPLETED"`. Unknown transaction is 404 `"Transaction not found"`. There is no unique constraint on `(transactionId, authorId)` yet.
+
+The Profile reviews tab reads `GET /users/:id/reviews` (public, see Users). Dashboard "Reviews to complete" does not call that list yet, so a completed transaction still shows a prompt until a later pass checks whether this author already reviewed it.
+
+### Housing, jobs, services, and community
+
+These four modules persist the screens in `src/pages/Housing.tsx`, `Jobs.tsx`, `Services.tsx`, and `Community.tsx`. Those pages call the routes through `src/api/client.ts`.
+
+Public list and get responses use the same public card as listings (`id` plus profile `displayName`, `firstName`, `neighborhood`, `city`). They do not include `passwordHash`, `email`, `lastName`, profile coordinates, or the row's `latitude` / `longitude`. Coordinates are write-only: create and update accept them, and no read returns them.
+
+Money is integer cents (`priceCents`, `startingPriceCents`). The Housing and Services screens show dollars; divide cents by 100 when wiring. Job `salary` stays the display string from the screen (`$110k–$145k`, `$16–$19/hr`) because it is a range, not one amount.
+
+`verified` (housing and jobs) and `backgroundCheck`, `rating`, and `reviewCount` (services) are not client fields. Sending them is 400. Public housing and service reads do not return the stored `ServiceListing.rating` or `reviewCount` columns. They return `rating` and `reviewCount` from published, unhidden `Review` rows whose `subjectId` is the owner. With no such reviews, `rating` is `null` and `reviewCount` is `0`. `rating` is never `0`. The user profile field stays `ratingAverage`.
+
+Create always sets `PUBLISHED`. Owner `DELETE` sets `ARCHIVED` and `deletedAt`. A non-owner update or delete is 403. Missing or archived rows are 404.
+
+Pagination matches listings: `limit` (1–100, default 24) and `offset` (default 0). Text `query` is a case-insensitive `contains`, not full-text and not geo. `distance` on the Housing cards is not stored.
+
+| Screen field | API field |
+| --- | --- |
+| Housing `type` | `type` (`Apartment`, `House`, `Room`, `Studio`, `Condo`, `Sublet`) |
+| Housing `listingType` | `listingType` (`rent`, `sale`) |
+| Housing `price` dollars | `priceCents` |
+| Housing `seller` | `owner` public card |
+| Housing `images[]` unsplash id | `images[].objectKey` |
+| Housing `postedAt` | `createdAt` |
+| Jobs `type` | `type` (`Full-time`, `Part-time`, `Freelance`, `Internship`) |
+| Jobs `remote` | `remote` (`Remote`, `Hybrid`, `On-site`) |
+| Jobs `logo` | `logo` |
+| Jobs `posted` | `createdAt` |
+| Services `provider` / `providerName` | `businessName` and `owner.profile.displayName` |
+| Services `startingPrice` dollars | `startingPriceCents` |
+| Services `image` | `image` |
+| Community post `author` | `author` public card |
+| Community `reactions.like` / `love` | `reactions.like` / `reactions.love` (`wow` is the 😮 count) |
+| Community `replies` | `replies` |
+| Lost & found `type` | `type` (`lost`, `found`) |
+| Event `image` / `attending` | `image` / `attending` |
+
+#### Housing
+
+| Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
-| GET | `/conversations` | Yes | List caller's conversations |
-| POST | `/conversations` | Yes | Find or create a direct conversation with a participant |
-| GET | `/conversations/:id/messages` | Yes, participant | Read conversation history |
-| POST | `/conversations/:id/messages` | Yes, participant | Persist and send a message |
-| PATCH | `/conversations/:id/read` | Yes, participant | Mark messages read |
+| `GET` | `/housing` | No | Published rows, newest first unless `sort` is `price_asc`, `price_desc`, or `beds`. Query: `query`, `listingType`, `type`, `minBeds`, `maxPriceCents`, `pets`, `furnished`, `verified`, `utilitiesIncluded`, `sort`, `limit`, `offset`, `latitude`, `longitude`, `radiusMiles`. |
+| `GET` | `/housing/:id` | No | One published listing. 404 `"Housing listing not found"`. |
+| `POST` | `/housing` | Yes | Creates `PUBLISHED`. Optional `imageKeys` (max 8). |
+| `PATCH` | `/housing/:id` | Yes | Owner only. |
+| `DELETE` | `/housing/:id` | Yes | Owner only. Returns `{ id, status: "ARCHIVED" }`. |
 
-Socket.IO namespace `/realtime` requires a valid access token at handshake. Joining a conversation room requires participant authorization. Message delivery, read updates, and typing events are restricted to authorized rooms. Attachments and Socket.IO notification delivery are not implemented.
+`POST /housing` body (unknown fields rejected):
 
-## Notifications
+```json
+{
+  "title": "Sunny 2BR in Inman Park",
+  "description": "At least 10 characters",
+  "type": "Apartment",
+  "listingType": "rent",
+  "priceCents": 185000,
+  "priceUnit": "/mo",
+  "beds": 2,
+  "baths": 1,
+  "sqft": 920,
+  "neighborhood": "Inman Park",
+  "city": "Atlanta",
+  "available": "Oct 1, 2026",
+  "lease": "12 months",
+  "pets": true,
+  "furnished": false,
+  "utilities": "Water included",
+  "imageKeys": ["photo-1560448204-e02f11c3d0e2"],
+  "latitude": 33.761,
+  "longitude": -84.363
+}
+```
 
-| Method | Path | Auth | Purpose |
+`utilitiesIncluded=true` keeps rows whose `utilities` text is set and is not `N/A` or a `Resident…` string. Boolean query params are `true` or `false`.
+
+#### Jobs
+
+| Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
-| GET | `/notifications` | Yes | List the caller's latest 50 notifications |
-| GET | `/notifications/unread-count` | Yes | Return the caller's unread notification count |
-| PATCH | `/notifications/:id/read` | Yes, owner | Mark one notification as read |
-| PATCH | `/notifications/read-all` | Yes | Mark all of the caller's notifications as read |
+| `GET` | `/jobs` | No | Published jobs, newest first. Query: `query` (title, company, description), `type`, `level` (contains, so `Mid` matches `Mid-Senior`), `remote`, `limit`, `offset`, `latitude`, `longitude`, `radiusMiles`. Does not include applications. |
+| `GET` | `/jobs/:id` | No | One published job. 404 `"Job not found"`. |
+| `POST` | `/jobs` | Yes | Creates `PUBLISHED`. |
+| `PATCH` | `/jobs/:id` | Yes | Owner only. |
+| `DELETE` | `/jobs/:id` | Yes | Owner only. `{ id, status: "ARCHIVED" }`. |
+| `POST` | `/jobs/:id/apply` | Yes | Body `{ "message"?: string }`. One application per person. Repeating returns the existing row. The employer cannot apply (400 `"You cannot apply to your own job"`). The applicant card is the public card. |
+| `GET` | `/jobs/applications` | Yes | Caller's applications, with the public job. |
+| `GET` | `/jobs/:id/applications` | Yes | Owner only. Applicant public cards and messages. No email. |
+| `POST` | `/jobs/:id/save` | Yes | Toggle. `{ saved: true \| false }`. |
+| `GET` | `/jobs/saved` | Yes | Caller's saved jobs, newest save first. |
 
-New offers, counteroffers, offer decisions, and incoming messages create durable in-app notifications in the same database transaction as their source action. Message notifications respect the user's `messages` preference. The frontend polls the unread count and provides a persisted notification center; push/email delivery and notification pagination are not implemented.
+`POST /jobs` requires `title`, `company`, `description` (min 10), `type`, `level`, `salary`, `location`, and `remote`. Optional `responsibilities[]`, `tags[]`, `deadline`, `logoKey`, `latitude`, `longitude`.
 
-## Transactions and reviews
+#### Services
 
-| Method | Path | Auth | Purpose |
+| Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
-| GET | `/transactions` | Yes, participant | List caller's transactions |
-| PATCH | `/transactions/:id/status` | Yes, participant | Apply a permitted transaction state transition |
-| POST | `/transactions/:id/appointments` | Yes, participant | Schedule the exchange |
-| POST | `/transactions/:id/reviews` | Yes, eligible participant | Review the other participant after completion |
+| `GET` | `/services` | No | Published services, newest first. Query: `query`, `category`, `limit`, `offset`, `latitude`, `longitude`, `radiusMiles`. No quotes. Each row includes `rating` (`null` when the owner has no published review) and `reviewCount` (`0` in that case). |
+| `GET` | `/services/:id` | No | One published service. 404 `"Service not found"`. |
+| `POST` | `/services` | Yes | Creates `PUBLISHED`. |
+| `PATCH` | `/services/:id` | Yes | Owner only. |
+| `DELETE` | `/services/:id` | Yes | Owner only. `{ id, status: "ARCHIVED" }`. |
+| `POST` | `/services/:id/quotes` | Yes | Quote request. The provider cannot quote their own service (400). The response includes the address the caller just sent. |
+| `GET` | `/services/quotes/mine` | Yes | Caller's quotes, including their own address and the public service. |
+| `GET` | `/services/:id/quotes` | Yes | Provider only (403 otherwise). Requester public card. `address` is omitted while `status` is `PENDING`. |
+| `POST` | `/services/quotes/:id/accept` | Yes | Provider only. Sets `ACCEPTED`. The response then includes `address`. |
 
-Offer acceptance creates a transaction at `ACCEPTED`; scheduling uses the appointment endpoint. The server enforces allowed status transitions and participant access. A database uniqueness constraint prevents duplicate reviews for the same transaction, author, and subject.
+`category` is one of `Cleaning`, `Moving`, `Tutoring`, `Repair`, `Photography`, `Lawn Care`, `Tech Help`, `Fitness`, `Design`, `Cooking`.
 
-## Community
+`POST /services/:id/quotes` body: `notes` (min 2), optional `preferredDate`, `preferredTime`, and `address`. Address is the street line the Services modal says stays private until the provider accepts.
 
-| Method | Path | Auth | Purpose |
+#### Community
+
+| Method | Path | Auth | Behavior |
 | --- | --- | --- | --- |
-| GET/POST | `/community/posts` | Yes | List visible posts or create a post |
-| POST | `/community/posts/:id/comments` | Yes | Add a comment |
-| POST | `/community/posts/:id/reactions` | Yes | Toggle like/helpful/celebrate reaction |
-| DELETE | `/community/posts/:id` | Yes, author | Soft-delete a post |
-| GET/POST | `/community/events` | Yes | List upcoming events or create one |
-| POST | `/community/events/:id/rsvp` | Yes | Set RSVP and enforce capacity |
-| DELETE | `/community/events/:id` | Yes, organizer | Cancel an event |
+| `GET` | `/community/posts` | No | Published posts, newest first. Query: `type`, `limit`, `offset`. `type` is `discussion`, `announcement`, `lost_found`, `recommendation`, `event`, or `giveaway`. |
+| `GET` | `/community/posts/:id` | No | One post with reaction counts and `replies`. |
+| `POST` | `/community/posts` | Yes | Body: `type`, `title`, `body` (min 10), `neighborhood`, optional `city`. |
+| `PATCH` | `/community/posts/:id` | Yes | Author only. |
+| `DELETE` | `/community/posts/:id` | Yes | Author only. Archives. |
+| `POST` | `/community/posts/:id/reactions` | Yes | Body `{ "emoji": "👍" \| "❤️" \| "😮" }`. One reaction per person. The same emoji again removes it. Returns the post. |
+| `GET` | `/community/posts/:id/comments` | No | Comments oldest first. Author public card. |
+| `POST` | `/community/posts/:id/comments` | Yes | Body `{ "body": "min length 1" }`. |
+| `GET` | `/community/events` | No | Published events, oldest `createdAt` first (seed order matches the Events tab). `attending` is the RSVP count. |
+| `GET` | `/community/events/:id` | No | One event. |
+| `POST` | `/community/events` | Yes | `title`, `neighborhood`, `dateLabel`, `timeLabel`. Optional `description`, `city`, `imageKey`. |
+| `PATCH` | `/community/events/:id` | Yes | Organizer only. |
+| `DELETE` | `/community/events/:id` | Yes | Organizer only. |
+| `POST` | `/community/events/:id/rsvp` | Yes | Toggle. `{ attending, attendingCount }`. |
+| `GET` | `/community/lost-found` | No | Newest first. |
+| `GET` | `/community/lost-found/:id` | No | One item. `type` is `lost` or `found`. |
+| `POST` | `/community/lost-found` | Yes | `type`, `item`, `neighborhood`. Optional `city`, `imageKey`. |
+| `PATCH` | `/community/lost-found/:id` | Yes | Author only. |
+| `DELETE` | `/community/lost-found/:id` | Yes | Author only. |
+| `GET` | `/community/giveaways` | No | Newest first. `claimed` is boolean. The claimer is not included. |
+| `GET` | `/community/giveaways/:id` | No | One giveaway. |
+| `POST` | `/community/giveaways` | Yes | `item`, `neighborhood`, optional `city`. |
+| `PATCH` | `/community/giveaways/:id` | Yes | Author only. |
+| `DELETE` | `/community/giveaways/:id` | Yes | Author only. |
+| `POST` | `/community/giveaways/:id/claim` | Yes | First caller sets `claimed`. `{ claimed: true, giveaway }`. A second person is 409 `"This giveaway has already been claimed"`. The same person claiming again is `{ claimed: true, giveaway }`. |
 
-Blocked-neighbor activity is excluded from results, and interaction endpoints enforce blocks in both directions.
+### Safety
 
-## Trust and safety
+All guarded. Reports and blocks use the caller id from the access token. A caller cannot read another person’s reports or blocks.
 
-| Method | Path | Auth | Purpose |
-| --- | --- | --- | --- |
-| GET | `/safety/blocks` | Yes | List caller's blocked accounts |
-| POST/DELETE | `/safety/blocks/:userId` | Yes | Block or unblock an account |
-| POST | `/safety/reports` | Yes | Report a user, listing, request, or message |
-| GET | `/safety/reports` | Moderator/admin | Review reports, optionally filtered by status |
-| PATCH | `/safety/reports/:id` | Moderator/admin | Record an action and resolve/dismiss a report |
+| Method | Path | Behavior |
+| --- | --- | --- |
+| `POST` | `/safety/reports` | Body: `targetType` (`LISTING`, `USER`, `MESSAGE`, `COMMUNITY_POST`), `targetId` (UUID), `reason` (`SPAM`, `SCAM`, `HARASSMENT`, `INAPPROPRIATE`, `OTHER`), optional `details` (max 2000, sanitized). Missing target is 404 `"Report target not found"`. A message the caller does not participate in is the same 404. Reporting your own content is 409 `"You cannot report your own content"`. A second report of the same target by the same caller is 409 `"You already reported this"`. Rate limited. |
+| `GET` | `/safety/reports` | The caller’s reports only. |
+| `GET` | `/safety/blocks` | People the caller has blocked: `{ userId, createdAt }[]`. |
+| `POST` | `/safety/blocks` | Body `{ "userId" }`. 404 `"User not found"`. 409 `"You cannot block yourself"` or `"This person is already blocked"`. |
+| `DELETE` | `/safety/blocks/:userId` | 404 `"Block not found"` when that block is not the caller’s. A non-UUID is 400. |
+| `GET` | `/moderation/reports` | `MODERATOR` or `ADMIN` only. Query `status` defaults to `OPEN`. Anyone else is 403 `"Moderator access is required"`. |
+| `GET` | `/moderation/reports/:id` | Staff only. Includes a short `preview` of the target. 404 `"Report not found"`. |
+| `POST` | `/moderation/reports/:id/actions` | Body `{ "kind", "note?" }`. `kind` is `DISMISS`, `RESOLVE`, `HIDE`, `SUSPEND_USER`, or `RESTORE_USER`. A closed report is 409 `"This report is already closed"`, except `RESTORE_USER` on a `RESOLVED` report whose target account is still `SUSPENDED`. `HIDE` archives a listing or community post (`deletedAt` set) or sets `Message.hiddenAt`. `HIDE` on a user report is 409 `"This action does not apply to that report"`. `SUSPEND_USER` sets that account to `SUSPENDED` and resolves the report. `RESTORE_USER` sets it back to `ACTIVE`, including after that resolve. Staff cannot suspend or restore their own account from a report (409). |
 
-Blocking is enforced for direct conversations, request offers, community interactions, and event RSVPs. Duplicate open reports for the same target are rejected.
+There is no screen that grants `StaffRole`. Insert `StaffRoleAssignment` directly. `GET /users/me` lists those roles and does not grant them. There is no notification list.
 
-## Planned, not implemented
+Blocking is symmetric for new interactions: either person blocking the other returns 403 `"You cannot interact with this person"` on a new conversation, a message in an existing thread, an offer, a counter, an accept, a reject, a job application, a service quote, a community reaction, a community comment, and a review of that person. Existing threads stay readable. The original message text stays in the database when a message is hidden; participant reads are redacted.
 
-The remaining planned contracts are password recovery/email verification, payment intents/payouts/refunds, saved-search match delivery, push/email notifications, message attachments, domain-specific housing applications/service bookings/job applications, geospatial radius search, disputes, and detailed operational audit history. Do not build clients against these until their routes appear in the generated OpenAPI document.
+### Rate limits
+
+Counted in Redis when `REDIS_URL` is set. Otherwise the API process keeps the window in memory. A Redis error uses that same in-memory window. Limits are off when `NODE_ENV=test` unless `RATE_LIMIT_ENFORCE=1`. Each cap can be overridden with the env name in the table. Over the cap is 429 `"Too many requests"`.
+
+| Scope | Env override | Default | Window | Key |
+| --- | --- | --- | --- | --- |
+| `POST /auth/register` | `RATE_LIMIT_AUTH_REGISTER` | 5 | 15 minutes | client address |
+| `POST /auth/login` | `RATE_LIMIT_AUTH_LOGIN` | 10 | 15 minutes | client address |
+| `POST /conversations` and `POST /conversations/:id/messages` | `RATE_LIMIT_MESSAGING` | 30 | 1 minute | caller id |
+| `POST /listings` and `POST /listings/drafts` | `RATE_LIMIT_LISTINGS` | 20 | 1 hour | caller id |
+| `POST /requests/:id/offers` and `POST /requests/offers/:id/counter` | `RATE_LIMIT_OFFERS` | 30 | 1 hour | caller id |
+| `POST /safety/reports` | `RATE_LIMIT_REPORTS` | 10 | 1 hour | caller id |
+
+The client address is the first `X-Forwarded-For` hop, then the socket address. The edge proxy must set that header. A failed login still counts.
+
+Stored free text is passed through `sanitizeText` (markup and control characters removed, then trimmed) on registration names, listings, requests, offers, messages, reviews, community posts and comments, housing and job and service create text, quote notes, and report details.
+
+## TARGET
+
+These routes are the remainder of the v1 contract. They are not implemented. Paths below supersede older aliases in the previous revision of this file (`POST /listings/:id/save`, `PATCH /offers/:id`, `POST /conversations/:id/read`).
+
+### Identity
+
+- `POST /auth/refresh` — rotate access tokens. Env already has `JWT_REFRESH_SECRET` and `JWT_REFRESH_TTL`.
+- `PATCH /users/me/profile` — bio, display name, phone. Distinct from onboarding. The Profile screen does not have an edit control, so this route is still not implemented.
+
+### Listings and media
+
+- Presigned image upload and `ListingImage` rows on create.
+- Query params the Explore screen already paints: condition, min/max price, distance, verified, free, delivery, neighborhood, sort. Distance needs a real geo filter (target). It is not a vector search.
+- Price history writes on `PATCH` when `priceCents` changes, then a read for the Saved Items price-alert tab.
+- Saved-search alert delivery. The tab already says new-match alerts are unavailable.
+
+### Requests
+
+- `GET /requests?mine=1` or equivalent — caller's requests only. The current list is public and global.
+- `POST /requests` draft mode and `PATCH /requests/:id` to cancel (`CANCELLED`) without deleting the row.
+- Deterministic match rows in `RequestMatch` from category, mode, and radius. Score is a plain decimal the server writes. Not an embedding.
+
+### Messaging
+
+- A browser client that joins `conversation:{id}` and receives `message.created`. The gateway handler exists. Send already persists, then emits. No page opens the socket. `POST /conversations` does not change that.
+- Typing and attachments stay target. The composer camera button stays visual until attachments exist.
+
+### Transactions, reviews, safety
+
+- `POST /transactions/:id/appointments` — `startsAt`, `locationNote`. The Dashboard meetup cards bind here later.
+- One review per author per transaction (constraint still target). `POST /reviews` and `GET /users/:id/reviews` are implemented. Dashboard does not yet hide a prompt when that list already contains the author's review.
+- A notification list and notification mark-read. Conversation read state is already `PATCH /conversations/:id/read`. The nav message badge reads `GET /conversations` and does not add `GET /notifications`. Reports, blocks, and moderation actions are implemented under Safety.
+
+### Explicitly out of v1
+
+- Semantic / vector / LLM ranking of listings or requests.
+- AI listing titles, AI photo review, AI price opinions. The wizard step stays on screen and performs no request.
+- Payment provider calls. `STRIPE_*` may be empty. Dashboard "Earned" is fixture copy.
+
+## Workflow the implemented routes can already finish
+
+1. Register and onboarding write a user.
+2. `POST /listings` or `POST /requests` publishes immediately.
+3. Another user `POST /requests/:id/offers`.
+4. Either party `POST /requests/offers/:id/counter` while the offer is `PENDING` or `COUNTERED`.
+5. The requester `POST /requests/:id/offers/:offerId/accept` (or `reject`). Accept opens one conversation and one `ACCEPTED` transaction.
+6. A participant `PATCH /transactions/:id/status` along the legal edges until `IN_PROGRESS`. Both participants then `PATCH` `{ "status": "COMPLETED" }`. The exchange is `COMPLETED` only after the second confirm. Staff, not either participant, resolve a `DISPUTED` row.
+7. A participant `POST /reviews` for that completed transaction. A one-sided completion confirm is not enough.
+
+Scheduling an appointment is still target. The screens for this sequence already exist (`docs/UX_REQUEST_FLOW_STATES.md`).

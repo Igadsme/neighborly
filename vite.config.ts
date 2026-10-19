@@ -1,6 +1,8 @@
-import { defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type HtmlTagDescriptor, type Plugin } from 'vite'
+import { LOCALHOST_API_URL, productionApiUrlProblem } from './src/api/require-api-url'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import fs from 'node:fs'
 import path from 'node:path'
 
 import siteConfiguration from './.figma/make/site.json'
@@ -16,13 +18,17 @@ export default defineConfig(({ mode }) => {
       sourcemap: emitSourcemaps ? 'inline' : false,
       minify: !emitSourcemaps,
     },
+    // History API routes fall back to index.html. Asset and API paths do not.
+    appType: 'spa',
     plugins: [
       react(),
       tailwindcss(),
+      requireProductionApiUrl(),
       figmaSiteConfiguration(siteConfiguration),
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
       figmaMakeKitPlugin({ storiesGlob: '/src/**/*.stories.{ts,tsx,js,jsx}' }),
+      previewSpaFallback(),
     ],
     resolve: {
       alias: {
@@ -42,6 +48,18 @@ export default defineConfig(({ mode }) => {
     preview: {
       host: process.env.FIGMA_DEV_SERVER_HOST || '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
+      // The client connects its Socket.IO namespace to the same origin
+      // ("/realtime"), which is how the deployed topology works: the edge
+      // proxy serves the SPA and forwards /api and /socket.io to the API.
+      // Without this proxy `vite preview` cannot reproduce that topology, so
+      // realtime connections fail the handshake and the browser suite cannot
+      // verify authenticated realtime behaviour.
+      // previewSpaFallback() answers unknown non-API paths with index.html
+      // and leaves /api, /socket.io, and real asset files on their own paths.
+      proxy: {
+        '/api': { target: 'http://127.0.0.1:3001', changeOrigin: true },
+        '/socket.io': { target: 'http://127.0.0.1:3001', changeOrigin: true, ws: true },
+      },
     },
   }
 })
@@ -70,6 +88,41 @@ type FigmaSiteConfiguration = {
   }
   accessibility?: {
     addBypassLinks?: boolean
+  }
+}
+
+/**
+ * `vite build` (production mode) refuses to run without `VITE_API_URL`, and
+ * refuses a bundle that still contains the dev localhost API unless that
+ * string was the explicit value. Dev server and `--mode development` builds
+ * are unchanged.
+ */
+function requireProductionApiUrl(): Plugin {
+  let mode = 'production'
+  let explicitUrl = ''
+  return {
+    name: 'neighborly-require-api-url',
+    apply: 'build',
+    configResolved(config) {
+      mode = config.mode
+      const fromFiles = loadEnv(config.mode, config.envDir, 'VITE_').VITE_API_URL
+      explicitUrl = (process.env.VITE_API_URL ?? fromFiles ?? '').trim()
+      const problem = productionApiUrlProblem(config.mode, explicitUrl)
+      if (problem) {
+        throw new Error(problem)
+      }
+    },
+    generateBundle(_options, bundle) {
+      if (mode !== 'production') return
+      if (explicitUrl === LOCALHOST_API_URL) return
+      for (const item of Object.values(bundle)) {
+        if (item.type === 'chunk' && item.code.includes(LOCALHOST_API_URL)) {
+          this.error(
+            `Production bundle contains ${LOCALHOST_API_URL}. Set VITE_API_URL to the public API base URL.`,
+          )
+        }
+      }
+    },
   }
 }
 
@@ -236,18 +289,25 @@ function figmaErrorOverlayReplay(): Plugin {
     configureServer(server) {
       let lastError: object | null = null
 
-      const origSend = server.ws.send.bind(server.ws) as (...args: any[]) => void
-      server.ws.send = ((...args: any[]) => {
-        const payload = args[0]
-        if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-          const type = (payload as { type?: string }).type
+      const origSend = server.ws.send.bind(server.ws) as (
+        eventOrPayload: unknown,
+        payload?: unknown
+      ) => void
+      server.ws.send = ((eventOrPayload: unknown, payload?: unknown) => {
+        const candidate = eventOrPayload
+        if (
+          candidate &&
+          typeof candidate === 'object' &&
+          !Array.isArray(candidate)
+        ) {
+          const type = (candidate as { type?: string }).type
           if (type === 'error') {
-            lastError = payload as object
+            lastError = candidate as object
           } else if (type === 'update' || type === 'full-reload') {
             lastError = null
           }
         }
-        return origSend(...args)
+        return origSend(eventOrPayload, payload)
       }) as typeof server.ws.send
 
       server.ws.on('connection', (socket) => {
@@ -295,6 +355,55 @@ function figmaReactRefreshBoundaryFallback(): Plugin {
       }
 
       return null
+    },
+  }
+}
+
+const PREVIEW_ASSET_EXTENSION =
+  /\.(?:js|mjs|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|json|txt|xml|webmanifest)$/i
+
+/**
+ * `vite preview` already falls back to index.html for SPA navigations.
+ * That fallback also rewrites a missing asset when the browser sends
+ * `Accept: *\/*`, so a stale hash would be executed as HTML. Missing
+ * assets and API prefixes end here instead: assets 404, and `/api` plus
+ * `/socket.io` fall through to the preview proxy.
+ */
+function previewSpaFallback(): Plugin {
+  return {
+    name: 'neighborly-preview-spa-fallback',
+    configurePreviewServer(server) {
+      const distDir = path.resolve(server.config.root, server.config.build.outDir)
+      server.middlewares.use((req, res, next) => {
+        if (req.method !== 'GET' && req.method !== 'HEAD') return next()
+        const pathname = (req.url ?? '/').split('?')[0] || '/'
+        if (
+          pathname === '/api' ||
+          pathname.startsWith('/api/') ||
+          pathname === '/socket.io' ||
+          pathname.startsWith('/socket.io/')
+        ) {
+          return next()
+        }
+        const isAsset = pathname.startsWith('/assets/') || PREVIEW_ASSET_EXTENSION.test(pathname)
+        if (!isAsset) return next()
+
+        const relative = pathname.replace(/^\/+/, '')
+        const file = path.resolve(distDir, relative)
+        const rootWithSep = distDir.endsWith(path.sep) ? distDir : distDir + path.sep
+        if (file !== distDir && !file.startsWith(rootWithSep)) {
+          res.statusCode = 400
+          res.end()
+          return
+        }
+        if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
+          res.statusCode = 404
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+          res.end('Not found')
+          return
+        }
+        next()
+      })
     },
   }
 }

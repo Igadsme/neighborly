@@ -1,0 +1,30 @@
+# Local staging TLS. Caddy's internal CA is not a public certificate.
+# The site port matches the published host port so the Host header matches.
+#
+# History API routes are not files. /api and /socket.io stay on the API.
+# /assets stays on the static server and is not rewritten. Every other path
+# is proxied to nginx, which returns index.html when the path is not a file.
+{
+	admin off
+	persist_config off
+}
+
+https://staging.neighborly.localhost:8444 {
+	tls internal
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle /socket.io/* {
+		reverse_proxy api:3000
+	}
+
+	handle /assets/* {
+		reverse_proxy web:80
+	}
+
+	handle {
+		reverse_proxy web:80
+	}
+}
