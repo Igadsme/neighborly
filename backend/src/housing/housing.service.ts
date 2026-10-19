@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
+import { activeAccountWhere } from '../common/active-account'
 import { publicUserSelect } from '../common/public-user.select'
 import { cleanList, cleanText, sanitizeText } from '../common/text'
 import { PrismaService } from '../prisma/prisma.service'
@@ -47,6 +48,7 @@ export class HousingService {
       where: {
         status: 'PUBLISHED',
         deletedAt: null,
+        owner: activeAccountWhere,
         ...(query.listingType ? { listingType: query.listingType } : {}),
         ...(query.type ? { propertyType: query.type } : {}),
         ...(query.minBeds ? { beds: { gte: query.minBeds } } : {}),
@@ -92,7 +94,7 @@ export class HousingService {
 
   async get(id: string) {
     const row = await this.prisma.housingListing.findFirst({
-      where: { id, status: 'PUBLISHED', deletedAt: null },
+      where: { id, status: 'PUBLISHED', deletedAt: null, owner: activeAccountWhere },
       select: publicHousingSelect
     })
     if (!row) throw new NotFoundException('Housing listing not found')

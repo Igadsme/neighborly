@@ -59,7 +59,12 @@ describe('ListingsService public reads', () => {
     const detail = await moduleRef.get(ListingsService).get('listing-1')
 
     const query = findFirst.mock.calls[0][0]
-    expect(query.where).toEqual({ id: 'listing-1', deletedAt: null, status: { in: ['PUBLISHED', 'SOLD'] } })
+    expect(query.where).toEqual({
+      id: 'listing-1',
+      deletedAt: null,
+      status: { in: ['PUBLISHED', 'SOLD'] },
+      seller: { status: 'ACTIVE', deletedAt: null }
+    })
     expectPublicSeller(query.select.seller)
     expect(query.select.images).toEqual({ orderBy: { sortOrder: 'asc' } })
     expect(JSON.stringify(query)).not.toContain('passwordHash')

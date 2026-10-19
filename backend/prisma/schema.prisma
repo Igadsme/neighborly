@@ -1064,6 +1064,9 @@ model TransactionParticipant {
   transactionId String      @db.Uuid
   userId        String      @db.Uuid
   role          String
+  /// Set when this participant confirms the exchange is complete. The
+  /// transaction stays IN_PROGRESS until every participant has a timestamp.
+  completionConfirmedAt DateTime?
   transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   user          User        @relation(fields: [userId], references: [id])
 

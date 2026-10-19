@@ -14,6 +14,7 @@ import {
   ListingStatus,
   Prisma
 } from '@prisma/client'
+import { activeAccountWhere } from '../common/active-account'
 import { assertNotBlocked } from '../common/blocks'
 import { audit } from '../common/logger'
 import { publicUserSelect } from '../common/public-user.select'
@@ -136,7 +137,13 @@ export class BorrowService {
 
   async getItem(listingId: string, viewerId?: string) {
     const item = await this.prisma.listing.findFirst({
-      where: { id: listingId, borrowable: true, deletedAt: null, status: { in: [ListingStatus.PUBLISHED, ListingStatus.ARCHIVED] } },
+      where: {
+        id: listingId,
+        borrowable: true,
+        deletedAt: null,
+        status: { in: [ListingStatus.PUBLISHED, ListingStatus.ARCHIVED] },
+        seller: activeAccountWhere
+      },
       select: itemSelect
     })
     if (!item) throw new NotFoundException('Borrowable item not found')
@@ -195,6 +202,7 @@ export class BorrowService {
       borrowable: true,
       deletedAt: null,
       status: ListingStatus.PUBLISHED,
+      seller: activeAccountWhere,
       ...(query.categoryId ? { categoryId: query.categoryId } : {}),
       ...(query.city ? { city: { equals: query.city, mode: 'insensitive' } } : {}),
       ...(query.neighborhood ? { neighborhood: { equals: query.neighborhood, mode: 'insensitive' } } : {}),
@@ -1508,7 +1516,7 @@ export class BorrowService {
   /** An item that can be requested right now: published and not deleted. */
   private async requestableItem(listingId: string) {
     const item = await this.prisma.listing.findFirst({
-      where: { id: listingId, borrowable: true, status: ListingStatus.PUBLISHED, deletedAt: null },
+      where: { id: listingId, borrowable: true, status: ListingStatus.PUBLISHED, deletedAt: null, seller: activeAccountWhere },
       select: itemSelect
     })
     if (!item) throw new NotFoundException('This item is not available for borrowing')

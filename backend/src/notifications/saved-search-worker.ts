@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
+import { activeAccountWhere } from '../common/active-account'
 import { audit } from '../common/logger'
 import { PrismaService } from '../prisma/prisma.service'
 /** Local namespace for alert keys; not a domain event type. */
@@ -43,6 +44,7 @@ export class SavedSearchAlertWorker {
           // Only genuinely available listings can produce an alert.
           status: 'PUBLISHED',
           deletedAt: null,
+          seller: activeAccountWhere,
           ...(options.listingId ? { id: options.listingId } : {}),
           ...(options.since ? { createdAt: { gte: options.since } } : {})
         },

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
+import { enforceRateLimit } from '../common/rate-limit'
 import { CreateQuoteDto, CreateServiceDto, ListServicesQuery, UpdateServiceDto } from './dto'
 import { ServicesService } from './services.service'
 
@@ -37,35 +38,40 @@ export class ServicesController {
   @Post()
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  create(@Req() request: AuthenticatedRequest, @Body() input: CreateServiceDto) {
+  async create(@Req() request: AuthenticatedRequest, @Body() input: CreateServiceDto) {
+    await enforceRateLimit('services', request.user.id)
     return this.services.create(request.user.id, input)
   }
 
   @Post('quotes/:id/accept')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  accept(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+  async accept(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    await enforceRateLimit('services', request.user.id)
     return this.services.acceptQuote(request.user.id, id)
   }
 
   @Post(':id/quotes')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  quote(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: CreateQuoteDto) {
+  async quote(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: CreateQuoteDto) {
+    await enforceRateLimit('services', request.user.id)
     return this.services.createQuote(request.user.id, id, input)
   }
 
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  update(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateServiceDto) {
+  async update(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateServiceDto) {
+    await enforceRateLimit('services', request.user.id)
     return this.services.update(request.user.id, id, input)
   }
 
   @Delete(':id')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  archive(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+  async archive(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    await enforceRateLimit('services', request.user.id)
     return this.services.archive(request.user.id, id)
   }
 }
