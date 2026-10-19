@@ -84,6 +84,10 @@ fi
 
 cd "$(dirname "$0")/../backend"
 
+# Generate the Prisma client on clean runners before applying migrations or
+# compiling storage integration specs.
+DATABASE_URL="$DB_URL" pnpm exec prisma generate >/dev/null
+
 # Verify the migration chain applies from a clean database.
 DATABASE_URL="$DB_URL" pnpm exec prisma migrate deploy >/dev/null
 

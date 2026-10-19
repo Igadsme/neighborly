@@ -95,6 +95,8 @@ jobs:
     name: Storage integration (S3)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      S3_IMAGE: rustfs/rustfs:1.0.1
     defaults:
       run:
         working-directory: .
